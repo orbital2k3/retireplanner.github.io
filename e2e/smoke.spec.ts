@@ -119,11 +119,14 @@ test('an income change on Inputs updates the Plan Summary', async ({ page }) => 
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(expected);
 });
 
-test('editing an input after optimizing gates the results pages', async ({ page }) => {
+test('editing an input after optimizing keeps the results pages open with an out-of-date banner', async ({ page }) => {
   await seedPlan(page, optimizedPlanA());
   await addIncomeStream(page, 60_000);
   await page.getByRole('link', { name: 'Dashboard' }).click();
 
-  await expect(page.getByText('Your inputs have changed since the optimizer ran')).toBeVisible();
-  await expect(page.getByText('Plan Summary', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Your inputs changed after the optimizer ran.')).toBeVisible();
+  await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Projections' }).click();
+  await expect(page.getByText('Your inputs changed after the optimizer ran.')).toBeVisible();
+  await expect(page.locator('tbody tr').first()).toBeVisible();
 });

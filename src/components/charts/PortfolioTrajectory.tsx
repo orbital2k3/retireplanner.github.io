@@ -84,7 +84,7 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
       },
       {
         label: 'Pre-tax 401(k)/IRA',
-        data: rows.map((r) => scale(r.endTraditional, r.inflationFactor)),
+        data: rows.map((r) => scale(r.endTraditional - (r.inheritedBal - r.inheritedRothBal), r.inflationFactor)),
         backgroundColor: bucketColors.traditional + 'd0',
         borderColor: bucketColors.traditional,
         borderWidth: 0,
@@ -94,7 +94,7 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
       },
       {
         label: 'Roth',
-        data: rows.map((r) => scale(r.endRoth, r.inflationFactor)),
+        data: rows.map((r) => scale(r.endRoth - r.inheritedRothBal, r.inflationFactor)),
         backgroundColor: bucketColors.roth + 'd0',
         borderColor: bucketColors.roth,
         borderWidth: 1.5,
@@ -102,6 +102,16 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
         pointRadius: 0,
         tension: 0.2,
       },
+      ...(rows.some((r) => r.inheritedBal > 0) ? [{
+        label: 'Inherited IRA/Roth',
+        data: rows.map((r) => scale(r.inheritedBal, r.inflationFactor)),
+        backgroundColor: bucketColors.inherited + 'd0',
+        borderColor: bucketColors.inherited,
+        borderWidth: 0,
+        fill: '-1',
+        pointRadius: 0,
+        tension: 0.2,
+      }] : []),
     ],
   };
 

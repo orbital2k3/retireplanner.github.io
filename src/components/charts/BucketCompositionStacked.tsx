@@ -19,10 +19,14 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
   const pct = (n: number, total: number) => (total > 0 ? (n / total) * 100 : 0);
   const scale = (n: number, inf: number) => (real ? n / inf : n);
 
+  const ownTrad = (r: (typeof rows)[number]) => r.endTraditional - (r.inheritedBal - r.inheritedRothBal);
+  const ownRoth = (r: (typeof rows)[number]) => r.endRoth - r.inheritedRothBal;
+  const hasInherited = rows.some((r) => r.inheritedBal > 0);
   const dollars = {
     taxable: rows.map((r) => scale(r.endTaxable, r.inflationFactor)),
-    traditional: rows.map((r) => scale(r.endTraditional, r.inflationFactor)),
-    roth: rows.map((r) => scale(r.endRoth, r.inflationFactor)),
+    traditional: rows.map((r) => scale(ownTrad(r), r.inflationFactor)),
+    roth: rows.map((r) => scale(ownRoth(r), r.inflationFactor)),
+    inherited: rows.map((r) => scale(r.inheritedBal, r.inflationFactor)),
     total: rows.map((r) => scale(r.endTotal, r.inflationFactor)),
   };
 
@@ -43,7 +47,7 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
       },
       {
         label: 'Pre-tax 401(k)/IRA',
-        data: rows.map((r) => +pct(r.endTraditional, r.endTotal).toFixed(2)),
+        data: rows.map((r) => +pct(ownTrad(r), r.endTotal).toFixed(2)),
         // @ts-expect-error custom property for tooltip
         rawDollars: dollars.traditional,
         backgroundColor: palette.warning + 'cc',
@@ -55,7 +59,7 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
       },
       {
         label: 'Roth',
-        data: rows.map((r) => +pct(r.endRoth, r.endTotal).toFixed(2)),
+        data: rows.map((r) => +pct(ownRoth(r), r.endTotal).toFixed(2)),
         // @ts-expect-error custom property for tooltip
         rawDollars: dollars.roth,
         backgroundColor: bucketColors.roth + 'cc',
@@ -65,6 +69,18 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
         pointRadius: 0,
         tension: 0.25,
       },
+      ...(hasInherited ? [{
+        label: 'Inherited IRA/Roth',
+        data: rows.map((r) => +pct(r.inheritedBal, r.endTotal).toFixed(2)),
+        // @ts-expect-error custom property for tooltip
+        rawDollars: dollars.inherited,
+        backgroundColor: bucketColors.inherited + 'cc',
+        borderColor: bucketColors.inherited,
+        borderWidth: 1,
+        fill: '-1',
+        pointRadius: 0,
+        tension: 0.25,
+      }] : []),
     ],
   };
 

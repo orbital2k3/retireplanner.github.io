@@ -66,6 +66,7 @@ export const palette = {
   bucketTaxable: '#1a8a5a',   // success — matches the Taxable bucket convention
   bucketTrad:    '#0d1b2e',   // navy
   bucketRoth:    '#c9a84c',   // gold
+  bucketInherited: '#7b5ea7', // muted violet — distinct from all three own-account buckets
   incomeOther:   '#3b5e8a',   // blue-slate — distinct from textMuted
   taxOther:      '#7a96b0',   // textMuted — kept for state-tax / IRMAA aggregate
   acaBar:        '#c0714d',   // warm coral — ACA premium (spend, not tax)
@@ -75,6 +76,7 @@ export const bucketColors = {
   taxable: palette.bucketTaxable,
   traditional: palette.bucketTrad,
   roth: palette.bucketRoth,
+  inherited: palette.bucketInherited,
 };
 
 export const fmtCompact = (n: number): string => {

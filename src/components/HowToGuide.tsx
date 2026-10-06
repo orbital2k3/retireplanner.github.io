@@ -522,16 +522,17 @@ export function GuideContent() {
           as ordinary income. If the original owner had already started their own required
           withdrawals, check the box under the event. You then also owe a yearly minimum in years
           1 through 9, based on the IRS Single Life Table for your age, and the engine forces out
-          whichever is larger: that minimum or the even spread. Strategy withdrawals from your
-          traditional account proportionally reduce the required supplement, so if your withdrawal plan already draws heavily from
-          pre-tax, the forced add-on shrinks accordingly. Any balance still in the account in the
+          whichever is larger: that minimum or the even spread. This required amount comes out every
+          year, whatever your withdrawal strategy. When your strategy also draws from pre-tax, that
+          money comes out of the inherited account first, so it empties sooner and more of your own
+          IRA stays available for Roth conversions. Any balance still in the account in the
           10th year after the year of death is fully distributed. Use this for a traditional IRA or 401(k) inherited
           from a non-spouse.
         </li>
         <li>
           <strong>Inherited Roth IRA</strong>: the same 10-year distribution rule applies, but
-          distributions are tax-free. The balance is added to your Roth account and a proportional
-          annual floor is forced out by the end of the 10th year after the year of death. Those distributions generate no
+          distributions are tax-free. The balance is added to your Roth account. A yearly required amount comes out, Roth
+          withdrawals from your strategy draw on the inherited account first, and the rest is forced out by the end of the 10th year after the year of death. Those distributions generate no
           ordinary income and reduce your need for taxable or traditional withdrawals in those years.
           Use this for a Roth IRA inherited from a non-spouse.
         </li>
@@ -546,10 +547,12 @@ export function GuideContent() {
       <Tip>
         <strong>Inherited Pre-Tax IRA example:</strong> You inherit $250,000 at age 65, the year the
         owner died. The account must be empty by the end of age 75, so the first-year floor is
-        $250,000 ÷ 11 = about $22,700. If your withdrawal strategy already pulls $15,000
-        of traditional proportionally, the engine only forces an additional $7,700 supplement. At
-        age 75 any remaining balance is fully distributed. All distributions are ordinary
-        income and appear in the "Inherited Income" column on the Projections page.
+        $250,000 ÷ 11 = about $22,700. If your withdrawal strategy also pulls $40,000 from
+        pre-tax that year, that $40,000 comes out of the inherited account too, for a total of
+        $62,700. At age 75 any remaining balance is fully distributed. All of it is ordinary
+        income and appears in the "Inherited Inc" column on the Projections page. The "WD Pre-tax"
+        column shows only withdrawals from your own accounts, and "Beg Inh" and "End Inh" show what is
+        in the inherited account at the start and end of each year.
       </Tip>
       <Tip>
         Inherited account events change the optimal withdrawal and conversion strategy, so re-run

@@ -68,7 +68,10 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   if (Math.abs(r.endRoth - expectedEndRoth) > tol) {
     out.push(`Roth MASS BALANCE: endRoth $${r.endRoth.toFixed(2)} != expected $${expectedEndRoth.toFixed(2)}`);
   }
-  const expectedEndTax = Math.max(0, r.begTaxable * (1 + gRateTax) + contribToTax - r.wdTax) + (r.lumpSumInjectTaxable ?? 0) + (r.cashSurplus ?? 0);
+  const inhTrd = (r.inheritedBal ?? 0) - (r.inheritedRothBal ?? 0);
+  if (inhTrd > r.endTraditional + tol) out.push(`Inherited pre-tax $${inhTrd.toFixed(2)} > endTraditional $${r.endTraditional.toFixed(2)}`);
+  if ((r.inheritedRothBal ?? 0) > r.endRoth + tol) out.push(`Inherited Roth $${(r.inheritedRothBal ?? 0).toFixed(2)} > endRoth $${r.endRoth.toFixed(2)}`);
+  const expectedEndTax = Math.max(0, r.begTaxable * (1 + gRateTax) + contribToTax - r.wdTax - (r.distributedCash ?? 0)) + (r.lumpSumInjectTaxable ?? 0) + (r.cashSurplus ?? 0);
   if (Math.abs(r.endTaxable - expectedEndTax) > tol) {
     out.push(`Taxable MASS BALANCE: endTaxable $${r.endTaxable.toFixed(2)} != expected $${expectedEndTax.toFixed(2)}`);
   }

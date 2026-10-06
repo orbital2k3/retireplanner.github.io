@@ -6,8 +6,7 @@ import { DEFAULT_EQUITY_PCT } from '../engine/returnModels';
  * These are stress-test controls, not plan data: the deterministic projection runs on the user's
  * entered expected return, while Monte Carlo asks the separate question "how does this plan hold
  * up against real history for a given stock/bond mix?". Keeping the mix out of the Plan also keeps
- * it out of planInputKey, so changing it cannot mark an optimizer policy stale and bounce the user
- * off the Monte Carlo page via StalePlanGate.
+ * it out of planInputKey, so changing it cannot mark an optimizer policy stale.
  */
 const STORAGE_KEY = 'fireopt-mc-prefs-v1';
 

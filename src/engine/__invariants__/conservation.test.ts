@@ -43,8 +43,10 @@ describe('portfolio conservation: inherited accounts', () => {
       const inhRows = checkedRows(proj, p).filter((r) => r.ageA >= 66 && r.ageA <= 76);
       expect(inhRows.length).toBe(11);
       expect(inhRows[0].endTaxable).toBeGreaterThan(1000);
-      const cash = inhRows.reduce((s, r) => s + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0), 0);
+      const cash = inhRows.reduce((s, r) => s + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0)
+        + r.inheritedTradFromWd + r.inheritedRothFromWd, 0);
       expect(cash).toBeGreaterThan(ev.amount * 0.99);
+      expect(inhRows[inhRows.length - 1].inheritedBal).toBe(0);
     });
   }
 

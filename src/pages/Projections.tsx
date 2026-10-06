@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useProjection, usePlanStore } from '../store/usePlanStore';
-import { useOptimizerStore } from '../store/useOptimizerStore';
-import { policyStatus } from '../engine/policyStatus';
-import StalePlanGate from '../components/StalePlanGate';
+import StalePlanBanner from '../components/StalePlanBanner';
 import type { DisplayMode } from '../store/usePlanStore';
 import { fmtUSD, fmtFull } from '../lib/format';
 import CashFlowsBalanced from '../components/charts/CashFlowsBalanced';
@@ -57,6 +55,9 @@ const BG: Record<'identity' | GroupKey, string> = {
  */
 const deductionApplies = (r: Row) => r.ordIncome + r.ltcg > 0;
 
+const inheritedIncome = (r: Row) => (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0)
+  + (r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0);
+
 const COLUMNS: Column[] = [
   // Identity (always shown, sticky)
   { key: 'year',  label: 'Yr',    group: 'identity', essential: true, fmt: 'raw', get: (r) => r.year,       bg: BG.identity },
@@ -72,7 +73,7 @@ const COLUMNS: Column[] = [
   { key: 'exemptInterest',      label: 'Tax-Exempt Int',  group: 'income', essential: false, fmt: 'money', get: (r) => r.exemptInterest ?? 0,                                                                    bg: BG.income },
   { key: 'distributedCash',     label: 'Div Paid Out',    group: 'income', essential: false, fmt: 'money', get: (r) => r.distributedCash ?? 0,                                                                   bg: BG.income },
   { key: 'lumpSumInject',       label: 'Lump Sum',        group: 'income', essential: true,  fmt: 'money', get: (r) => (r.lumpSumInjectTaxable ?? 0) + (r.lumpSumInjectTrad ?? 0) + (r.lumpSumInjectRoth ?? 0), bg: BG.income },
-  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: (r) => r.lumpSumOrdinaryIncome ?? 0,                                                            bg: BG.income },
+  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: inheritedIncome, tooltip: (r) => `Required minimum: ${fmtFull((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0))} · Extra from your withdrawal strategy: ${fmtFull((r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0))}`, bg: BG.income },
   { key: 'contribA',            label: 'Contrib A',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribA,                                                                              bg: BG.income },
   { key: 'contribB',            label: 'Contrib B',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribB,                                                                              bg: BG.income },
   // Spousal IRA portion of Contrib A/B — without this, the contribution column drops from a
@@ -81,10 +82,11 @@ const COLUMNS: Column[] = [
   { key: 'cashSurplus',         label: 'Cash Surplus',    group: 'income', essential: false, fmt: 'money', get: (r) => r.cashSurplus ?? 0,                                                                      bg: BG.income },
 
   // Withdrawals — portfolio draws and conversion activity
-  { key: 'totalWD',   label: 'Total WD',   group: 'withdrawals', essential: true,  fmt: 'money', get: (r) => r.totalWD,   bg: BG.withdrawals },
+  // Withdrawals from inherited accounts are shown in Inherited Inc, so these cover your own accounts only.
+  { key: 'totalWD',   label: 'Total WD',   group: 'withdrawals', essential: true,  fmt: 'money', get: (r) => r.totalWD - (r.inheritedTradFromWd ?? 0) - (r.inheritedRothFromWd ?? 0), bg: BG.withdrawals },
   { key: 'wdTax',     label: 'WD Taxable', group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdTax,     bg: BG.withdrawals },
-  { key: 'wdTrd',     label: 'WD Pre-tax', group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdTrd,     bg: BG.withdrawals },
-  { key: 'wdRth',     label: 'WD Roth',    group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdRth,     bg: BG.withdrawals },
+  { key: 'wdTrd',     label: 'WD Pre-tax', group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdTrd - (r.inheritedTradFromWd ?? 0), bg: BG.withdrawals },
+  { key: 'wdRth',     label: 'WD Roth',    group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdRth - (r.inheritedRothFromWd ?? 0), bg: BG.withdrawals },
   { key: 'rmd',       label: 'RMD',        group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.rmd,       bg: BG.withdrawals },
   { key: 'rothConv',  label: 'Roth Conv',  group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.rothConv,  bg: BG.withdrawals },
 
@@ -107,11 +109,13 @@ const COLUMNS: Column[] = [
   // Balances — end-of-year portfolio state
   { key: 'endTotal',       label: 'End Total', group: 'balances', essential: true,  fmt: 'money', get: (r) => r.endTotal,       bg: BG.balances },
   { key: 'begTaxable',     label: 'Beg Tax',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.begTaxable,     bg: BG.balances },
-  { key: 'begTraditional', label: 'Beg Trd',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.begTraditional, bg: BG.balances },
-  { key: 'begRoth',        label: 'Beg Roth',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.begRoth,        bg: BG.balances },
+  { key: 'begTraditional', label: 'Beg Trd',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.begTraditional - ((r.inheritedBegBal ?? 0) - (r.inheritedRothBegBal ?? 0)), bg: BG.balances },
+  { key: 'begRoth',        label: 'Beg Roth',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.begRoth - (r.inheritedRothBegBal ?? 0), bg: BG.balances },
+  { key: 'inheritedBegBal', label: 'Beg Inh',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.inheritedBegBal ?? 0, tooltip: () => 'Money in inherited accounts at the start of the year. Beg Trd and Beg Roth cover your own accounts only.', bg: BG.balances },
   { key: 'endTaxable',     label: 'End Tax',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxable,        bg: BG.balances },
-  { key: 'endTraditional', label: 'End Trd',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTraditional,    bg: BG.balances },
-  { key: 'endRoth',        label: 'End Roth',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.endRoth,           bg: BG.balances },
+  { key: 'endTraditional', label: 'End Trd',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTraditional - ((r.inheritedBal ?? 0) - (r.inheritedRothBal ?? 0)), bg: BG.balances },
+  { key: 'endRoth',        label: 'End Roth',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.endRoth - (r.inheritedRothBal ?? 0), bg: BG.balances },
+  { key: 'inheritedBal',   label: 'End Inh',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.inheritedBal ?? 0, tooltip: () => 'Money left in inherited accounts at the end of the year. End Trd and End Roth cover your own accounts only.', bg: BG.balances },
   { key: 'endTaxableBasis',label: 'End Basis',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxableBasis ?? 0, tooltip: (r) => `Unrealized gain: ${fmtFull(Math.max(0, r.endTaxable - (r.endTaxableBasis ?? 0)))}`, bg: BG.balances },
   { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r) => `Gross ${fmtFull(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
 ];
@@ -166,10 +170,8 @@ const loadVisibleKeys = (): Set<string> => {
 };
 
 export default function Projections() {
-  const plan = usePlanStore((s) => s.plan);
   const mode = usePlanStore((s) => s.displayMode);
   const proj = useProjection();
-  const pendingPlan = useOptimizerStore((s) => s.pendingPlan);
   const [visibleKeys, setVisibleKeysState] = useState<Set<string>>(loadVisibleKeys);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPos, setPickerPos] = useState<{ top: number; right: number; maxHeight: number }>({ top: 0, right: 0, maxHeight: 400 });
@@ -278,10 +280,9 @@ export default function Projections() {
     document.body.removeChild(a);
   };
 
-  if (policyStatus(plan) === 'stale' && pendingPlan === null) return <StalePlanGate />;
-
   return (
     <div className="page">
+      <StalePlanBanner />
       <div className="page-body">
         <WhatIfBar />
 

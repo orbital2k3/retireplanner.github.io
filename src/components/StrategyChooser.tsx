@@ -272,7 +272,7 @@ export default function StrategyChooser() {
     const editLink = (label: string) => (
       <button style={editLinkStyle} onClick={() => {
         // In optimize tab, pass pendingConv as override so ConversionDetail shows the pending
-        // mode without committing to the store (which would trigger StalePlanGate).
+        // mode without committing to the store (which would mark the plan stale).
         setSheetConvOverride(tab === 'optimize' && pendingConv !== null ? pendingConv : null);
         setSheetMode('conversion');
       }}>{label} →</button>

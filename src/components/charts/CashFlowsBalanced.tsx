@@ -143,19 +143,19 @@ export default function CashFlowsBalanced({ proj, real = true, height = 280 }: P
         stack: 'in',
       },
       {
-        // Cash from inherited accounts: forced pre-tax/Roth distributions (SECURE Act 10-year
-        // rule) plus inherited HSA cash. lumpSumOrdinaryIncome = forced pre-tax + HSA. This cash
-        // reduces the gross-up gap (so totalWD is smaller), so it must appear as income here.
+        // Everything drawn from inherited accounts: required minimums and HSA cash outside
+        // totalWD, plus the strategy draws inside wdTrd/wdRth that came from inherited balances.
         type: 'bar',
         label: 'Inherited Distributions',
-        data: rows.map((r) => scale((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0), r.inflationFactor)),
+        data: rows.map((r) => scale((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0)
+          + (r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0), r.inflationFactor)),
         backgroundColor: palette.successLight,
         stack: 'in',
       },
       {
         type: 'bar',
         label: 'Portfolio Withdrawals',
-        data: rows.map((r) => scale(r.totalWD, r.inflationFactor)),
+        data: rows.map((r) => scale(r.totalWD - (r.inheritedTradFromWd ?? 0) - (r.inheritedRothFromWd ?? 0), r.inflationFactor)),
         backgroundColor: palette.navy,
         stack: 'in',
       },

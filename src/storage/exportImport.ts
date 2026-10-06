@@ -1,6 +1,7 @@
 import type { Plan } from '../schemas/plan';
 import { PlanSchema } from '../schemas/plan';
 import { migratePlanToV24, migratePlanToV25 } from '../store/planMigrations';
+import { planInputKey } from '../engine/planInputKey';
 
 export interface ExportPayload {
   app: 'retirement-optimizer';
@@ -44,6 +45,8 @@ export function importPlanFromJSON(raw: string): ImportResult {
   }
   // Support both wrapped (with metadata) and raw plan shapes
   const candidate = (parsed as { plan?: unknown }).plan ?? parsed;
+  // Fingerprint as the file stores the plan, before migrations or parsing reshape it.
+  const fileKey = candidate && typeof candidate === 'object' ? planInputKey(candidate as Plan) : null;
   // Run all migrations before Zod parsing (safe to apply to any version — each is idempotent).
   if (candidate && typeof candidate === 'object') {
     migratePlanToV24(candidate as Record<string, unknown>);
@@ -53,7 +56,14 @@ export function importPlanFromJSON(raw: string): ImportResult {
   if (!result.success) {
     return { ok: false, error: result.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
   }
-  return { ok: true, plan: result.data };
+  const plan = result.data;
+  // Parsing reorders keys and drops retired fields, which changes the fingerprint string. Keep a
+  // policy that was current in the file current after import.
+  const policy = plan.customPolicy;
+  if (policy?.inputKey != null && policy.inputKey === fileKey) {
+    plan.customPolicy = { ...policy, inputKey: planInputKey(plan) };
+  }
+  return { ok: true, plan };
 }
 
 export async function readFileAsText(file: File): Promise<string> {

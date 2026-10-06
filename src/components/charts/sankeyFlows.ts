@@ -50,7 +50,9 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const brokTaxPull = Math.min(row.taxFromBrokerage ?? 0, row.wdTax);
   const wdTaxNet = row.wdTax - brokTaxPull;
   const gainsOnWd = row.wdTax > 0 ? realizedGains * (wdTaxNet / row.wdTax) : 0;
-  const inheritedCash = (row.lumpSumOrdinaryIncome ?? 0) + (row.lumpSumForcedRothDist ?? 0);
+  const inhTrdFromWd = row.inheritedTradFromWd ?? 0;
+  const inhRthFromWd = row.inheritedRothFromWd ?? 0;
+  const inheritedCash = (row.lumpSumOrdinaryIncome ?? 0) + (row.lumpSumForcedRothDist ?? 0) + inhTrdFromWd + inhRthFromWd;
   const deposits = (row.lumpSumInjectTaxable ?? 0) + (row.lumpSumInjectTrad ?? 0) + (row.lumpSumInjectRoth ?? 0);
   const contributions = row.contribA + row.contribB;
 
@@ -60,11 +62,11 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
       taxBase: gainsOnWd, route: 'general' },
     { id: 'brokTax', label: 'Brokerage · Tax payment', value: brokTaxPull, color: palette.warningLight,
       taxBase: 0, route: 'brokTax' },
-    { id: 'wdTrd', label: 'Withdrawal · Pre-tax', value: row.wdTrd, color: palette.bucketTrad,
-      taxBase: row.wdTrd, route: 'general' },
+    { id: 'wdTrd', label: 'Withdrawal · Pre-tax', value: row.wdTrd - inhTrdFromWd, color: palette.bucketTrad,
+      taxBase: row.wdTrd - inhTrdFromWd, route: 'general' },
     { id: 'rmd', label: 'RMD · Pre-tax', value: row.rmd, color: palette.warning,
       taxBase: row.rmd, route: 'general' },
-    { id: 'wdRth', label: 'Withdrawal · Roth', value: row.wdRth, color: palette.bucketRoth,
+    { id: 'wdRth', label: 'Withdrawal · Roth', value: row.wdRth - inhRthFromWd, color: palette.bucketRoth,
       taxBase: 0, route: 'general' },
     { id: 'ss', label: 'Social Security', value: row.totalSS, color: palette.goldLight,
       taxBase: taxableSS, route: 'general' },
@@ -73,7 +75,7 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
     { id: 'div', label: 'Dividends (paid out)', value: row.distributedCash ?? 0, color: palette.goldPale,
       taxBase: row.distributedDiv ?? 0, route: 'general' },
     { id: 'inh', label: 'Inherited account withdrawals', value: inheritedCash, color: palette.gold,
-      taxBase: row.lumpSumOrdinaryIncome ?? 0, route: 'general' },
+      taxBase: (row.lumpSumOrdinaryIncome ?? 0) + inhTrdFromWd, route: 'general' },
     { id: 'contrib', label: 'Contributions from pay', value: contributions, color: palette.successLight,
       taxBase: 0, route: 'save' },
     { id: 'conv', label: 'Roth Conversion', value: row.rothConv, color: palette.navyLight,

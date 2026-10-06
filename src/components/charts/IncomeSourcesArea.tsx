@@ -11,7 +11,7 @@ interface Props {
 }
 
 /** Stacked area showing the retirement income sources (voluntary Withdrawals,
- *  forced RMDs, Social Security, Other Income) across all retirement years.
+ *  forced RMDs, inherited accounts, Social Security, Other Income) across all retirement years.
  *  Replaces the single-year donut on Dashboard — surfacing the *trajectory* of
  *  where retirement money comes from instead of just one cherry-picked year.
  *  RMDs are a distinct cash source from voluntary withdrawals (totalWD excludes
@@ -22,13 +22,16 @@ export default function IncomeSourcesArea({ proj, real = true, height = 240 }: P
   const rows = proj.rows.filter((r) => r.phase === 'Retire' || r.phase === 'Survivor');
   const labels = rows.map((r) => r.ageA);
   const scale = (n: number, inf: number) => (real ? n / inf : n);
+  const inheritedFromWd = (r: (typeof rows)[number]) => r.inheritedTradFromWd + r.inheritedRothFromWd;
+  const inheritedCash = (r: (typeof rows)[number]) =>
+    r.lumpSumOrdinaryIncome + r.lumpSumForcedRothDist + inheritedFromWd(r);
 
   const data: ChartData<'line'> = {
     labels,
     datasets: [
       {
         label: 'Portfolio Withdrawals',
-        data: rows.map((r) => scale(r.totalWD, r.inflationFactor)),
+        data: rows.map((r) => scale(r.totalWD - inheritedFromWd(r), r.inflationFactor)),
         backgroundColor: palette.navy + 'd0',
         borderColor: palette.navy,
         borderWidth: 0,
@@ -46,6 +49,16 @@ export default function IncomeSourcesArea({ proj, real = true, height = 240 }: P
         pointRadius: 0,
         tension: 0.2,
       },
+      ...(rows.some((r) => inheritedCash(r) > 0) ? [{
+        label: 'Inherited Accounts',
+        data: rows.map((r) => scale(inheritedCash(r), r.inflationFactor)),
+        backgroundColor: palette.bucketInherited + 'd0',
+        borderColor: palette.bucketInherited,
+        borderWidth: 0,
+        fill: '-1',
+        pointRadius: 0,
+        tension: 0.2,
+      }] : []),
       {
         label: 'Social Security',
         data: rows.map((r) => scale(r.totalSS, r.inflationFactor)),

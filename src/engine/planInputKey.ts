@@ -41,7 +41,8 @@ export function planInputKey(plan: Plan): string {
   // manualSchedule is excluded: the optimizer either ignores it (optimize=true) or keeps it
   // fixed while choosing withdrawal ordering, and projections always use the current schedule.
   // Keying on it made every keystroke in the manual table trip the stale gate.
-  const { manualSchedule: _, ...conversion } = plan.conversion;
+  const { manualSchedule, ...conversion } = plan.conversion;
+  void manualSchedule;
   return JSON.stringify(
     Object.fromEntries(OPTIMIZER_INPUT_FIELDS.map((k) => [k, k === 'conversion' ? conversion : plan[k]]))
   );

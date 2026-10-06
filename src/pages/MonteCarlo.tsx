@@ -18,11 +18,10 @@ import OptimizerBadge from '../components/OptimizerBadge';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
 import LearnMoreModal from '../components/LearnMoreModal';
 import { MC_SIMULATE_HELP, MC_OPTIMIZE_HELP, type HelpTopic } from '../components/learnMoreTopics';
-import { policyStatus } from '../engine/policyStatus';
 import { planInputKey } from '../engine/planInputKey';
 import { type McPosture } from '../engine/goalLabels';
 import { loadEquityPct, saveEquityPct } from '../lib/mcPrefs';
-import StalePlanGate from '../components/StalePlanGate';
+import StalePlanBanner from '../components/StalePlanBanner';
 
 interface RiskBand {
   label: string;
@@ -261,10 +260,9 @@ export default function MonteCarlo() {
     ? (1.96 * Math.sqrt(result.successRate * (1 - result.successRate) / result.trials) * 100).toFixed(1)
     : null;
 
-  if (policyStatus(plan) === 'stale' && pendingPlan === null) return <StalePlanGate />;
-
   return (
     <div className="page">
+      <StalePlanBanner />
       <div className="page-header">
         <div className="page-header-inner">
           <div>

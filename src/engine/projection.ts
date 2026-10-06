@@ -83,8 +83,14 @@ export interface ProjectionRow {
   lumpSumInjectTrad: number;
   lumpSumInjectRoth: number;
   lumpSumOrdinaryIncome: number;   // ordinary income from inheritedPreTaxIRA dists + inheritedHSA
-  lumpSumForcedTradDist: number;   // supplemental forced dists from inheritedPreTaxIRA
-  lumpSumForcedRothDist: number;   // supplemental forced dists from inheritedRoth
+  lumpSumForcedTradDist: number;   // required minimum from inheritedPreTaxIRA, outside wdTrd
+  lumpSumForcedRothDist: number;   // required minimum from inheritedRoth, outside wdRth
+  inheritedTradFromWd: number;     // part of wdTrd drawn from inherited pre-tax accounts
+  inheritedRothFromWd: number;     // part of wdRth drawn from inherited Roth accounts
+  inheritedBegBal: number;         // start-of-year balance in inherited pre-tax + Roth accounts
+  inheritedBal: number;            // year-end balance left in inherited pre-tax + Roth accounts
+  inheritedRothBegBal: number;     // Roth part of inheritedBegBal
+  inheritedRothBal: number;        // Roth part of inheritedBal
   cashSurplus: number;          // after-tax income surplus swept to taxable
   // Balances
   begTaxable: number;
@@ -294,7 +300,9 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
   const inheritedState: Array<{ ev: LumpSumEvent; remainingBal: number; injected: boolean }> =
     (plan.lumpSumEvents ?? [])
       .filter(ev => ev.bucket === 'inheritedPreTaxIRA' || ev.bucket === 'inheritedRoth')
-      .map(ev => ({ ev, remainingBal: 0, injected: false }));
+      .map(ev => ({ ev, remainingBal: 0, injected: false }))
+      // Earliest deadline first, so strategy withdrawals drain the most urgent account first.
+      .sort((a, b) => a.ev.age - b.ev.age);
   // Inherited before plan start: ev.amount is the balance today. Seed it into the opening
   // balance so it grows like any held account; the 10-year clock still runs from ev.age.
   // Past events whose deadline has passed (or past taxable/HSA events) contribute nothing.
@@ -425,11 +433,13 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
     // Inherited pre-tax balances still being tracked sit inside tradA/tradB but follow the
     // inherited-account rules, so they are excluded from the owner's own RMD base. A/Household
     // events live in tradA, or in tradB once A has died and the balance rolled over.
-    let inheritedInTradA = 0, inheritedInTradB = 0;
+    let inheritedInTradA = 0, inheritedInTradB = 0, inheritedBegBal = 0, inheritedRothBegBal = 0;
     for (const s of inheritedState) {
-      if (!s.injected || s.remainingBal <= 0 || s.ev.bucket !== 'inheritedPreTaxIRA') continue;
+      if (!s.injected || s.remainingBal <= 0) continue;
       const tracked = s.ev.whose === 'A' ? aliveA : s.ev.whose === 'B' ? aliveB : (aliveA || aliveB);
       if (!tracked) continue;
+      inheritedBegBal += s.remainingBal;
+      if (s.ev.bucket !== 'inheritedPreTaxIRA') { inheritedRothBegBal += s.remainingBal; continue; }
       if (s.ev.whose === 'B' || !aliveA) inheritedInTradB += s.remainingBal;
       else inheritedInTradA += s.remainingBal;
     }
@@ -591,9 +601,9 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
     lifetimeConversionReal += conv / inflationFactor;
 
     // Pre-estimate inherited account income for gross-up loop sizing.
-    // HSA: deterministic (event amount, no circularity). InheritedPreTaxIRA/Roth: use floor
-    // from prior-year remainingBal (or ev.amount in the injection year) — overestimates in
-    // tradfirst (strategy draws more than floor, supplement = 0) but exact in taxfirst.
+    // HSA: deterministic (event amount, no circularity). InheritedPreTaxIRA/Roth: the required
+    // minimum from prior-year remainingBal (or ev.amount in the injection year); matches the
+    // depletion step below exactly.
     let lumpSumHSAIncomeEst = 0, lumpSumForcedTradDistEst = 0, lumpSumTaxFreeEst = 0;
     for (const ev of (plan.lumpSumEvents ?? []) as LumpSumEvent[]) {
       const evAge = ev.whose === 'A' ? ageA : ev.whose === 'B' ? (ageB ?? -1) : ageA;
@@ -611,9 +621,10 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
       if (balEst <= 0) continue;
       const gRateEst = s.ev.bucket === 'inheritedPreTaxIRA' ? gRateTradYear : gRateRothYear;
       const rmdEst = inheritedAnnualRmd(s.ev, balEst, yearsElapsedEst);
+      const grownEst = balEst * (1 + gRateEst);
       const floorEst = rmdEst > 0 && rmdEst >= balEst
-        ? balEst * (1 + gRateEst)
-        : Math.max(balEst * (1 + gRateEst) / (INHERITED_DEADLINE_YEARS + 1 - yearsElapsedEst), rmdEst);
+        ? grownEst
+        : Math.min(grownEst, Math.max(grownEst / (INHERITED_DEADLINE_YEARS + 1 - yearsElapsedEst), rmdEst));
       if (s.ev.bucket === 'inheritedPreTaxIRA') lumpSumForcedTradDistEst += floorEst;
       else lumpSumTaxFreeEst += floorEst;
     }
@@ -874,8 +885,9 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
       }
     }
 
-    // Inherited IRA/Roth 10-year depletion (SECURE Act). Runs after withdrawal balances are
-    // updated so proportional-credit uses current-year host balance post-strategy.
+    // Inherited IRA/Roth 10-year depletion (SECURE Act). The required minimum comes out first,
+    // like an RMD, independent of the withdrawal strategy; strategy draws are attributed to the
+    // inherited balance afterwards (inherited first, see below).
     let lumpSumForcedTradDist = 0, lumpSumForcedTradDistA = 0, lumpSumForcedTradDistB = 0;
     let lumpSumForcedRothDist = 0;
     for (const s of inheritedState) {
@@ -896,29 +908,16 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
       // Floor = even spread over the years left, or the annual RMD when that is larger. Once the
       // life-expectancy divisor runs out (RMD = whole prior balance), the account must be emptied.
       const yearsRemaining = INHERITED_DEADLINE_YEARS + 1 - yearsElapsed;
-      const floor = annualRmd > 0 && annualRmd >= priorBal
+      const floor = (annualRmd > 0 && annualRmd >= priorBal) || yearsRemaining === 1
         ? s.remainingBal
         : Math.min(s.remainingBal, Math.max(s.remainingBal / yearsRemaining, annualRmd));
-
-      const hostBal = s.ev.bucket === 'inheritedPreTaxIRA'
-        ? (s.ev.whose === 'B' ? tradB : tradA)
-        : roth;
-      const wdFromHost = s.ev.bucket === 'inheritedPreTaxIRA' ? wdTrd : wdRth;
-      const proportionalDepleted = hostBal > 0
-        ? Math.min(s.remainingBal, wdFromHost * (s.remainingBal / hostBal))
-        : 0;
-      s.remainingBal -= proportionalDepleted;
-
-      const supplement = yearsRemaining === 1
-        ? s.remainingBal
-        : Math.max(0, floor - proportionalDepleted);
-      s.remainingBal = Math.max(0, s.remainingBal - supplement);
+      s.remainingBal = Math.max(0, s.remainingBal - floor);
 
       if (s.ev.bucket === 'inheritedPreTaxIRA') {
-        lumpSumForcedTradDist += supplement;
-        if (s.ev.whose === 'B') lumpSumForcedTradDistB += supplement;
-        else lumpSumForcedTradDistA += supplement;
-      } else lumpSumForcedRothDist += supplement;
+        lumpSumForcedTradDist += floor;
+        if (s.ev.whose === 'B' || !aliveA) lumpSumForcedTradDistB += floor;
+        else lumpSumForcedTradDistA += floor;
+      } else lumpSumForcedRothDist += floor;
     }
 
     const lumpSumOrdIncome = lumpSumHSAIncome + lumpSumForcedTradDist;
@@ -950,7 +949,7 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
       acaPremiumYear = acaPremiumFor(surchargeMAGI, taxableSS);
     };
 
-    // Correct taxes when actual != estimate (e.g. tradfirst zeroed supplement) or the
+    // Correct taxes when actual != estimate (e.g. owner died mid-plan) or the
     // de-minimis clamp removed a pre-tax draw the loop had taxed.
     if (trdClamped || lumpSumOrdIncome !== lumpSumOrdIncomeEst || lumpSumTaxFreeCash !== lumpSumTaxFreeEst) {
       resolveYearTaxes();
@@ -973,6 +972,7 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
     const residualOf = () => cashIn + wdTax + wdTrd + wdRth
       - netSpend - fedTax - stateAmt - irmaa - niit - acaPremiumYear;
     let residual = residualOf();
+    let wdTrdFromA = wdTrd * ratioA, wdTrdFromB = wdTrd * (1 - ratioA);
     for (let k = 0; k < 40 && residual < -0.01; k++) {
       const need = -residual;
       const tradTotal = tradA + tradB;
@@ -1012,10 +1012,38 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
         tradA = Math.max(0, tradA - fromTrad * shareA);
         tradB = Math.max(0, tradB - fromTrad * (1 - shareA));
         wdTrd += fromTrad;
+        wdTrdFromA += fromTrad * shareA;
+        wdTrdFromB += fromTrad * (1 - shareA);
       }
       resolveYearTaxes();
       residual = residualOf();
     }
+
+    // Inherited first: each owner's strategy draws come out of their inherited balance before
+    // their own account. Inherited IRAs cannot be converted, so this preserves convertible room.
+    let inheritedTradFromWd = 0, inheritedRothFromWd = 0, inheritedBal = 0, inheritedRothBal = 0;
+    let rothWdLeft = wdRth;
+    for (const s of inheritedState) {
+      if (!s.injected || s.remainingBal <= 0) continue;
+      const tracked = s.ev.whose === 'A' ? aliveA : s.ev.whose === 'B' ? aliveB : (aliveA || aliveB);
+      if (!tracked) continue;
+      let take: number;
+      if (s.ev.bucket === 'inheritedPreTaxIRA') {
+        if (s.ev.whose === 'B' || !aliveA) {
+          take = Math.min(s.remainingBal, wdTrdFromB); wdTrdFromB -= take;
+        } else {
+          take = Math.min(s.remainingBal, wdTrdFromA); wdTrdFromA -= take;
+        }
+        inheritedTradFromWd += take;
+      } else {
+        take = Math.min(s.remainingBal, rothWdLeft); rothWdLeft -= take;
+        inheritedRothFromWd += take;
+      }
+      s.remainingBal -= take;
+      inheritedBal += s.remainingBal;
+      if (s.ev.bucket !== 'inheritedPreTaxIRA') inheritedRothBal += s.remainingBal;
+    }
+
     let cashSurplus = 0;
     if (residual > 0) {
       cashSurplus = residual;
@@ -1091,6 +1119,12 @@ export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionR
       lumpSumOrdinaryIncome: lumpSumOrdIncome,
       lumpSumForcedTradDist,
       lumpSumForcedRothDist,
+      inheritedTradFromWd,
+      inheritedRothFromWd,
+      inheritedBegBal,
+      inheritedBal,
+      inheritedRothBegBal,
+      inheritedRothBal,
       cashSurplus,
       begTaxable, begTraditional: begTrad, begRoth,
       endTaxable: taxable, endTraditional: tradA + tradB, endRoth: roth,
