@@ -27,16 +27,8 @@ export const OPTIMIZER_OUTPUT_FIELDS = [
   'optimizedBy', 'mcTuning',
 ] as const;
 
-/** Order-independent fingerprint of the manual conversion schedule. Kept separate from
- *  planInputKey so editing amounts offers Re-optimize without gating the results pages.
- *  Zero entries are dropped: the engine treats 0 and a missing age the same. */
-export function manualScheduleKey(plan: Plan): string {
-  const s = plan.conversion.manualSchedule ?? {};
-  return JSON.stringify(Object.keys(s).filter((k) => s[k] !== 0).sort().map((k) => [k, s[k]]));
-}
-
-/** Stable fingerprint of the plan fields that affect optimizer output.
- *  Excludes optimizer-output fields so they don't create false positives. */
+/** Fingerprint used by the Monte Carlo page to drop results after an input change elsewhere.
+ *  Optimizer staleness uses optimizerKey (strategy/optimizerInput.ts), not this. */
 export function planInputKey(plan: Plan): string {
   // manualSchedule is excluded: the optimizer either ignores it (optimize=true) or keeps it
   // fixed while choosing withdrawal ordering, and projections always use the current schedule.

@@ -5,6 +5,8 @@
  * and exportImport.ts (on import).  Each function mutates the raw persisted
  * object in-place — Zod parses the result afterward.
  */
+import type { Plan } from '../schemas/plan';
+import { optimizerKey } from '../engine/strategy/optimizerInput';
 
 /**
  * v23 → v24
@@ -174,4 +176,47 @@ export function migratePlanToV25(raw: Record<string, unknown>): void {
   if (Array.isArray(raw.expenseStreams)) {
     for (const e of raw.expenseStreams as Record<string, unknown>[]) upgradeEnd(e);
   }
+}
+
+// ── Frozen pre-v34 fingerprints. Used only to recognise results that were current when saved. ──
+const LEGACY_INPUT_FIELDS = [
+  'personA', 'personB', 'assumptions', 'portfolio',
+  'incomeStreams', 'lumpSumEvents', 'expenseStreams', 'withdrawalStrategy',
+  'withdrawalBracketCeiling', 'conversion', 'payTaxFromBrokerage', 'state',
+  'customStateTaxRate', 'goals',
+] as const;
+
+/** planInputKey as of v33: insertion-order JSON of the input fields, manualSchedule excluded. */
+export function legacyPlanInputKey(raw: Record<string, unknown>): string {
+  const { manualSchedule, ...conversion } = (raw.conversion ?? {}) as Record<string, unknown>;
+  void manualSchedule;
+  return JSON.stringify(Object.fromEntries(LEGACY_INPUT_FIELDS.map((k) => [k, k === 'conversion' ? conversion : raw[k]])));
+}
+
+/** manualScheduleKey as of v33. */
+export function legacyManualScheduleKey(raw: Record<string, unknown>): string {
+  const s = ((raw.conversion as Record<string, unknown> | undefined)?.manualSchedule ?? {}) as Record<string, number>;
+  return JSON.stringify(Object.keys(s).filter((k) => s[k] !== 0).sort().map((k) => [k, s[k]]));
+}
+
+/** True when a stored optimizer result was current under the pre-v34 keys. */
+export function wasLegacyFresh(raw: Record<string, unknown>): boolean {
+  const cp = raw.customPolicy as Record<string, unknown> | undefined;
+  if (!cp || cp.source !== 'optimizer' || typeof cp.inputKey !== 'string') return false;
+  if (cp.inputKey !== legacyPlanInputKey(raw)) return false;
+  return cp.manualScheduleKey == null || cp.manualScheduleKey === legacyManualScheduleKey(raw);
+}
+
+/**
+ * v33 → v34
+ *
+ * Staleness moves to a single key, optimizerKey. Re-stamp results that were current under the
+ * old keys so no plan turns stale on upgrade; results already out of date stay out of date.
+ * manualScheduleKey is retired (the schedule is part of optimizerKey now).
+ */
+export function migratePlanToV34(raw: Record<string, unknown>): void {
+  const cp = raw.customPolicy as Record<string, unknown> | undefined;
+  if (!cp) return;
+  if (wasLegacyFresh(raw)) cp.inputKey = optimizerKey(raw as unknown as Plan);
+  delete cp.manualScheduleKey;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { policyStatus } from './policyStatus';
-import { planInputKey, manualScheduleKey } from './planInputKey';
+import { optimizerKey } from './strategy/optimizerInput';
 import { defaultPlan } from '../schemas/plan';
 import type { BlendPolicy } from './blendPolicy';
 
@@ -24,9 +24,9 @@ describe('policyStatus', () => {
     expect(policyStatus(plan)).toBe('hand-edited');
   });
 
-  it('returns fresh when inputKey matches planInputKey', () => {
+  it('returns fresh when inputKey matches optimizerKey', () => {
     const base = defaultPlan();
-    const key = planInputKey(base);
+    const key = optimizerKey(base);
     const plan = { ...base, customPolicy: { windows: [BASE_WINDOW], source: 'optimizer' as const, inputKey: key } };
     expect(policyStatus(plan)).toBe('fresh');
   });
@@ -44,32 +44,31 @@ describe('policyStatus', () => {
 
   it('detects stale after payTaxFromBrokerage flip', () => {
     const base = defaultPlan();
-    const key = planInputKey(base);
+    const key = optimizerKey(base);
     const applied = { ...base, customPolicy: { windows: [BASE_WINDOW], source: 'optimizer' as const, inputKey: key } };
     const afterToggle = { ...applied, payTaxFromBrokerage: !base.payTaxFromBrokerage };
     expect(policyStatus(afterToggle)).toBe('stale');
   });
 
-  it('stays fresh when only the manual conversion schedule changes', () => {
+  it('goes stale when manual conversion amounts change', () => {
     const base = defaultPlan();
     const manual = { ...base, conversion: { ...base.conversion, mode: 'manual' as const, optimize: false, manualSchedule: { '60': 50_000 } } };
-    const applied = { ...manual, customPolicy: { windows: [BASE_WINDOW], source: 'optimizer' as const, inputKey: planInputKey(manual) } };
+    const applied = { ...manual, customPolicy: { windows: [BASE_WINDOW], source: 'optimizer' as const, inputKey: optimizerKey(manual) } };
+    expect(policyStatus(applied)).toBe('fresh');
     const edited = { ...applied, conversion: { ...applied.conversion, manualSchedule: { '60': 5, '61': 80_000 } } };
-    expect(policyStatus(edited)).toBe('fresh');
+    expect(policyStatus(edited)).toBe('stale');
   });
 
-  it('goes stale when the conversion mode changes', () => {
+  it('goes stale when a user-owned conversion mode changes', () => {
     const base = defaultPlan();
-    const applied = { ...base, customPolicy: { windows: [BASE_WINDOW], source: 'optimizer' as const, inputKey: planInputKey(base) } };
-    const nextMode = base.conversion.mode === 'manual' ? 'bracket-fill' as const : 'manual' as const;
-    expect(policyStatus({ ...applied, conversion: { ...base.conversion, mode: nextMode } })).toBe('stale');
+    const owned = { ...base, conversion: { ...base.conversion, mode: 'bracket-fill' as const, optimize: false } };
+    const applied = { ...owned, customPolicy: { windows: [BASE_WINDOW], source: 'optimizer' as const, inputKey: optimizerKey(owned) } };
+    expect(policyStatus({ ...applied, conversion: { ...owned.conversion, mode: 'manual' } })).toBe('stale');
   });
 
-  it('manualScheduleKey ignores key order and detects amount edits', () => {
+  it('stays fresh when a leftover mode changes while the optimizer owns conversions', () => {
     const base = defaultPlan();
-    const withSched = (m: Record<string, number>) => ({ ...base, conversion: { ...base.conversion, manualSchedule: m } });
-    expect(manualScheduleKey(withSched({ '60': 1, '61': 2 }))).toBe(manualScheduleKey(withSched({ '61': 2, '60': 1 })));
-    expect(manualScheduleKey(withSched({ '60': 1 }))).not.toBe(manualScheduleKey(withSched({ '60': 2 })));
-    expect(manualScheduleKey(withSched({ '60': 1, '61': 0 }))).toBe(manualScheduleKey(withSched({ '60': 1 })));
+    const applied = { ...base, customPolicy: { windows: [BASE_WINDOW], source: 'optimizer' as const, inputKey: optimizerKey(base) } };
+    expect(policyStatus({ ...applied, conversion: { ...base.conversion, mode: 'manual' } })).toBe('fresh');
   });
 });

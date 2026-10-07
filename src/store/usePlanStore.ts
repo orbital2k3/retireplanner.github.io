@@ -11,8 +11,7 @@ import { defaultScenarios } from '../engine/scenario';
 import { useWhatIfStore, applyWhatIf } from './useWhatIfStore';
 import { useOptimizerStore } from './useOptimizerStore';
 import { disposeEngineWorker } from '../engine/workerClient';
-import { migratePlanToV24, migratePlanToV25 } from './planMigrations';
-import { planInputKey, manualScheduleKey } from '../engine/planInputKey';
+import { migratePlanToV24, migratePlanToV25, migratePlanToV34, legacyPlanInputKey } from './planMigrations';
 import { PLAN_STORE_KEY, PLAN_STORE_VERSION } from './planStoreVersion';
 
 export type DisplayMode = 'real' | 'nominal';
@@ -148,16 +147,8 @@ export const usePlanStore = create<PlanState>()(
       migrate: (persistedState: unknown, fromVersion: number) => {
         if (!persistedState || typeof persistedState !== 'object') return persistedState as PlanState;
         const ps = persistedState as Record<string, unknown> & { plan?: Record<string, unknown> };
-        // v33: stamp manualScheduleKey on optimizer-authored customPolicy so later edits to the
-        // manual conversion amounts light up Re-optimize. Treats the saved schedule as the run's.
-        if (fromVersion < 33 && ps.plan && typeof ps.plan === 'object') {
-          const planObj = ps.plan as Record<string, unknown>;
-          const cp = planObj.customPolicy as Record<string, unknown> | undefined;
-          const conv = planObj.conversion as Record<string, unknown> | undefined;
-          if (cp && cp.source === 'optimizer' && !cp.manualScheduleKey && conv) {
-            cp.manualScheduleKey = manualScheduleKey(planObj as unknown as Plan);
-          }
-        }
+        // v34 (runs last, below): single optimizerKey replaces planInputKey + manualScheduleKey.
+        // v33: stamped manualScheduleKey; superseded by v34, which treats a missing one as current.
         // v32: add optional lumpSumEvents[].ownerStartedRmds (annual RMDs on inherited pre-tax IRAs).
         // Absent === false === pre-v32 behavior, so no data rewrite is needed.
         // v31: add plan.optimizedBy + plan.mcTuning (strategy provenance: the goal optimizer vs a
@@ -182,7 +173,7 @@ export const usePlanStore = create<PlanState>()(
           const planObj = ps.plan as Record<string, unknown>;
           const cp = planObj.customPolicy as Record<string, unknown> | undefined;
           if (cp && cp.source === 'optimizer' && !cp.inputKey) {
-            cp.inputKey = planInputKey(planObj as unknown as Plan);
+            cp.inputKey = legacyPlanInputKey(planObj);
           }
         }
         // v28: add assumptions.legacyTargetTaxAdjReal (after-tax legacy floor for max-spending).
@@ -392,6 +383,9 @@ export const usePlanStore = create<PlanState>()(
                 : undefined,
             };
           }
+        }
+        if (fromVersion < 34 && ps.plan && typeof ps.plan === 'object') {
+          migratePlanToV34(ps.plan as Record<string, unknown>);
         }
         if (!('displayMode' in ps)) ps.displayMode = 'real';
         return ps as unknown as PlanState;

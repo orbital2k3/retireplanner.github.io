@@ -2,6 +2,7 @@ import type { Plan, ConversionParams } from '../schemas/plan';
 import type { BlendPolicy, BlendWindow } from './blendPolicy';
 import { runProjection, type ProjectionResult } from './projection';
 import { householdPlanThroughAgeA } from './planInputKey';
+import { optimizerInput } from './strategy/optimizerInput';
 import { REC_GOALS, USER_GOALS, type RecGoal, type UserGoal } from './recommender';
 import { calendarYearAge } from '../lib/ageUtils';
 import { nelderMead2D, nelderMead3D } from './nelderMead';
@@ -1313,7 +1314,9 @@ function buildMcContext(opts: OptimizeOptions): McContext {
   return { paths, seed, equityPct, posture };
 }
 
-export function optimizeStrategy(plan: Plan, goal: UserGoal, opts: OptimizeOptions = {}): OptimizeResult {
+export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeOptions = {}): OptimizeResult {
+  // Every caller gets the same view: "Set it myself" settings and hand-built blends never reach the search.
+  const plan = optimizerInput(livePlan);
   const evalCounter = { n: 0 };
 
   if (goal === 'max-end-balance') {

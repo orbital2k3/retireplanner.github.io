@@ -201,7 +201,6 @@ export const BlendPolicySchema = z.object({
   source: z.enum(['optimizer', 'manual']).optional(),
   goal: z.string().optional(),
   inputKey: z.string().optional(),
-  manualScheduleKey: z.string().optional(),
 });
 export type BlendPolicySchemaT = z.infer<typeof BlendPolicySchema>;
 

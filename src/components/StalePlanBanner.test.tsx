@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { planInputKey } from '../engine/planInputKey';
+import { optimizerKey } from '../engine/strategy/optimizerInput';
 import { samplePlan } from '../schemas/plan';
 import type { Plan } from '../schemas/plan';
 
@@ -50,7 +50,7 @@ describe('StalePlanBanner', () => {
     const base = samplePlan();
     mockPlan.mockReturnValue({
       ...base,
-      customPolicy: { windows: [BASE_WINDOW], source: 'optimizer', inputKey: planInputKey(base) },
+      customPolicy: { windows: [BASE_WINDOW], source: 'optimizer', inputKey: optimizerKey(base) },
     });
     const { container } = renderBanner();
     expect(container.firstChild).toBeNull();

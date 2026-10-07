@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { usePlanStore } from './usePlanStore';
 import { samplePlan } from '../schemas/plan';
 import { policyStatus } from '../engine/policyStatus';
-import { planInputKey } from '../engine/planInputKey';
+import { optimizerKey } from '../engine/strategy/optimizerInput';
 import type { BlendPolicy } from '../engine/blendPolicy';
 
 const makeOptimizerPolicy = (plan: ReturnType<typeof samplePlan>): BlendPolicy => ({
   source: 'optimizer',
   windows: [{ fromAge: 59, toAge: 98, pctTaxable: 0.4, pctTraditional: 0.4, pctRoth: 0.2, convAmt: 50_000 }],
-  inputKey: planInputKey(plan),
+  inputKey: optimizerKey(plan),
 });
 
 const baselinePolicy: BlendPolicy = {

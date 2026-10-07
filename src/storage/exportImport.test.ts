@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { importPlanFromJSON, exportPlanToJSON } from './exportImport';
-import { planInputKey } from '../engine/planInputKey';
+import { optimizerKey } from '../engine/strategy/optimizerInput';
 import { policyStatus } from '../engine/policyStatus';
 import { samplePlan, type Plan } from '../schemas/plan';
 
@@ -17,7 +17,7 @@ function legacyShapedPlan(): Plan {
 describe('importPlanFromJSON', () => {
   it('keeps a current optimizer policy current when parsing reorders or drops fields', () => {
     const raw = legacyShapedPlan();
-    raw.customPolicy = { windows: [WINDOW], source: 'optimizer', inputKey: planInputKey(raw) };
+    raw.customPolicy = { windows: [WINDOW], source: 'optimizer', inputKey: optimizerKey(raw) };
     const r = importPlanFromJSON(exportPlanToJSON(raw));
     expect(r.ok).toBe(true);
     expect(policyStatus(r.plan!)).toBe('fresh');
