@@ -53,7 +53,7 @@ describe('P7 legacy target', () => {
     expect(canReOptimize(saved())).toBe(true);
     expect(end(saved())).toBe(end(before));
     render(<StalePlanBanner />);
-    expect(screen.getByText(/inputs changed after the optimizer ran/i)).toBeTruthy();
+    expect(screen.getByText(/plan changed after the optimizer ran/i)).toBeTruthy();
   });
 
   it('under "Set it myself" the edit changes neither the charts nor the manual slot', () => {
@@ -86,7 +86,7 @@ describe('P15 what-if sliders and Save as scenario', () => {
     // The overlay does change what the charts show.
     expect(runProjection(applyWhatIf(enginePlan(saved()), useWhatIfStore.getState())).endTotalReal).not.toBe(end(before));
     render(<StalePlanBanner />);
-    expect(screen.queryByText(/inputs changed after the optimizer ran/i)).toBeNull();
+    expect(screen.queryByText(/plan changed after the optimizer ran/i)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
     expect(useWhatIfStore.getState().active).toBe(false);
@@ -110,7 +110,7 @@ describe('P18 Reset', () => {
     expect(useWhatIfStore.getState().active).toBe(false);
     cleanup();
     render(<><StalePlanBanner /><StrategyChooser /></>);
-    expect(screen.queryByText(/inputs changed after the optimizer ran/i)).toBeNull();
+    expect(screen.queryByText(/plan changed after the optimizer ran/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Optimize for me/ }));
     expect((screen.getByRole('button', { name: /Re-optimize|Build/ }) as HTMLButtonElement).disabled).toBe(false);
   });

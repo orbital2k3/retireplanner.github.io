@@ -21,6 +21,7 @@ const withGoal = (p: SavedPlan, goal: SavedPlan['strategy']['optimizer']['goal']
 
 const goalBadge = (page: Page, label: string) => page.locator('.badge', { hasText: `✓ ${label}` });
 const pendingBanner = (page: Page) => page.getByText(/result ready/);
+const staleBanner = (page: Page) => page.getByText('Your plan changed after the optimizer ran.');
 
 async function reoptimizeFor(page: Page, goal: string) {
   await page.getByRole('button', { name: goal, exact: true }).click();
@@ -130,14 +131,13 @@ test('editing an input after optimizing keeps the results pages open with an out
   await addIncomeStream(page, 60_000);
   await page.getByRole('link', { name: 'Dashboard' }).click();
 
-  await expect(page.getByText('Your inputs changed after the optimizer ran.')).toBeVisible();
+  await expect(staleBanner(page)).toBeVisible();
   await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Projections' }).click();
-  await expect(page.getByText('Your inputs changed after the optimizer ran.')).toBeVisible();
+  await expect(staleBanner(page)).toBeVisible();
   await expect(page.locator('tbody tr').first()).toBeVisible();
 });
 
-const staleBanner = (page: Page) => page.getByText('Your inputs changed after the optimizer ran.');
 
 test('P5 editing the age window on the Dashboard stays on the page, keeps the charts, and Re-optimize clears the banner', async ({ page }) => {
   const plan = optimizedPlanABracketFill();

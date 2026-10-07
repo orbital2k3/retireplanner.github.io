@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react';
 import type { Plan } from '../schemas/plan';
 import type { SavedPlan } from '../schemas/savedPlan';
 import type { MonteCarloOptions } from '../engine/monteCarlo';
@@ -66,10 +66,23 @@ describe('P14 Monte Carlo robustness', () => {
     expect(useOptimizerStore.getState().robustnessPlan).toBeNull();
     expect(tunedBadge()).toBeTruthy();
 
+    // The shown results were simulated on the applied plan, so they stay.
+    expect(useOptimizerStore.getState().mcResult?.successRate).toBe(0.92);
+
     await runOptimizer({ plan: saved(), goal: 'max-end-balance' });
     expect(saved().strategy.result?.optimizedBy).toBe('optimizer');
     expect(saved().strategy.result?.mcTuning).toBeUndefined();
     await waitFor(() => expect(tunedBadge()).toBeNull());
+    // A new strategy makes the old simulation results out of date.
+    expect(useOptimizerStore.getState().mcResult).toBeNull();
+  });
+
+  it('switching to "Set it myself" clears simulation results from the optimizer strategy', async () => {
+    render(<MonteCarlo />);
+    fireEvent.click(screen.getByRole('button', { name: /Run Simulation/ }));
+    await waitFor(() => expect(useOptimizerStore.getState().mcResult).not.toBeNull());
+    act(() => usePlanStore.getState().setActiveStrategy('manual'));
+    expect(useOptimizerStore.getState().mcResult).toBeNull();
   });
 
   it('Discard leaves the saved plan unchanged', async () => {

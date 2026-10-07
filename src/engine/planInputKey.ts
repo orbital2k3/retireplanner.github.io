@@ -14,28 +14,3 @@ export function householdPlanThroughAgeA(plan: Plan): number {
   const bEndInATerms = plan.personB.planThroughAge + (birthYearB - birthYearA);
   return Math.max(ptA, bEndInATerms);
 }
-
-export const OPTIMIZER_INPUT_FIELDS = [
-  'personA', 'personB', 'assumptions', 'portfolio',
-  'incomeStreams', 'lumpSumEvents', 'expenseStreams', 'withdrawalStrategy',
-  'withdrawalBracketCeiling', 'conversion', 'payTaxFromBrokerage', 'state',
-  'customStateTaxRate', 'goals',
-] as const;
-
-export const OPTIMIZER_OUTPUT_FIELDS = [
-  'customPolicy', 'conversionBaselinePolicy', 'optimizedForGoal', 'solvedSpendingMultiplier',
-  'optimizedBy', 'mcTuning',
-] as const;
-
-/** Fingerprint used by the Monte Carlo page to drop results after an input change elsewhere.
- *  Optimizer staleness uses optimizerKey (strategy/optimizerInput.ts), not this. */
-export function planInputKey(plan: Plan): string {
-  // manualSchedule is excluded: the optimizer either ignores it (optimize=true) or keeps it
-  // fixed while choosing withdrawal ordering, and projections always use the current schedule.
-  // Keying on it made every keystroke in the manual table trip the stale gate.
-  const { manualSchedule, ...conversion } = plan.conversion;
-  void manualSchedule;
-  return JSON.stringify(
-    Object.fromEntries(OPTIMIZER_INPUT_FIELDS.map((k) => [k, k === 'conversion' ? conversion : plan[k]]))
-  );
-}

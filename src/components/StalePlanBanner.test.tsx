@@ -48,7 +48,7 @@ describe('StalePlanBanner', () => {
   it('when stale, explains and re-optimizes in place without leaving the page', async () => {
     mockPlan.mockReturnValue(staleSaved());
     renderBanner();
-    expect(screen.getByText(/inputs changed after the optimizer ran/i)).toBeTruthy();
+    expect(screen.getByText(/plan changed after the optimizer ran/i)).toBeTruthy();
     expect(screen.queryByText(/Back to Inputs/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Re-optimize/ }));
     await waitFor(() => expect(runOptimizer).toHaveBeenCalledWith(expect.objectContaining({ goal: 'max-end-balance' })));

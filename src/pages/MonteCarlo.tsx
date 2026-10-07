@@ -14,10 +14,10 @@ import OptimizerBadge from '../components/OptimizerBadge';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
 import { runOptimizer, commitOptimizerPlan } from '../store/strategyActions';
 import { enginePlan } from '../engine/strategy/savedPlan';
+import { canonicalStringify } from '../engine/strategy/optimizerInput';
 import type { SavedPlan } from '../schemas/savedPlan';
 import LearnMoreModal from '../components/LearnMoreModal';
 import { MC_SIMULATE_HELP, MC_OPTIMIZE_HELP, type HelpTopic } from '../components/learnMoreTopics';
-import { planInputKey } from '../engine/planInputKey';
 import { type McPosture } from '../engine/goalLabels';
 import { loadEquityPct, saveEquityPct } from '../lib/mcPrefs';
 import StalePlanBanner from '../components/StalePlanBanner';
@@ -137,8 +137,9 @@ export default function MonteCarlo() {
   // current plan (user changed inputs on another page), clear before the user sees stale numbers.
   // While mounted: if the key changes reactively (What-If slider or equity % changes on this page),
   // clear immediately and mark dirty so the user knows to re-run.
+  // The key covers everything the simulation reads, strategy included, so a new strategy clears old results.
   const mcFlat = useMemo(() => enginePlan(mcBase), [mcBase]);
-  const planKey = planInputKey(mcFlat);
+  const planKey = useMemo(() => canonicalStringify(mcFlat), [mcFlat]);
   useEffect(() => {
     if (mcResult && mcPlanKey !== null && mcPlanKey !== planKey) {
       clearMcResults();
@@ -239,6 +240,8 @@ export default function MonteCarlo() {
   const handleApply = () => {
     if (!robustnessPlan) return;
     commitOptimizerPlan(robustnessPlan);
+    // The shown results were simulated on this plan, so they stay current after it is saved.
+    setMcPlanKey(canonicalStringify(enginePlan(robustnessPlan)));
     setRobustnessPlan(null);
     setRobustnessComparison(null);
     setApplySuccess(robustnessPlan.strategy.result?.mcTuning?.posture ?? ROBUSTNESS_POSTURE);

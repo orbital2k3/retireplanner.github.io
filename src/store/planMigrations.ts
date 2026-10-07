@@ -10,6 +10,7 @@ import type { SavedPlan } from '../schemas/savedPlan';
 import { optimizerKey } from '../engine/strategy/optimizerInput';
 import { liveSettings } from '../engine/strategy/resultSettings';
 import { fromFlat } from '../engine/strategy/savedPlan';
+import { policyStatus } from '../engine/policyStatus';
 
 /**
  * v23 → v24
@@ -235,8 +236,7 @@ export function stampLegacySettings(raw: Record<string, unknown>): void {
 
 /** True when a flat plan's optimizer result matches its v34 key (judged on the object as stored). */
 export function wasV34Fresh(raw: Record<string, unknown>): boolean {
-  const cp = raw.customPolicy as Record<string, unknown> | undefined;
-  return cp?.source === 'optimizer' && typeof cp.inputKey === 'string' && cp.inputKey === optimizerKey(raw as unknown as Plan);
+  return policyStatus(raw as unknown as Plan) === 'fresh';
 }
 
 /**

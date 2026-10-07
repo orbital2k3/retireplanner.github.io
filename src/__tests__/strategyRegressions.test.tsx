@@ -101,7 +101,7 @@ describe('§6.6 strategy regressions', () => {
     for (const v of [4, 40, 400, 40_000]) usePlanStore.getState().setConversion('optimizer', { manualSchedule: { '65': 30_000, '66': v } });
     expect(end(saved())).toBe(before);
     render(<StalePlanBanner />);
-    expect(screen.getByText(/inputs changed after the optimizer ran/i)).toBeTruthy();
+    expect(screen.getByText(/plan changed after the optimizer ran/i)).toBeTruthy();
   });
 
   it('2c8a4e5: editing manual amounts marks the result out of date so Re-optimize turns on', () => {

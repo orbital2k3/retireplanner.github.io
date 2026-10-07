@@ -5,8 +5,8 @@ import { runOptimizer } from '../store/strategyActions';
 import { planStatus } from '../engine/strategy/savedPlan';
 
 /**
- * Non-blocking notice for result pages when inputs changed after the optimizer ran.
- * The page keeps rendering projections of the current inputs under the earlier strategy.
+ * Non-blocking notice for result pages when the plan's facts or "Optimize for me" settings changed
+ * after the optimizer ran. The page keeps rendering the current facts under the earlier strategy.
  */
 export default function StalePlanBanner() {
   const plan = usePlanStore((s) => s.plan);
@@ -39,9 +39,9 @@ export default function StalePlanBanner() {
     }}>
       <span style={{ fontSize: 16 }}>⚠</span>
       <div style={{ flex: 1, minWidth: 240, fontSize: 13, lineHeight: 1.5 }}>
-        <strong>Your inputs changed after the optimizer ran.</strong>{' '}
-        The results below use your new inputs with the strategy picked for your earlier ones.
-        Re-optimize to pick a strategy that fits your current plan.
+        <strong>Your plan changed after the optimizer ran.</strong>{' '}
+        The results below still use the strategy the optimizer picked earlier.
+        Re-optimize to pick a strategy for your plan as it is now.
         {error && <div style={{ color: '#c0392b', marginTop: 4 }}>Re-optimize failed: {error}</div>}
       </div>
       <button className="btn btn-primary" onClick={reoptimize} disabled={running}>

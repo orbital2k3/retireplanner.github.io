@@ -54,7 +54,7 @@ interface OptimizerState {
   /** True when plan inputs have changed since the last simulation was run. */
   mcDirty: boolean;
   setMcDirty: (d: boolean) => void;
-  /** planInputKey fingerprint at the time the last simulation ran. Used to detect cross-page
+  /** Fingerprint of the simulated engine plan at the time the last simulation ran. Used to detect cross-page
    *  input changes: if the current key differs on mount, results are stale and must be cleared. */
   mcPlanKey: string | null;
   setMcPlanKey: (key: string | null) => void;

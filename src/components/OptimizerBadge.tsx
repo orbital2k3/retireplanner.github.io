@@ -20,7 +20,7 @@ export default function OptimizerBadge({ state, style }: Props) {
   if (state.kind === 'stale') {
     return (
       <span className="badge badge-warning" style={style} title={title}>
-        ⚡ {label}{sourceText} · inputs changed
+        ⚡ {label}{sourceText} · plan changed
       </span>
     );
   }
