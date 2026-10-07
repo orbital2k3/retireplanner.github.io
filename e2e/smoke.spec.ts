@@ -4,7 +4,8 @@ import { runProjection } from '../src/engine/projection';
 import { fmtM } from '../src/lib/format';
 import { PLAN_STORE_KEY } from '../src/store/planStoreVersion';
 import type { Plan } from '../src/schemas/plan';
-import { optimizedPlanA, seedPlan, heroStat, gotoDashboard } from './fixtures';
+import { optimizedPlanA, optimizedPlanABracketFill, seedPlan, heroStat, gotoDashboard } from './fixtures';
+import { exportPlanToJSON } from '../src/storage/exportImport';
 
 // The UI optimizer runs in a Web Worker; max-spending on planA takes ~5s in Node.
 const OPTIMIZE_TIMEOUT = 60_000;
@@ -129,4 +130,72 @@ test('editing an input after optimizing keeps the results pages open with an out
   await page.getByRole('link', { name: 'Projections' }).click();
   await expect(page.getByText('Your inputs changed after the optimizer ran.')).toBeVisible();
   await expect(page.locator('tbody tr').first()).toBeVisible();
+});
+
+const staleBanner = (page: Page) => page.getByText('Your inputs changed after the optimizer ran.');
+
+test('P5 editing the age window on the Dashboard stays on the page, keeps the charts, and Re-optimize clears the banner', async ({ page }) => {
+  const plan = optimizedPlanABracketFill();
+  await seedPlan(page, plan);
+  await gotoDashboard(page);
+  const endBalance = fmtM(runProjection(plan).endTotalReal);
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
+
+  await page.getByRole('button', { name: 'Edit age window →' }).click();
+  const startAge = page.locator('.form-group', { hasText: 'Start Age' }).locator('input');
+  await startAge.fill('66');
+  await startAge.blur();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await expect(page).toHaveURL(/#\/dashboard/);
+  expect((await storedPlan(page)).conversion.startAge).toBe(66);
+  await expect(staleBanner(page)).toBeVisible();
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
+  await page.getByRole('button', { name: /^↗ Re-optimize/ }).click();
+  await expect(staleBanner(page)).toHaveCount(0, { timeout: OPTIMIZE_TIMEOUT });
+});
+
+test('P9 switching to Set it myself and back keeps the optimizer result current', async ({ page }) => {
+  const plan = optimizedPlanA();
+  await seedPlan(page, plan);
+  await gotoDashboard(page);
+  await page.getByRole('button', { name: /Set it myself/ }).click();
+  await page.getByRole('button', { name: /Optimize for me/ }).click();
+  await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
+  await expect(staleBanner(page)).toHaveCount(0);
+  expect(await storedPlan(page)).toEqual(plan);
+});
+
+test('P11 an input change shows the banner on every results page; Re-optimize from one clears it everywhere', async ({ page }) => {
+  await seedPlan(page, optimizedPlanA());
+  await addIncomeStream(page, 60_000);
+  for (const name of ['Dashboard', 'Projections', 'Taxes', 'Monte Carlo']) {
+    await page.getByRole('link', { name }).click();
+    await expect(staleBanner(page), name).toBeVisible();
+  }
+  await page.getByRole('button', { name: 'Re-optimize', exact: true }).click();
+  await expect(staleBanner(page)).toHaveCount(0, { timeout: OPTIMIZE_TIMEOUT });
+  await page.getByRole('link', { name: 'Dashboard' }).click();
+  await expect(staleBanner(page)).toHaveCount(0);
+});
+
+test('P12 a pending Max Spending result does not survive a reload', async ({ page }) => {
+  const plan = optimizedPlanA();
+  await seedPlan(page, plan);
+  await gotoDashboard(page);
+  await reoptimizeFor(page, 'Max Spending');
+  await page.reload();
+  await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
+  await expect(pendingBanner(page)).toHaveCount(0);
+  expect(await storedPlan(page)).toEqual(plan);
+});
+
+test('P16 importing a fresh export shows no out-of-date banner', async ({ page }) => {
+  await seedPlan(page, planA_simple());
+  await gotoDashboard(page);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'plan.json', mimeType: 'application/json', buffer: Buffer.from(exportPlanToJSON(optimizedPlanA())),
+  });
+  await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
+  await expect(staleBanner(page)).toHaveCount(0);
 });

@@ -8,11 +8,22 @@ import type { Plan } from '../src/schemas/plan';
 export const BUILD_OPTIONS = { useNelderMead: true, thorough: true } as const;
 
 let optimizedA: Plan | undefined;
+let optimizedABracketFill: Plan | undefined;
 
 /** planA_simple after a max-end-balance optimizer run with the UI's options: the plan Build Plan would save. */
 export function optimizedPlanA(): Plan {
   optimizedA ??= applyResultToPlan(planA_simple(), optimizeStrategy(planA_simple(), 'max-end-balance', BUILD_OPTIONS));
   return structuredClone(optimizedA);
+}
+
+/** planA_simple optimized with bracket-fill conversions (ages 63-73) chosen under Optimize for me. */
+export function optimizedPlanABracketFill(): Plan {
+  if (!optimizedABracketFill) {
+    const base = planA_simple();
+    const plan: Plan = { ...base, conversion: { ...base.conversion, mode: 'bracket-fill', optimize: false, startAge: 63, endAge: 73 } };
+    optimizedABracketFill = applyResultToPlan(plan, optimizeStrategy(plan, 'max-end-balance', BUILD_OPTIONS));
+  }
+  return structuredClone(optimizedABracketFill);
 }
 
 /** Seeds the persisted plan store once per tab, so later reloads keep changes made in the UI. */
