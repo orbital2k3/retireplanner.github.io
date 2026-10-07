@@ -22,7 +22,7 @@ import type { Plan } from '../schemas/plan';
 import OptimizerBadge from '../components/OptimizerBadge';
 import { GOAL_LABELS } from '../engine/goalLabels';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
-import { runOptimizer, commitOptimizerPlan, optimizerPatchFromFlat } from '../store/strategyActions';
+import { runOptimizer, commitOptimizerPlan, discardPending, optimizerPatchFromFlat } from '../store/strategyActions';
 import { enginePlan } from '../engine/strategy/savedPlan';
 import StalePlanBanner from '../components/StalePlanBanner';
 
@@ -39,9 +39,6 @@ export default function Dashboard() {
   const optimizerResult = useOptimizerStore((s) => s.result);
   const pendingPlan = useOptimizerStore((s) => s.pendingPlan);
   const pendingGoal = useOptimizerStore((s) => s.pendingGoal);
-  const setPendingPlan = useOptimizerStore((s) => s.setPendingPlan);
-  const setPendingGoal = useOptimizerStore((s) => s.setPendingGoal);
-  const setResult = useOptimizerStore((s) => s.setResult);
   const proj = useProjection(pendingPlan ?? undefined);
 
   // The engine view of what the charts show (a pending result first).
@@ -119,11 +116,6 @@ export default function Dashboard() {
     commitOptimizerPlan(pendingPlan);
   };
 
-  const handleDiscard = () => {
-    setPendingPlan(null);
-    setPendingGoal(null);
-    setResult(null);
-  };
 
   // Re-optimize with a settings patch from the rationale modal (Class B rows). Runs on the
   // saved plan (never the pending one) and follows the same apply rule as every other caller.
@@ -177,7 +169,7 @@ export default function Dashboard() {
                 Apply to Plan
               </button>
               <button
-                onClick={handleDiscard}
+                onClick={discardPending}
                 style={{ background: 'none', border: 'none', fontSize: 12, color: '#9a7830', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit', padding: 0 }}
               >
                 Discard

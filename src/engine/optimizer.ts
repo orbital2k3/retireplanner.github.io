@@ -49,6 +49,9 @@ const CONV_FINE = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0];
 
 // 12% bracket top (today's $) — MFJ upper bound of the second bracket.
 const BRACKET_12_TOP = FED_BRACKETS_MFJ[1][0];
+/** Ceilings tried for the bracket-fill withdrawal preset (12% and 22% tops, MFJ terms; the
+ *  projection scales them for single filers). The optimizer never reads the "Set it myself" ceiling. */
+const BF_WITHDRAWAL_CEILINGS = [BRACKET_12_TOP, FED_BRACKETS_MFJ[2][0]] as const;
 // 24% bracket top (today's $) — upper bound of 24% bracket (bottom of 32%).
 // Used as the per-year conversion cap so the optimizer can explore up to the
 // fill-to-24% strategy. The prior 3× BRACKET_12_TOP cap ($302K) blocked this
@@ -243,7 +246,7 @@ const buildConstantSeed = (
  *
  *  convAmt carries the conversions the source projection actually made (deflated to today's $,
  *  since convAmt is real and row.rothConv is nominal). Hardcoding 0 here used to discard the
- *  conversion schedule that made the source plan win: competitors 4–8 screen each ordering preset
+ *  conversion schedule that made the source plan win: competitors 4–9 screen each ordering preset
  *  with the incumbent's conversions pinned as manual mode, so a seed with conversions stripped
  *  starts in a different basin than the candidate being escalated and can land lower.
  *
@@ -1000,7 +1003,7 @@ function packageResult(
 // Post-refinement competitors (same pattern as customPolicy — direct full refinement, no
 // screening, so coordinate descent refines *within* an existing basin):
 //   1. Prior cross-goal customPolicy (if present) — avoids feedback-loop drift on same goal.
-//   2. Bracketfill preset with no conversions — catches plans where bracket-filling traditional
+//   2. Bracketfill preset (12% and 22% ceilings) with no conversions — catches plans where bracket-filling traditional
 //      in early low-income years beats conversion-heavy strategies globally. Only triggered when
 //      the bracketfill preset (one cheap projection) already outscores the multi-start best;
 //      otherwise the 3-seed screening already found the right basin and adding this would be
@@ -1010,8 +1013,8 @@ function packageResult(
 //      of wealth vs the bracketfill+no-conversion optimum.
 //   3. Zero-pre-Medicare conversions — catches plans where coordinate descent locks into a
 //      pre-65 conversion island that is worse than deferring all conversions post-Medicare.
-//   4–8. All 5 withdrawal-ordering presets with the winning conversion schedule pinned as
-//      manual mode. Pinning matches the decisionTrace ledger rows exactly, so a ledger row
+//   4–9. All 5 withdrawal-ordering presets (bracketfill at both ceilings) with the winning
+//      conversion schedule pinned as manual mode. Pinning matches the decisionTrace ledger rows exactly, so a ledger row
 //      with a positive delta guarantees escalation here — making Class A positive deltas a
 //      standing optimizer-quality bug signal. Costs at most 5 cheap projections.
 function multiStartInner(plan: Plan, opts: OptimizeOptions, evalCounter: { n: number }, outerProgress?: () => void): InnerEval {
@@ -1044,25 +1047,28 @@ function multiStartInner(plan: Plan, opts: OptimizeOptions, evalCounter: { n: nu
   // Competitor 2: bracketfill preset with no conversions.
   // One cheap projection establishes whether the bracketfill basin is globally better than the
   // multi-start result. Full refinement only fires when it is — no overhead for typical plans.
-  // Kept separate from the pinned-conversion loop (Competitors 4–8) because pinning the winning
+  // Kept separate from the pinned-conversion loop (Competitors 4–9) because pinning the winning
   // conversion schedule can mask plans where the global optimum is bracketfill + no conversions
   // (e.g. large traditional $1.2M+, RMD age 75): pinned-conv screening scores lower than best
   // even though bracketfill+no-conv is the true global winner.
   if (optimizeConversions) {
-    const bfCheckPlan: Plan = {
-      ...plan,
-      withdrawalStrategy: 'bracketfill',
-      customPolicy: undefined,
-      conversion: { ...plan.conversion, mode: 'off', optimize: false },
-    };
-    const bfCheckProj = runProjection(bfCheckPlan);
-    if (!bfCheckProj.ranOut && REC_GOALS['max-end'].score(bfCheckProj) > best.score) {
-      // Adopt the screen itself first, so a candidate proven better than the incumbent survives
-      // even if the re-search below lands lower.
-      const bfMat = materializeScreen(plan, bfCheckProj, retireAge, planToAge, evalCounter, optimizeConversions);
-      if (isBetter(bfMat, best)) best = bfMat;
-      const bfRefined = innerOptimize(plan, opts, evalCounter, outerProgress, bfMat.policy.windows);
-      if (isBetter(bfRefined, best)) best = bfRefined;
+    for (const withdrawalBracketCeiling of BF_WITHDRAWAL_CEILINGS) {
+      const bfCheckPlan: Plan = {
+        ...plan,
+        withdrawalStrategy: 'bracketfill',
+        withdrawalBracketCeiling,
+        customPolicy: undefined,
+        conversion: { ...plan.conversion, mode: 'off', optimize: false },
+      };
+      const bfCheckProj = runProjection(bfCheckPlan);
+      if (!bfCheckProj.ranOut && REC_GOALS['max-end'].score(bfCheckProj) > best.score) {
+        // Adopt the screen itself first, so a candidate proven better than the incumbent survives
+        // even if the re-search below lands lower.
+        const bfMat = materializeScreen(plan, bfCheckProj, retireAge, planToAge, evalCounter, optimizeConversions);
+        if (isBetter(bfMat, best)) best = bfMat;
+        const bfRefined = innerOptimize(plan, opts, evalCounter, outerProgress, bfMat.policy.windows);
+        if (isBetter(bfRefined, best)) best = bfRefined;
+      }
     }
   }
 
@@ -1075,9 +1081,9 @@ function multiStartInner(plan: Plan, opts: OptimizeOptions, evalCounter: { n: nu
     if (isBetter(noPreMedRefined, best)) best = noPreMedRefined;
   }
 
-  // Competitors 4–8: all 5 withdrawal-ordering presets with the winning conversion schedule
-  // pinned as manual mode. The screening plan is identical to the decisionTrace ledger row for
-  // each preset, so a positive ledger delta (preset beats chosen) implies the screening also
+  // Competitors 4–9: all 5 withdrawal-ordering presets (bracketfill at both ceilings) with the
+  // winning conversion schedule pinned as manual mode. The screening plan (12% ceiling) is
+  // identical to the decisionTrace ledger row for each preset, so a positive ledger delta (preset beats chosen) implies the screening also
   // beats best.score — guaranteeing escalation and making Class A deltas a bug signal.
   // Guard: retirementAge exclusion prevents manual conversions firing in accumulation years
   // (conversion.ts:24 manual branch fires before the !retired check).
@@ -1095,8 +1101,11 @@ function multiStartInner(plan: Plan, opts: OptimizeOptions, evalCounter: { n: nu
       manualSchedule: pinSchedule,
     };
     const ORDERING_PRESETS = ['taxfirst', 'rothfirst', 'tradfirst', 'proportional', 'bracketfill'] as const;
-    for (const preset of ORDERING_PRESETS) {
-      const checkPlan: Plan = { ...plan, withdrawalStrategy: preset, customPolicy: undefined, conversion: pinnedConv };
+    const candidates = ORDERING_PRESETS.flatMap((preset): Array<{ preset: Plan['withdrawalStrategy']; withdrawalBracketCeiling: number }> => preset === 'bracketfill'
+      ? BF_WITHDRAWAL_CEILINGS.map((withdrawalBracketCeiling) => ({ preset, withdrawalBracketCeiling }))
+      : [{ preset, withdrawalBracketCeiling: plan.withdrawalBracketCeiling }]);
+    for (const { preset, withdrawalBracketCeiling } of candidates) {
+      const checkPlan: Plan = { ...plan, withdrawalStrategy: preset, withdrawalBracketCeiling, customPolicy: undefined, conversion: pinnedConv };
       const checkProj = runProjection(checkPlan);
       if (!checkProj.ranOut && REC_GOALS['max-end'].score(checkProj) > best.score) {
         // Adopt the screen itself first — see materializeScreen. The seed now carries the pinned

@@ -74,6 +74,18 @@ export function commitOptimizerPlan(plan: SavedPlan): void {
   useWhatIfStore.getState().reset();
 }
 
+/** Declines a pending result. The goal pill goes back to the saved result's goal, so the pill
+ *  and the charts agree again. With no saved result the pill keeps the user's pick. */
+export function discardPending(): void {
+  const opt = useOptimizerStore.getState();
+  opt.setPendingPlan(null);
+  opt.setPendingGoal(null);
+  opt.setResult(null);
+  const plan = usePlanStore.getState().plan;
+  const savedGoal = plan.strategy.result?.goal;
+  if (savedGoal && savedGoal !== plan.strategy.optimizer.goal) usePlanStore.getState().editOptimizer({ goal: savedGoal });
+}
+
 const workerOptimize: OptimizeFn = (plan, goal, options, onProgress) =>
   getEngineWorker().optimize(plan, goal, options, onProgress ? Comlink.proxy(onProgress) : undefined);
 

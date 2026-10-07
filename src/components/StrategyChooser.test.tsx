@@ -176,3 +176,13 @@ describe('§6.7 StrategyChooser: every control saves to its own slot', () => {
     expect(saved().strategy.optimizer.goal).toBe('min-retirement-age');
   });
 });
+
+describe('leaving "Optimize for me" with a pending result', () => {
+  it('discards it and puts the goal pill back on the saved result\'s goal', () => {
+    setup('pending');
+    usePlanStore.getState().editOptimizer({ goal: 'max-sustainable-spending' });
+    tab('manual');
+    expect(useOptimizerStore.getState().pendingPlan).toBeNull();
+    expect(saved().strategy.optimizer.goal).toBe('max-end-balance');
+  });
+});

@@ -85,8 +85,9 @@ test('Re-optimize for max spending, then Discard leaves the saved plan unchanged
   await expect(pendingBanner(page)).toHaveCount(0);
   await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
-  // The goal pill is a saved setting; Discard / reload drops only the result.
-  expect(await storedPlan(page)).toEqual(withGoal(plan, 'max-sustainable-spending'));
+  // Discard also puts the goal pill back on the saved result's goal.
+  expect(await storedPlan(page)).toEqual(plan);
+  await expect(page.getByRole('button', { name: /^↗ Re-optimize/ })).toBeDisabled();
 });
 
 test("Today's $ / Nominal $ toggle switches the end balance", async ({ page }) => {
@@ -201,7 +202,7 @@ test('P12 a pending Max Spending result does not survive a reload', async ({ pag
   await page.reload();
   await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
   await expect(pendingBanner(page)).toHaveCount(0);
-  // The goal pill is a saved setting; Discard / reload drops only the result.
+  // The goal pill is a saved setting; a reload drops only the pending result.
   expect(await storedPlan(page)).toEqual(withGoal(plan, 'max-sustainable-spending'));
 });
 

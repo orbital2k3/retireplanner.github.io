@@ -13,7 +13,7 @@ import { useOptimizerStore } from '../../../store/useOptimizerStore';
 import { useWhatIfStore } from '../../../store/useWhatIfStore';
 import { PLAN_STORE_VERSION } from '../../../store/planStoreVersion';
 import {
-  runOptimizer, commitOptimizerPlan, chooseConversion, applyRule,
+  runOptimizer, commitOptimizerPlan, discardPending, chooseConversion, applyRule,
   type OptimizeFn, type ConversionChoice,
 } from '../../../store/strategyActions';
 import { exportPlanToJSON, importPlanFromJSON } from '../../../storage/exportImport';
@@ -160,7 +160,7 @@ async function step(m: Model, c: Cmd): Promise<void> {
       break;
     }
     case 'ApplyPending': if (opt().pendingPlan) commitOptimizerPlan(opt().pendingPlan!); break;
-    case 'DiscardPending': opt().setPendingPlan(null); opt().setPendingGoal(null); break;
+    case 'DiscardPending': discardPending(); break;
     case 'McRobustness': {
       const goal = before.strategy.result?.goal ?? before.strategy.optimizer.goal;
       const out = await runOptimizer({ plan: before, goal, mc: { mcSeed: 1, mcPosture: 'balanced', equityPct: 0.6 } }, fakeOptimize);

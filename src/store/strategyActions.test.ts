@@ -7,7 +7,7 @@ import { sampleSaved } from '../engine/__testutil__/savedPlans';
 import { usePlanStore } from './usePlanStore';
 import { useOptimizerStore } from './useOptimizerStore';
 import { useWhatIfStore } from './useWhatIfStore';
-import { runOptimizer, commitOptimizerPlan, applyRule, optimizerPatchFromFlat, type OptimizeFn } from './strategyActions';
+import { runOptimizer, commitOptimizerPlan, discardPending, applyRule, optimizerPatchFromFlat, type OptimizeFn } from './strategyActions';
 
 const GOALS: UserGoal[] = ['max-end-balance', 'max-sustainable-spending', 'min-retirement-age'];
 const CALLERS = ['inputs', 'chooser', 'dashboard-rationale', 'banner'] as const;
@@ -151,5 +151,29 @@ describe('§3.3 pathways through the runner', () => {
     usePlanStore.getState().updateExpenseStream(saved().expenseStreams[0].id, { annualAmount: 1 });
     expect(saved().strategy.result?.solvedSpendingMultiplier).toBeUndefined();
     expect(resultStatus(saved())).toBe('stale');
+  });
+});
+
+describe('Discard', () => {
+  it('drops the pending result and puts the goal pill back on the saved result\'s goal', async () => {
+    await runOptimizer({ plan: saved(), goal: 'max-end-balance' }, fakeOptimize);
+    const applied = saved();
+    usePlanStore.getState().editOptimizer({ goal: 'max-sustainable-spending' });
+    await runOptimizer({ plan: saved() }, fakeOptimize);
+    expect(opt().pendingPlan).not.toBeNull();
+
+    discardPending();
+    expect(opt()).toMatchObject({ pendingPlan: null, pendingGoal: null, result: null });
+    expect(saved()).toEqual(applied);
+    expect(planStatus(saved())).toBe('fresh');
+  });
+
+  it('with no saved result the pill keeps the user\'s pick', async () => {
+    usePlanStore.getState().editOptimizer({ goal: 'min-retirement-age' });
+    await runOptimizer({ plan: saved() }, fakeOptimize);
+    discardPending();
+    expect(opt().pendingPlan).toBeNull();
+    expect(saved().strategy.optimizer.goal).toBe('min-retirement-age');
+    expect(saved().strategy.result).toBeUndefined();
   });
 });

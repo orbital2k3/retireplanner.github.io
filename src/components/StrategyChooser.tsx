@@ -4,7 +4,7 @@ import { LegacyTargetInput } from './inputs/LegacyTargetInput';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { STRATEGIES } from '../engine/strategyPresets';
 import { USER_GOALS, type UserGoal } from '../engine/recommender';
-import { runOptimizer } from '../store/strategyActions';
+import { runOptimizer, discardPending } from '../store/strategyActions';
 import { resultStatus, canReOptimize } from '../engine/strategy/savedPlan';
 import StrategyCustomizeSheet from './strategy/StrategyCustomizeSheet';
 import ConversionPills from './strategy/ConversionPills';
@@ -69,8 +69,8 @@ export default function StrategyChooser() {
   };
 
   const switchApproach = (tab: 'optimize' | 'manual') => {
-    // The pending result belongs to "Optimize for me"; leaving the tab declines it.
-    if (tab === 'manual') dropPending();
+    // The pending result belongs to "Optimize for me"; leaving the tab discards it.
+    if (tab === 'manual' && pendingPlan) discardPending();
     setActiveStrategy(tab === 'optimize' ? 'optimizer' : 'manual');
   };
 
