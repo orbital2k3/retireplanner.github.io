@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { importPlanFromJSON, exportPlanToJSON } from './exportImport';
 import { optimizerKey } from '../engine/strategy/optimizerInput';
-import { policyStatus } from '../engine/policyStatus';
+import { planStatus } from '../engine/strategy/savedPlan';
 import { samplePlan, type Plan } from '../schemas/plan';
+import { optimizedSaved, staleSaved, sampleSaved } from '../engine/__testutil__/savedPlans';
+import { MANUAL_WINDOW } from '../engine/__testutil__/strategyPlans';
 
 const WINDOW = { fromAge: 60, toAge: 95, pctTaxable: 0.5, pctTraditional: 0.3, pctRoth: 0.2 };
 
@@ -10,23 +12,59 @@ const WINDOW = { fromAge: 60, toAge: 95, pctTaxable: 0.5, pctTraditional: 0.3, p
 function legacyShapedPlan(): Plan {
   const base = samplePlan();
   const { name, dob, ...restA } = base.personA;
-  const raw = { ...base, personA: { ...restA, passingAge: 95, dob, name } } as unknown as Plan;
-  return raw;
+  return { ...base, personA: { ...restA, passingAge: 95, dob, name } } as unknown as Plan;
 }
 
-describe('importPlanFromJSON', () => {
+/** A pre-v35 export file (flat plan). */
+const flatFile = (plan: Plan, planVersion?: number) =>
+  JSON.stringify({ app: 'retirement-optimizer', version: 1, exportedAt: '2026-10-01T00:00:00Z', planVersion, plan });
+
+describe('importPlanFromJSON: pre-v35 (flat) files', () => {
   it('keeps a current optimizer policy current when parsing reorders or drops fields', () => {
     const raw = legacyShapedPlan();
     raw.customPolicy = { windows: [WINDOW], source: 'optimizer', inputKey: optimizerKey(raw) };
-    const r = importPlanFromJSON(exportPlanToJSON(raw));
+    const r = importPlanFromJSON(flatFile(raw));
     expect(r.ok).toBe(true);
-    expect(policyStatus(r.plan!)).toBe('fresh');
+    expect(r.plan!.strategy.active).toBe('optimizer');
+    expect(planStatus(r.plan!)).toBe('fresh');
   });
 
   it('leaves a policy that was already out of date as stale', () => {
     const raw = legacyShapedPlan();
     raw.customPolicy = { windows: [WINDOW], source: 'optimizer', inputKey: 'old-key' };
-    const r = importPlanFromJSON(exportPlanToJSON(raw));
-    expect(policyStatus(r.plan!)).toBe('stale');
+    expect(planStatus(importPlanFromJSON(flatFile(raw)).plan!)).toBe('stale');
+  });
+
+  it('a hand-built blend lands in "Set it myself"', () => {
+    const r = importPlanFromJSON(flatFile({ ...samplePlan(), customPolicy: { windows: [MANUAL_WINDOW], source: 'manual' } }, 34));
+    expect(r.plan!.strategy).toMatchObject({ active: 'manual', manual: { customWindows: [MANUAL_WINDOW] } });
+    expect(r.plan!.strategy.result).toBeUndefined();
+  });
+});
+
+describe('importPlanFromJSON: v35 files (I7)', () => {
+  it('a fresh export stays fresh', () => {
+    expect(planStatus(importPlanFromJSON(exportPlanToJSON(optimizedSaved())).plan!)).toBe('fresh');
+  });
+
+  it('a stale export stays stale', () => {
+    expect(planStatus(importPlanFromJSON(exportPlanToJSON(staleSaved())).plan!)).toBe('stale');
+  });
+
+  it('both slots, the active tab and the result survive', () => {
+    const p = optimizedSaved();
+    const manualActive = {
+      ...p,
+      strategy: { ...p.strategy, active: 'manual' as const, manual: { ...p.strategy.manual, preset: 'rothfirst' as const, customWindows: [MANUAL_WINDOW] } },
+    };
+    expect(importPlanFromJSON(exportPlanToJSON(manualActive)).plan).toEqual(manualActive);
+  });
+
+  it('rejects an invalid strategy block with a readable error', () => {
+    const bad = JSON.parse(exportPlanToJSON(sampleSaved()));
+    bad.plan.strategy.active = 'nobody';
+    const r = importPlanFromJSON(JSON.stringify(bad));
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/strategy\.active/);
   });
 });

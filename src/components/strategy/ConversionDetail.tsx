@@ -1,4 +1,5 @@
-import { usePlanStore } from '../../store/usePlanStore';
+import { usePlanStore, type StrategySlot } from '../../store/usePlanStore';
+import { optimizerView, enginePlan } from '../../engine/strategy/savedPlan';
 import { NumberInput } from '../inputs/NumberInput';
 import { fmtUSD } from '../../lib/format';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE } from '../../engine/taxConstants';
@@ -7,24 +8,27 @@ import { preRetirementConversionAges } from '../../engine/planWarnings';
 import { calendarYearAge } from '../../lib/ageUtils';
 
 type Props = {
-  // Optimize-for-me: the optimizer replaces the withdrawal preset, so its bracket-fill cap doesn't apply.
-  unrestrictedCeiling?: boolean;
+  /** Which settings this edits. "Optimize for me" is never capped by the withdrawal bracket-fill
+   *  ceiling: the optimizer replaces the withdrawal preset. */
+  slot: StrategySlot;
 };
 
 /** Data-entry detail for the active Roth conversion mode, shown inside the Dashboard side sheet.
  *  Mode SELECTION lives inline as pills in StrategyChooser; this renders only the fields the chosen
  *  mode needs — Fixed Amount (amount + window), Bracket-Fill (ceiling + window), Manual (per-year table).
  *  For 'off' there's nothing to enter. Saves to the store immediately. */
-export default function ConversionDetail({ unrestrictedCeiling }: Props = {}) {
-  const plan = usePlanStore((s) => s.plan);
+export default function ConversionDetail({ slot }: Props) {
+  const saved = usePlanStore((s) => s.plan);
+  // The flat plan for this slot, as the engine reads it.
+  const plan = slot === 'optimizer' ? optimizerView(saved) : enginePlan({ ...saved, strategy: { ...saved.strategy, active: 'manual' } });
   const displayMode = usePlanStore((s) => s.displayMode);
   const setConversion = usePlanStore((s) => s.setConversion);
-  const conv = plan.conversion;
-  const updateConv = setConversion;
+  const conv = saved.strategy[slot].conversion;
+  const updateConv = (patch: Parameters<typeof setConversion>[1]) => setConversion(slot, patch);
 
   const brackets = plan.personB ? FED_BRACKETS_MFJ : FED_BRACKETS_SINGLE;
   const convBracketOptions = brackets.slice(0, 5)
-    .filter(([top]) => unrestrictedCeiling || plan.withdrawalStrategy !== 'bracketfill' || top <= plan.withdrawalBracketCeiling)
+    .filter(([top]) => slot === 'optimizer' || plan.withdrawalStrategy !== 'bracketfill' || top <= plan.withdrawalBracketCeiling)
     .map(([top, rate]) => ({
       value: top,
       label: `Top of ${Math.round(rate * 100)}% bracket ($${top.toLocaleString()})`,

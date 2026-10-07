@@ -1,54 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { usePlanStore } from './usePlanStore';
-import { samplePlan } from '../schemas/plan';
-import { policyStatus } from '../engine/policyStatus';
-import { optimizerKey } from '../engine/strategy/optimizerInput';
-import type { BlendPolicy } from '../engine/blendPolicy';
+import { planStatus, resultStatus } from '../engine/strategy/savedPlan';
+import { optimizedSaved } from '../engine/__testutil__/savedPlans';
 
-const makeOptimizerPolicy = (plan: ReturnType<typeof samplePlan>): BlendPolicy => ({
-  source: 'optimizer',
-  windows: [{ fromAge: 59, toAge: 98, pctTaxable: 0.4, pctTraditional: 0.4, pctRoth: 0.2, convAmt: 50_000 }],
-  inputKey: optimizerKey(plan),
-});
+describe('setConversion edits one slot', () => {
+  beforeEach(() => usePlanStore.setState({ plan: optimizedSaved() }));
 
-const baselinePolicy: BlendPolicy = {
-  source: 'optimizer',
-  windows: [{ fromAge: 59, toAge: 98, pctTaxable: 1, pctTraditional: 0, pctRoth: 0 }],
-};
-
-describe('setConversion invalidation behavior', () => {
-  beforeEach(() => {
-    usePlanStore.setState({ plan: samplePlan() });
-  });
-
-  it('leaves customPolicy in place but makes policyStatus stale when the policy is optimizer-authored', () => {
-    const base = samplePlan();
-    const policy = makeOptimizerPolicy(base);
-    usePlanStore.setState({
-      plan: { ...base, customPolicy: policy, conversionBaselinePolicy: baselinePolicy },
-    });
-    expect(policyStatus(usePlanStore.getState().plan)).toBe('fresh');
-
-    usePlanStore.getState().setConversion({ mode: 'auto-window', optimize: false });
+  it('an optimizer-slot edit keeps the result but marks it stale (when conversions are user-owned)', () => {
+    usePlanStore.getState().editOptimizer({ optimizerDecidesConversions: false });
+    usePlanStore.getState().setConversion('optimizer', { mode: 'auto-window' });
     const plan = usePlanStore.getState().plan;
-
-    expect(plan.customPolicy).toBeDefined();
-    expect(plan.conversionBaselinePolicy).toBeDefined();
-    expect(plan.conversion.mode).toBe('auto-window');
-    expect(policyStatus(plan)).toBe('stale');
+    expect(plan.strategy.result).toBeDefined();
+    expect(plan.strategy.optimizer.conversion.mode).toBe('auto-window');
+    expect(planStatus(plan)).toBe('stale');
   });
 
-  it('leaves a manual-authored policy untouched', () => {
-    const manual: BlendPolicy = { source: 'manual', windows: [{ fromAge: 59, toAge: 98, pctTaxable: 0.4, pctTraditional: 0.4, pctRoth: 0.2 }] };
-    usePlanStore.setState({ plan: { ...samplePlan(), customPolicy: manual } });
-    usePlanStore.getState().setConversion({ mode: 'auto-window' });
-    expect(usePlanStore.getState().plan.customPolicy).toEqual(manual);
-  });
-
-  it('is a no-op on customPolicy when none is set', () => {
-    usePlanStore.getState().setConversion({ mode: 'bracket-fill' });
+  it('a manual-slot edit leaves the optimizer slot and the result untouched', () => {
+    const before = usePlanStore.getState().plan;
+    usePlanStore.getState().setConversion('manual', { mode: 'bracket-fill', bracketCeiling: 1 });
     const plan = usePlanStore.getState().plan;
-    expect(plan.customPolicy).toBeUndefined();
-    expect(plan.conversion.mode).toBe('bracket-fill');
+    expect(plan.strategy.optimizer).toBe(before.strategy.optimizer);
+    expect(plan.strategy.result).toBe(before.strategy.result);
+    expect(resultStatus(plan)).toBe('fresh');
   });
 });

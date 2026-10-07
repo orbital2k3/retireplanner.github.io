@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { PlanSchema } from '../../schemas/plan';
-import { FIELD_REGISTRY, classifyPath, type RegistryEntry } from './fieldRegistry';
+import { FIELD_REGISTRY, SAVED_FIELD_REGISTRY, classifyPath, classifySavedPath, type RegistryEntry } from './fieldRegistry';
+import { SavedPlanSchema, type SavedPlan } from '../../schemas/savedPlan';
+import { savedOptimizerKey, fromFlat } from './savedPlan';
+import { PlanSchema as FlatSchema } from '../../schemas/plan';
 import { optimizerKey } from './optimizerInput';
 import { richPlan } from '../__testutil__/strategyPlans';
 
@@ -92,5 +95,39 @@ describe('§6.1 key sensitivity follows the registry', () => {
     for (const k of ['incomeStreams', 'expenseStreams', 'lumpSumEvents'] as const) {
       expect(optimizerKey({ ...base, [k]: base[k].slice(1) }), k).not.toBe(baseKey);
     }
+  });
+});
+
+describe('§6.1 stored plan (Phase 2 slots)', () => {
+  /** richPlan as stored, with the optimizer slot owning a manual schedule so every field counts. */
+  const base: SavedPlan = (() => {
+    const p = fromFlat(FlatSchema.parse(richPlan()), true);
+    return { ...p, strategy: { ...p.strategy, optimizer: { ...p.strategy.optimizer, optimizerDecidesConversions: false } } };
+  })();
+  const baseKey = savedOptimizerKey(base);
+  const all = leaves(base);
+
+  it('classifies every key in SavedPlanSchema, recursively', () => {
+    expect(registryGaps(SavedPlanSchema, SAVED_FIELD_REGISTRY)).toEqual([]);
+  });
+
+  it('every leaf is classified', () => {
+    expect(all.filter((l) => classifySavedPath(l.path) === undefined).map((l) => l.path.join('.'))).toEqual([]);
+  });
+
+  it('fact and optimizer-setting edits change the key', () => {
+    const wrong = all
+      .filter((l) => SHOULD_CHANGE_KEY.has(classifySavedPath(l.path)!))
+      .filter((l) => savedOptimizerKey(setPath(base, l.path, mutate(l.value))) === baseKey)
+      .map((l) => l.path.join('.'));
+    expect(wrong).toEqual([]);
+  });
+
+  it('manual, display and output edits leave the key unchanged', () => {
+    const wrong = all
+      .filter((l) => !SHOULD_CHANGE_KEY.has(classifySavedPath(l.path)!))
+      .filter((l) => savedOptimizerKey(setPath(base, l.path, mutate(l.value))) !== baseKey)
+      .map((l) => l.path.join('.'));
+    expect(wrong).toEqual([]);
   });
 });

@@ -1,33 +1,42 @@
 import { expect, type Page } from '@playwright/test';
 import { planA_simple } from '../src/engine/__golden/plans';
 import { optimizeStrategy } from '../src/engine/optimizer';
-import { applyResultToPlan } from '../src/engine/applyOptimizerResult';
+import { fromFlat, optimizerView, applyResult } from '../src/engine/strategy/savedPlan';
 import { PLAN_STORE_KEY, PLAN_STORE_VERSION } from '../src/store/planStoreVersion';
 import type { Plan } from '../src/schemas/plan';
+import type { SavedPlan } from '../src/schemas/savedPlan';
 
 export const BUILD_OPTIONS = { useNelderMead: true, thorough: true } as const;
 
-let optimizedA: Plan | undefined;
-let optimizedABracketFill: Plan | undefined;
+let optimizedA: SavedPlan | undefined;
+let optimizedABracketFill: SavedPlan | undefined;
+
+/** A flat plan as saved by the app (no result, "Set it myself" active). */
+export const saved = (flat: Plan): SavedPlan => fromFlat(flat, false);
+
+/** What Build Plan saves: the optimizer run on the "Optimize for me" view of the plan. */
+function buildPlan(flat: Plan): SavedPlan {
+  const base = saved(flat);
+  return applyResult(base, optimizeStrategy(optimizerView(base), base.strategy.optimizer.goal, BUILD_OPTIONS));
+}
 
 /** planA_simple after a max-end-balance optimizer run with the UI's options: the plan Build Plan would save. */
-export function optimizedPlanA(): Plan {
-  optimizedA ??= applyResultToPlan(planA_simple(), optimizeStrategy(planA_simple(), 'max-end-balance', BUILD_OPTIONS));
+export function optimizedPlanA(): SavedPlan {
+  optimizedA ??= buildPlan(planA_simple());
   return structuredClone(optimizedA);
 }
 
 /** planA_simple optimized with bracket-fill conversions (ages 63-73) chosen under Optimize for me. */
-export function optimizedPlanABracketFill(): Plan {
+export function optimizedPlanABracketFill(): SavedPlan {
   if (!optimizedABracketFill) {
     const base = planA_simple();
-    const plan: Plan = { ...base, conversion: { ...base.conversion, mode: 'bracket-fill', optimize: false, startAge: 63, endAge: 73 } };
-    optimizedABracketFill = applyResultToPlan(plan, optimizeStrategy(plan, 'max-end-balance', BUILD_OPTIONS));
+    optimizedABracketFill = buildPlan({ ...base, conversion: { ...base.conversion, mode: 'bracket-fill', optimize: false, startAge: 63, endAge: 73 } });
   }
   return structuredClone(optimizedABracketFill);
 }
 
 /** Seeds the persisted plan store once per tab, so later reloads keep changes made in the UI. */
-export async function seedPlan(page: Page, plan: Plan, displayMode: 'real' | 'nominal' = 'real') {
+export async function seedPlan(page: Page, plan: SavedPlan, displayMode: 'real' | 'nominal' = 'real') {
   const value = JSON.stringify({ state: { plan, displayMode, setupDismissed: true }, version: PLAN_STORE_VERSION });
   await page.addInitScript(({ key, value }) => {
     if (sessionStorage.getItem('e2e-seeded')) return;

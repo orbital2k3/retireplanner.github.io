@@ -1,4 +1,5 @@
 import type { Plan, Assumptions, ConversionParams } from '../../schemas/plan';
+import type { SavedPlan } from '../../schemas/savedPlan';
 
 /** What a Plan field is, for deciding what the optimizer sees and what makes its result stale.
  *  - fact: describes the household. Always live in projections; changes make a result stale.
@@ -69,6 +70,44 @@ export const FIELD_REGISTRY: Record<keyof Plan, RegistryEntry> = {
 /** Classification of a dotted path (e.g. "assumptions.inflation"); the deepest registry entry wins. */
 export function classifyPath(path: readonly string[]): FieldClass | undefined {
   let entry: RegistryEntry | undefined = { ...FIELD_REGISTRY };
+  for (const key of path) {
+    if (typeof entry === 'string') return entry;
+    entry = entry?.[key];
+  }
+  return typeof entry === 'string' ? entry : undefined;
+}
+
+/** The same classification for the stored plan (facts + strategy slots). The goal pill and the
+ *  active tab are 'display' for the key: the goal is compared against the result's goal
+ *  separately, and switching tabs never changes what the optimizer sees. */
+export const SAVED_FIELD_REGISTRY: Record<keyof SavedPlan, RegistryEntry> = {
+  personA: 'fact',
+  personB: 'fact',
+  assumptions: Object.fromEntries(Object.entries(ASSUMPTIONS).filter(([k]) => k !== 'legacyTargetTaxAdjReal')),
+  portfolio: 'fact',
+  incomeStreams: 'fact',
+  lumpSumEvents: 'fact',
+  expenseStreams: 'fact',
+  state: 'fact',
+  customStateTaxRate: 'fact',
+  goals: 'display',
+  strategy: {
+    active: 'display',
+    manual: 'manualSetting',
+    optimizer: {
+      goal: 'display',
+      optimizerDecidesConversions: 'optimizerSetting',
+      conversion: 'optimizerSetting',
+      payTaxFromBrokerage: 'optimizerSetting',
+      legacyTargetTaxAdjReal: 'optimizerSetting',
+    },
+    result: 'output',
+  },
+};
+
+/** classifyPath for the stored plan. */
+export function classifySavedPath(path: readonly string[]): FieldClass | undefined {
+  let entry: RegistryEntry | undefined = { ...SAVED_FIELD_REGISTRY };
   for (const key of path) {
     if (typeof entry === 'string') return entry;
     entry = entry?.[key];

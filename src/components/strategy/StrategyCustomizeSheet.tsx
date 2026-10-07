@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { StrategySlot } from '../../store/usePlanStore';
 import { useProjection } from '../../store/usePlanStore';
 import ConversionDetail from './ConversionDetail';
 import CustomBlendPanel from './CustomBlendPanel';
@@ -8,9 +9,10 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 /** Right-drawer side sheet. `mode` controls which panel is shown:
  *  'blend' → Custom Blend Editor; 'conversion' → the active conversion mode's detail fields;
  *  'chart' → the Conversions-vs-RMD chart. Mode/preset selection lives inline in StrategyChooser. */
-export default function StrategyCustomizeSheet({ open, onClose, mode, unrestrictedCeiling }: {
+export default function StrategyCustomizeSheet({ open, onClose, mode, slot }: {
   open: boolean; onClose: () => void; mode: 'blend' | 'conversion' | 'chart';
-  unrestrictedCeiling?: boolean;
+  /** Which settings the conversion sheet edits. */
+  slot: StrategySlot;
 }) {
   const isMobile = useIsMobile();
   const proj = useProjection();
@@ -85,7 +87,7 @@ export default function StrategyCustomizeSheet({ open, onClose, mode, unrestrict
           >Close</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', paddingBottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom))' : 16 }}>
-          {mode === 'conversion' && <ConversionDetail unrestrictedCeiling={unrestrictedCeiling} />}
+          {mode === 'conversion' && <ConversionDetail slot={slot} />}
           {mode === 'blend' && <CustomBlendPanel />}
           {mode === 'chart' && (
             <div>

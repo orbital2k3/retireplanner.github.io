@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { runOptimizer } from '../store/strategyActions';
 import ConversionPills from '../components/strategy/ConversionPills';
 import { useNavigate } from 'react-router-dom';
-import { usePlanStore } from '../store/usePlanStore';
-import { useOptimizerStore } from '../store/useOptimizerStore';
+import { usePlanStore, useEnginePlan } from '../store/usePlanStore';
 import { householdTotals, resolveGrowthRate } from '../schemas/plan';
 import type { IncomeStream, ExpenseStream, LumpSumEvent, PersonPortfolio, GrowthRate, EndRule } from '../schemas/plan';
 import { computePlanWarnings } from '../engine/planWarnings';
@@ -206,13 +205,11 @@ export default function InputsPage() {
   const addExpenseStream = usePlanStore((s) => s.addExpenseStream);
   const updateExpenseStream = usePlanStore((s) => s.updateExpenseStream);
   const removeExpenseStream = usePlanStore((s) => s.removeExpenseStream);
-  const setPayTaxFromBrokerage = usePlanStore((s) => s.setPayTaxFromBrokerage);
-  const pendingGoal = useOptimizerStore((s) => s.pendingGoal);
-
-  const planGoal: UserGoal = pendingGoal ?? (plan.optimizedForGoal as UserGoal | undefined) ?? 'max-end-balance';
-  const [selectedGoal, setSelectedGoal] = useState<UserGoal>(planGoal);
-  const [seenGoal, setSeenGoal] = useState<UserGoal>(planGoal);
-  if (planGoal !== seenGoal) { setSeenGoal(planGoal); setSelectedGoal(planGoal); }
+  const editOptimizer = usePlanStore((s) => s.editOptimizer);
+  const flatPlan = useEnginePlan();
+  // The goal pills and conversion controls here are the "Optimize for me" settings Build Plan uses.
+  const selectedGoal = plan.strategy.optimizer.goal;
+  const setSelectedGoal = (goal: UserGoal) => editOptimizer({ goal });
 
   const [convSheetOpen, setConvSheetOpen] = useState(false);
   const [building, setBuilding] = useState(false);
@@ -282,7 +279,7 @@ export default function InputsPage() {
     && splitValidA && splitValidB;
   const retirementAge = A.retirementAge;
   const planThroughAge = A.planThroughAge;
-  const planWarnings = computePlanWarnings(plan);
+  const planWarnings = computePlanWarnings(flatPlan);
   const minStartAge = (whose: string) => {
     if (whose === 'B' && B) return B.retirementAge;
     if (whose === 'Household' && B) return Math.min(A.retirementAge, B.retirementAge);
@@ -315,7 +312,7 @@ export default function InputsPage() {
     setBuildProgress(0);
     setBuildError(null);
     try {
-      await runOptimizer({ plan, goal: selectedGoal, onProgress: (frac) => setBuildProgress(frac) });
+      await runOptimizer({ plan, onProgress: (frac) => setBuildProgress(frac) });
       window.scrollTo(0, 0);
       navigate('/dashboard');
     } catch (err) {
@@ -925,14 +922,14 @@ export default function InputsPage() {
               <div style={{ ...inlineLabelStyle, paddingTop: 8 }}>Roth conversions</div>
               <ConversionPills variant="optimizer" ceilingOptions={convBracketOptions} onEdit={() => setConvSheetOpen(true)} />
             </div>
-            <StrategyCustomizeSheet open={convSheetOpen} mode="conversion" onClose={() => setConvSheetOpen(false)} />
+            <StrategyCustomizeSheet open={convSheetOpen} mode="conversion" slot="optimizer" onClose={() => setConvSheetOpen(false)} />
 
             <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 10, marginTop: 2 }}>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', userSelect: 'none' }}>
                 <input
                   type="checkbox"
-                  checked={plan.payTaxFromBrokerage ?? true}
-                  onChange={(e) => setPayTaxFromBrokerage(e.target.checked)}
+                  checked={plan.strategy.optimizer.payTaxFromBrokerage}
+                  onChange={(e) => editOptimizer({ payTaxFromBrokerage: e.target.checked })}
                   style={{ accentColor: 'var(--gold)', width: 13, height: 13 }}
                 />
                 Pay IRA withdrawal taxes from brokerage

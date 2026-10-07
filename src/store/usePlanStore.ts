@@ -1,23 +1,35 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { useToastStore } from './useToastStore';
 import { FED_BRACKETS_MFJ } from '../engine/taxConstants';
-import type { Plan, Person, Assumptions, PersonPortfolio, IncomeStream, ExpenseStream, LumpSumEvent, ConversionParams, Goal } from '../schemas/plan';
-import type { BlendPolicy } from '../engine/blendPolicy';
-import { defaultPlan } from '../schemas/plan';
+import type { Plan, Person, Assumptions, PersonPortfolio, IncomeStream, ExpenseStream, LumpSumEvent, Goal } from '../schemas/plan';
+import type { SavedPlan, ManualStrategy, OptimizerStrategy, ConversionSettings, Strategy } from '../schemas/savedPlan';
+import { defaultSavedPlan, enginePlan } from '../engine/strategy/savedPlan';
 import { runProjection, type ProjectionResult } from '../engine/projection';
 import type { Scenario } from '../engine/scenario';
 import { defaultScenarios } from '../engine/scenario';
 import { useWhatIfStore, applyWhatIf } from './useWhatIfStore';
 import { useOptimizerStore } from './useOptimizerStore';
 import { disposeEngineWorker } from '../engine/workerClient';
-import { migratePlanToV24, migratePlanToV25, migratePlanToV34, legacyPlanInputKey } from './planMigrations';
+import { migratePlanToV24, migratePlanToV25, migratePlanToV34, legacyPlanInputKey, migrateFlatToSaved } from './planMigrations';
 import { PLAN_STORE_KEY, PLAN_STORE_VERSION } from './planStoreVersion';
 
 export type DisplayMode = 'real' | 'nominal';
 
+export type StrategySlot = 'manual' | 'optimizer';
+type FactsAssumptions = Omit<Assumptions, 'legacyTargetTaxAdjReal'>;
+
+/** A spending edit invalidates the solved Max Spending multiplier (it scaled the old amounts). */
+function clearSolvedSpending(plan: SavedPlan): SavedPlan {
+  const r = plan.strategy.result;
+  if (r?.solvedSpendingMultiplier === undefined) return plan;
+  return { ...plan, strategy: { ...plan.strategy, result: { ...r, solvedSpendingMultiplier: undefined } } };
+}
+
+const withStrategy = (plan: SavedPlan, patch: Partial<Strategy>): SavedPlan => ({ ...plan, strategy: { ...plan.strategy, ...patch } });
+
 interface PlanState {
-  plan: Plan;
+  plan: SavedPlan;
   scenarios: Scenario[];
   displayMode: DisplayMode;
   setupDismissed: boolean;
@@ -29,7 +41,7 @@ interface PlanState {
   resetScenarios: () => void;
   setPersonA: (patch: Partial<Person>) => void;
   setPersonB: (patch: Partial<Person>) => void;
-  setAssumptions: (patch: Partial<Assumptions>) => void;
+  setAssumptions: (patch: Partial<FactsAssumptions>) => void;
   setPersonAPortfolio: (patch: Partial<PersonPortfolio>) => void;
   setPersonBPortfolio: (patch: Partial<PersonPortfolio>) => void;
   setIncomeStreams: (streams: IncomeStream[]) => void;
@@ -45,17 +57,17 @@ interface PlanState {
   removeExpenseStream: (id: string) => void;
   addPersonB: () => void;
   removePersonB: () => void;
-  setWithdrawalStrategy: (s: Plan['withdrawalStrategy']) => void;
-  setCustomPolicy: (policy: BlendPolicy) => void;
-  /** Apply an entire next plan produced by applyResultToPlan (optimizer Apply).
-   *  Atomic — sets customPolicy + optimizedForGoal + any mutated expense / personA / personB fields in one go. */
-  applyOptimizerResult: (next: Plan) => void;
-  clearCustomPolicy: () => void;
-  setConversion: (patch: Partial<ConversionParams>) => void;
-  setWithdrawalBracketCeiling: (v: number) => void;
+  /** Which tab drives the charts. Neither tab's settings nor the optimizer result are touched. */
+  setActiveStrategy: (active: StrategySlot) => void;
+  /** "Set it myself" settings. Never read by the optimizer. */
+  editManual: (patch: Partial<ManualStrategy>) => void;
+  /** "Optimize for me" settings. Changing them marks the result out of date. */
+  editOptimizer: (patch: Partial<OptimizerStrategy>) => void;
+  setConversion: (slot: StrategySlot, patch: Partial<ConversionSettings>) => void;
+  /** Save a whole plan produced by applyResult (optimizer Apply), atomically. */
+  applyOptimizerResult: (next: SavedPlan) => void;
   setState: (state: string) => void;
   setCustomStateTaxRate: (rate: number) => void;
-  setPayTaxFromBrokerage: (v: boolean) => void;
   addGoal: (g: Goal) => void;
   updateGoal: (id: string, patch: Partial<Goal>) => void;
   removeGoal: (id: string) => void;
@@ -65,7 +77,7 @@ interface PlanState {
 export const usePlanStore = create<PlanState>()(
   persist(
     (set) => ({
-      plan: defaultPlan(),
+      plan: defaultSavedPlan(),
       scenarios: defaultScenarios(),
       displayMode: 'real',
       setupDismissed: false,
@@ -103,43 +115,26 @@ export const usePlanStore = create<PlanState>()(
       addLumpSumEvent: (e) => set((s) => ({ plan: { ...s.plan, lumpSumEvents: [...(s.plan.lumpSumEvents ?? []), e] } })),
       updateLumpSumEvent: (id, patch) => set((s) => ({ plan: { ...s.plan, lumpSumEvents: (s.plan.lumpSumEvents ?? []).map(x => x.id === id ? { ...x, ...patch } : x) } })),
       removeLumpSumEvent: (id) => set((s) => ({ plan: { ...s.plan, lumpSumEvents: (s.plan.lumpSumEvents ?? []).filter(x => x.id !== id) } })),
-      setExpenseStreams: (expenseStreams) => set((s) => ({ plan: { ...s.plan, expenseStreams, solvedSpendingMultiplier: undefined } })),
-      addExpenseStream: (stream) => set((s) => ({ plan: { ...s.plan, expenseStreams: [...s.plan.expenseStreams, stream], solvedSpendingMultiplier: undefined } })),
+      setExpenseStreams: (expenseStreams) => set((s) => ({ plan: clearSolvedSpending({ ...s.plan, expenseStreams }) })),
+      addExpenseStream: (stream) => set((s) => ({ plan: clearSolvedSpending({ ...s.plan, expenseStreams: [...s.plan.expenseStreams, stream] }) })),
       updateExpenseStream: (id, patch) => set((s) => ({
-        plan: { ...s.plan, expenseStreams: s.plan.expenseStreams.map(x => x.id === id ? { ...x, ...patch } : x), solvedSpendingMultiplier: undefined },
+        plan: clearSolvedSpending({ ...s.plan, expenseStreams: s.plan.expenseStreams.map(x => x.id === id ? { ...x, ...patch } : x) }),
       })),
-      removeExpenseStream: (id) => set((s) => ({ plan: { ...s.plan, expenseStreams: s.plan.expenseStreams.filter(x => x.id !== id), solvedSpendingMultiplier: undefined } })),
-      setWithdrawalStrategy: (withdrawalStrategy) => set((s) => {
-        if (s.plan.customPolicy?.source === 'optimizer') {
-          useToastStore.getState().show('info', 'Optimizer strategy cleared — re-run the optimizer to restore it.');
-        }
-        return { plan: { ...s.plan, withdrawalStrategy, customPolicy: undefined, conversionBaselinePolicy: undefined, optimizedForGoal: undefined, optimizedBy: undefined, mcTuning: undefined } };
+      removeExpenseStream: (id) => set((s) => ({ plan: clearSolvedSpending({ ...s.plan, expenseStreams: s.plan.expenseStreams.filter(x => x.id !== id) }) })),
+      setActiveStrategy: (active) => set((s) => ({ plan: withStrategy(s.plan, { active }) })),
+      editManual: (patch) => set((s) => ({ plan: withStrategy(s.plan, { manual: { ...s.plan.strategy.manual, ...patch } }) })),
+      editOptimizer: (patch) => set((s) => ({ plan: withStrategy(s.plan, { optimizer: { ...s.plan.strategy.optimizer, ...patch } }) })),
+      setConversion: (slot, patch) => set((s) => {
+        const cur = s.plan.strategy[slot];
+        return { plan: withStrategy(s.plan, { [slot]: { ...cur, conversion: { ...cur.conversion, ...patch } } }) };
       }),
-      setCustomPolicy: (policy) => set((s) => ({ plan: { ...s.plan, customPolicy: policy, conversionBaselinePolicy: undefined, optimizedForGoal: undefined } })),
       applyOptimizerResult: (next) => set(() => ({ plan: next })),
-      clearCustomPolicy: () => set((s) => {
-        if (s.plan.customPolicy?.source === 'optimizer') {
-          useToastStore.getState().show('info', 'Optimizer strategy cleared — re-run the optimizer to restore it.');
-        }
-        return { plan: { ...s.plan, customPolicy: undefined, conversionBaselinePolicy: undefined, optimizedForGoal: undefined, optimizedBy: undefined, mcTuning: undefined } };
-      }),
-      setConversion: (patch) => set((s) => ({
-        plan: { ...s.plan, conversion: { ...s.plan.conversion, ...patch } },
-      })),
-      setWithdrawalBracketCeiling: (v: number) => set((s) => ({
-        plan: {
-          ...s.plan,
-          withdrawalBracketCeiling: v,
-          conversion: { ...s.plan.conversion, bracketCeiling: Math.min(s.plan.conversion.bracketCeiling, v) },
-        },
-      })),
       setState: (state) => set((s) => ({ plan: { ...s.plan, state } })),
       setCustomStateTaxRate: (rate) => set((s) => ({ plan: { ...s.plan, customStateTaxRate: rate } })),
-      setPayTaxFromBrokerage: (v) => set((s) => ({ plan: { ...s.plan, payTaxFromBrokerage: v } })),
       addGoal: (g) => set((s) => ({ plan: { ...s.plan, goals: [...(s.plan.goals ?? []), g] } })),
       updateGoal: (id, patch) => set((s) => ({ plan: { ...s.plan, goals: (s.plan.goals ?? []).map((x) => x.id === id ? { ...x, ...patch } : x) } })),
       removeGoal: (id) => set((s) => ({ plan: { ...s.plan, goals: (s.plan.goals ?? []).filter((x) => x.id !== id) } })),
-      resetPlan: () => { disposeEngineWorker(); set({ plan: defaultPlan() }); },
+      resetPlan: () => { disposeEngineWorker(); set({ plan: defaultSavedPlan() }); },
     }),
     {
       name: PLAN_STORE_KEY,
@@ -387,6 +382,10 @@ export const usePlanStore = create<PlanState>()(
         if (fromVersion < 34 && ps.plan && typeof ps.plan === 'object') {
           migratePlanToV34(ps.plan as Record<string, unknown>);
         }
+        // v35: flat strategy fields → strategy slots (runs after every flat-shape migration).
+        if (fromVersion < 35 && ps.plan && typeof ps.plan === 'object') {
+          ps.plan = migrateFlatToSaved(ps.plan as Record<string, unknown>) as unknown as Record<string, unknown>;
+        }
         if (!('displayMode' in ps)) ps.displayMode = 'real';
         return ps as unknown as PlanState;
       },
@@ -400,12 +399,18 @@ export const usePlanStore = create<PlanState>()(
  *  Accepts an optional planOverride (e.g. the pending optimizer plan on the Dashboard).
  *  When provided, what-if overrides are layered on top of it instead of the stored plan.
  *  The saved plan in usePlanStore is never mutated. */
-export function useProjection(planOverride?: Plan): ProjectionResult {
+export function useProjection(planOverride?: SavedPlan): ProjectionResult {
   const plan = usePlanStore((s) => s.plan);
   const pendingPlan = useOptimizerStore((s) => s.pendingPlan);
   const whatIf = useWhatIfStore();
   // When the optimizer has a pending result (not yet applied), use it as the base so all
   // projection views reflect the optimizer's recommended plan without requiring Apply first.
-  const effective = applyWhatIf(planOverride ?? pendingPlan ?? plan, whatIf);
+  const effective = applyWhatIf(enginePlan(planOverride ?? pendingPlan ?? plan), whatIf);
   return runProjection(effective, { explain: true });
+}
+
+/** The saved plan as the engine sees it (active strategy flattened). Memoized per saved plan. */
+export function useEnginePlan(): Plan {
+  const plan = usePlanStore((s) => s.plan);
+  return useMemo(() => enginePlan(plan), [plan]);
 }

@@ -2,6 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { samplePlan, type Plan } from '../schemas/plan';
 import { policyStatus } from '../engine/policyStatus';
+import { planStatus } from '../engine/strategy/savedPlan';
+import type { SavedPlan } from '../schemas/savedPlan';
 import { usePlanStore } from './usePlanStore';
 import { legacyPlanInputKey, legacyManualScheduleKey, migratePlanToV34 } from './planMigrations';
 import { importPlanFromJSON } from '../storage/exportImport';
@@ -19,7 +21,7 @@ function v33Plan(opts: { fresh: boolean; scheduleEdited?: boolean }): Record<str
 }
 
 const migrateStore = (plan: Record<string, unknown>, from: number) =>
-  (usePlanStore.persist.getOptions().migrate!({ plan, scenarios: [] }, from) as { plan: Plan }).plan;
+  (usePlanStore.persist.getOptions().migrate!({ plan, scenarios: [] }, from) as { plan: SavedPlan }).plan;
 
 describe('v33 → v34 migration', () => {
   it('keeps a result that was current under the old keys current', () => {
@@ -42,14 +44,14 @@ describe('v33 → v34 migration', () => {
   });
 
   it('runs through the store migrate hook from v33', () => {
-    expect(policyStatus(migrateStore(v33Plan({ fresh: true }), 33))).toBe('fresh');
-    expect(policyStatus(migrateStore(v33Plan({ fresh: false }), 33))).toBe('stale');
+    expect(planStatus(migrateStore(v33Plan({ fresh: true }), 33))).toBe('fresh');
+    expect(planStatus(migrateStore(v33Plan({ fresh: false }), 33))).toBe('stale');
   });
 
   it('keeps a v28 plan fresh after v29 stamps it and v34 re-stamps it', () => {
     const p = JSON.parse(JSON.stringify(samplePlan())) as Record<string, unknown>;
     p.customPolicy = { windows: [OPT_WINDOW], source: 'optimizer' };
-    expect(policyStatus(migrateStore(p, 28))).toBe('fresh');
+    expect(planStatus(migrateStore(p, 28))).toBe('fresh');
   });
 
   it('leaves manual and absent policies alone', () => {
@@ -67,11 +69,11 @@ describe('import of pre-v34 exports', () => {
     JSON.stringify({ app: 'retirement-optimizer', version: 1, exportedAt: '2026-10-01T00:00:00Z', plan });
 
   it('keeps a result that was current in the file current', () => {
-    expect(policyStatus(importPlanFromJSON(file(v33Plan({ fresh: true }))).plan!)).toBe('fresh');
+    expect(planStatus(importPlanFromJSON(file(v33Plan({ fresh: true }))).plan!)).toBe('fresh');
   });
 
   it('keeps an out-of-date result out of date', () => {
-    expect(policyStatus(importPlanFromJSON(file(v33Plan({ fresh: false }))).plan!)).toBe('stale');
-    expect(policyStatus(importPlanFromJSON(file(v33Plan({ fresh: true, scheduleEdited: true }))).plan!)).toBe('stale');
+    expect(planStatus(importPlanFromJSON(file(v33Plan({ fresh: false }))).plan!)).toBe('stale');
+    expect(planStatus(importPlanFromJSON(file(v33Plan({ fresh: true, scheduleEdited: true }))).plan!)).toBe('stale');
   });
 });

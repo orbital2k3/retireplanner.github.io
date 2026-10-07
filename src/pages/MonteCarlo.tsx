@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from 'react';
 import { usePlanStore, useProjection } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { useWhatIfStore, applyWhatIf } from '../store/useWhatIfStore';
-import type { Plan } from '../schemas/plan';
 import { getEngineWorker } from '../engine/workerClient';
 import MonteCarloFan from '../components/charts/MonteCarloFan';
 import HistoricalCohortChart from '../components/charts/HistoricalCohortChart';
@@ -14,6 +13,8 @@ import InsightCard from '../components/InsightCard';
 import OptimizerBadge from '../components/OptimizerBadge';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
 import { runOptimizer, commitOptimizerPlan } from '../store/strategyActions';
+import { enginePlan } from '../engine/strategy/savedPlan';
+import type { SavedPlan } from '../schemas/savedPlan';
 import LearnMoreModal from '../components/LearnMoreModal';
 import { MC_SIMULATE_HELP, MC_OPTIMIZE_HELP, type HelpTopic } from '../components/learnMoreTopics';
 import { planInputKey } from '../engine/planInputKey';
@@ -136,7 +137,8 @@ export default function MonteCarlo() {
   // current plan (user changed inputs on another page), clear before the user sees stale numbers.
   // While mounted: if the key changes reactively (What-If slider or equity % changes on this page),
   // clear immediately and mark dirty so the user knows to re-run.
-  const planKey = planInputKey(mcBase);
+  const mcFlat = useMemo(() => enginePlan(mcBase), [mcBase]);
+  const planKey = planInputKey(mcFlat);
   useEffect(() => {
     if (mcResult && mcPlanKey !== null && mcPlanKey !== planKey) {
       clearMcResults();
@@ -157,7 +159,7 @@ export default function MonteCarlo() {
     setApplySuccess(null);
     try {
       const worker = getEngineWorker();
-      const mc = await worker.monteCarlo(robustnessPlan ?? mcBase, { trials, model: 'historical', equityPct: equityPct / 100, seed });
+      const mc = await worker.monteCarlo(enginePlan(robustnessPlan ?? mcBase), { trials, model: 'historical', equityPct: equityPct / 100, seed });
       setResult(mc);
       setMcPlanKey(planKey);
     } finally {
@@ -169,7 +171,7 @@ export default function MonteCarlo() {
     setRunningHistorical(true);
     try {
       const worker = getEngineWorker();
-      const sweep = await worker.historicalSweep(robustnessPlan ?? mcBase, { equityPct: equityPct / 100 });
+      const sweep = await worker.historicalSweep(enginePlan(robustnessPlan ?? mcBase), { equityPct: equityPct / 100 });
       setHistoricalResult(sweep);
     } finally {
       setRunningHistorical(false);
@@ -184,28 +186,34 @@ export default function MonteCarlo() {
     try {
       const worker = getEngineWorker();
       // Use mcBase as the base — never a previous preview, to avoid compounding.
-      const goal = mcBase.optimizedForGoal ?? 'max-end-balance';
+      const goal = mcBase.strategy.result?.goal ?? mcBase.strategy.optimizer.goal;
       const mcOpts = { trials, model: 'historical' as const, equityPct: equityPct / 100, seed };
-      const before = await worker.monteCarlo(mcBase, mcOpts);
+      const before = await worker.monteCarlo(mcFlat, mcOpts);
       const { result: optResult, plan: basePlan } = await runOptimizer({
         plan: mcBase, goal,
         mc: { equityPct: equityPct / 100, mcPosture: ROBUSTNESS_POSTURE, mcSeed: seed },
         onProgress: (frac, msg) => setRobustProgress({ frac, msg }),
       });
       // Out-of-sample score: the search used 32 bootstrap paths, so its own numbers are optimistic.
-      const after = await worker.monteCarlo(basePlan, mcOpts);
+      const after = await worker.monteCarlo(enginePlan(basePlan), mcOpts);
       const gainPts = (after.successRate - before.successRate) * 100;
       const worthIt = gainPts >= MIN_GAIN_PTS;
-      const plan: Plan = {
+      const plan: SavedPlan = {
         ...basePlan,
-        // Provenance, so the Dashboard can tell this apart from a goal-optimizer run.
-        optimizedBy: 'monte-carlo',
-        mcTuning: {
-          posture: ROBUSTNESS_POSTURE,
-          before: before.successRate,
-          after: after.successRate,
-          trials,
-          equityPct: equityPct / 100,
+        strategy: {
+          ...basePlan.strategy,
+          result: {
+            ...basePlan.strategy.result!,
+            // Provenance, so the Dashboard can tell this apart from a goal-optimizer run.
+            optimizedBy: 'monte-carlo',
+            mcTuning: {
+              posture: ROBUSTNESS_POSTURE,
+              before: before.successRate,
+              after: after.successRate,
+              trials,
+              equityPct: equityPct / 100,
+            },
+          },
         },
       };
       setRobustOutcome({ plan, optResult, before, after, gainPts, worthIt });
@@ -233,7 +241,7 @@ export default function MonteCarlo() {
     commitOptimizerPlan(robustnessPlan);
     setRobustnessPlan(null);
     setRobustnessComparison(null);
-    setApplySuccess(robustnessPlan.mcTuning?.posture ?? ROBUSTNESS_POSTURE);
+    setApplySuccess(robustnessPlan.strategy.result?.mcTuning?.posture ?? ROBUSTNESS_POSTURE);
     setRobustOutcome(null);
   };
 
@@ -249,7 +257,7 @@ export default function MonteCarlo() {
   const successColor = (rate: number) => rate >= 0.9 ? 'var(--success)' : rate >= 0.75 ? 'var(--warning)' : 'var(--danger)';
 
   const band = result ? riskBandFor(result.successRate) : null;
-  const insights = result ? insightsForSurface(generateInsights(plan, proj, result), 'mc') : [];
+  const insights = result ? insightsForSurface(generateInsights(enginePlan(plan), proj, result), 'mc') : [];
 
   const samplingRange = result
     ? (1.96 * Math.sqrt(result.successRate * (1 - result.successRate) / result.trials) * 100).toFixed(1)

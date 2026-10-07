@@ -1,19 +1,21 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { samplePlan, type Plan } from '../schemas/plan';
 import type { OptimizeResult } from '../engine/optimizer';
 import type { UserGoal } from '../engine/recommender';
-import { policyStatus } from '../engine/policyStatus';
 import { optimizerKey } from '../engine/strategy/optimizerInput';
+import { planStatus, resultStatus } from '../engine/strategy/savedPlan';
+import { sampleSaved } from '../engine/__testutil__/savedPlans';
 import { usePlanStore } from './usePlanStore';
 import { useOptimizerStore } from './useOptimizerStore';
 import { useWhatIfStore } from './useWhatIfStore';
-import { runOptimizer, commitOptimizerPlan, applyRule, type OptimizeFn } from './strategyActions';
+import { runOptimizer, commitOptimizerPlan, applyRule, optimizerPatchFromFlat, type OptimizeFn } from './strategyActions';
 
 const GOALS: UserGoal[] = ['max-end-balance', 'max-sustainable-spending', 'min-retirement-age'];
 const CALLERS = ['inputs', 'chooser', 'dashboard-rationale', 'banner'] as const;
 
 /** Deterministic stand-in for the worker: the policy depends only on the plan's key. */
+const seen: string[] = [];
 const fakeOptimize: OptimizeFn = async (plan, goal) => {
+  seen.push(JSON.stringify(plan));
   const k = optimizerKey(plan).length % 50;
   const spend = plan.expenseStreams.reduce((s, e) => s + e.annualAmount, 0);
   return {
@@ -28,7 +30,8 @@ const saved = () => usePlanStore.getState().plan;
 const opt = () => useOptimizerStore.getState();
 
 beforeEach(() => {
-  usePlanStore.setState({ plan: samplePlan() });
+  seen.length = 0;
+  usePlanStore.setState({ plan: sampleSaved() });
   useOptimizerStore.setState({ result: null, pendingPlan: null, pendingGoal: null, robustnessPlan: null, robustnessComparison: null });
   useWhatIfStore.getState().reset();
 });
@@ -42,27 +45,43 @@ describe('§3.3 one apply rule for every caller (I9, P1, P3)', () => {
         expect(out.kind).toBe(applyRule(goal));
         expect(opt().result?.goal).toBe(goal);
         if (out.kind === 'applied') {
-          expect(saved().optimizedForGoal).toBe(goal);
-          expect(policyStatus(saved())).toBe('fresh');
+          expect(saved().strategy.active).toBe('optimizer');
+          expect(saved().strategy.result?.goal).toBe(goal);
+          expect(planStatus(saved())).toBe('fresh');
           expect(opt().pendingPlan).toBeNull();
         } else {
           expect(saved()).toBe(before);
           expect(opt().pendingPlan).toBe(out.plan);
           expect(opt().pendingGoal).toBe(goal);
-          expect(policyStatus(out.plan)).toBe('fresh');
+          expect(planStatus(out.plan)).toBe('fresh');
         }
       });
     }
   }
+
+  it('runs the saved optimizer goal when none is given', async () => {
+    usePlanStore.getState().editOptimizer({ goal: 'min-retirement-age' });
+    const out = await runOptimizer({ plan: saved() }, fakeOptimize);
+    expect(out.goal).toBe('min-retirement-age');
+  });
 });
 
 describe('§3.3 pathways through the runner', () => {
+  it('the optimizer never receives "Set it myself" settings', async () => {
+    usePlanStore.getState().editManual({ preset: 'rothfirst', withdrawalBracketCeiling: 1, customWindows: [{ fromAge: 40, toAge: 110, pctTaxable: 0, pctTraditional: 1, pctRoth: 0 }] });
+    await runOptimizer({ plan: saved() }, fakeOptimize);
+    const sent = JSON.parse(seen[0]);
+    expect(sent.withdrawalStrategy).toBe('taxfirst');
+    expect(sent.customPolicy).toBeUndefined();
+    expect(saved().strategy.manual.preset).toBe('rothfirst');
+  });
+
   it('P11 a stale result is fresh after re-optimizing', async () => {
     await runOptimizer({ plan: saved(), goal: 'max-end-balance' }, fakeOptimize);
     usePlanStore.getState().setPersonA({ ssPIA: 50_000 });
-    expect(policyStatus(saved())).toBe('stale');
+    expect(planStatus(saved())).toBe('stale');
     await runOptimizer({ plan: saved(), goal: 'max-end-balance' }, fakeOptimize);
-    expect(policyStatus(saved())).toBe('fresh');
+    expect(planStatus(saved())).toBe('fresh');
   });
 
   it('P12 Apply saves the pending result; Discard leaves the plan unchanged', async () => {
@@ -74,16 +93,17 @@ describe('§3.3 pathways through the runner', () => {
     await runOptimizer({ plan: before, goal: 'max-sustainable-spending' }, fakeOptimize);
     commitOptimizerPlan(opt().pendingPlan!);
     expect(saved().expenseStreams[0].annualAmount).toBeCloseTo(out.plan.expenseStreams[0].annualAmount);
-    expect(policyStatus(saved())).toBe('fresh');
+    expect(saved().strategy.result?.solvedSpendingMultiplier).toBeCloseTo(1.1);
+    expect(planStatus(saved())).toBe('fresh');
     expect(opt().pendingPlan).toBeNull();
   });
 
   it('P13 a rationale patch is saved with the result and follows the same rule', async () => {
-    const flipped = !saved().payTaxFromBrokerage;
-    const out = await runOptimizer({ plan: saved(), goal: 'max-end-balance', patch: { payTaxFromBrokerage: flipped } }, fakeOptimize);
+    const flipped = !saved().strategy.optimizer.payTaxFromBrokerage;
+    const out = await runOptimizer({ plan: saved(), goal: 'max-end-balance', patch: optimizerPatchFromFlat({ payTaxFromBrokerage: flipped }) }, fakeOptimize);
     expect(out.kind).toBe('applied');
-    expect(saved().payTaxFromBrokerage).toBe(flipped);
-    expect(policyStatus(saved())).toBe('fresh');
+    expect(saved().strategy.optimizer.payTaxFromBrokerage).toBe(flipped);
+    expect(planStatus(saved())).toBe('fresh');
   });
 
   it('P14 a Monte Carlo run previews only; Apply sets provenance; the next goal run resets it', async () => {
@@ -93,15 +113,25 @@ describe('§3.3 pathways through the runner', () => {
     expect(out.kind).toBe('preview');
     expect(saved()).toBe(before);
     expect(opt().pendingPlan).toBeNull();
-    commitOptimizerPlan({ ...out.plan, optimizedBy: 'monte-carlo' });
-    expect(saved().optimizedBy).toBe('monte-carlo');
-    expect(policyStatus(saved())).toBe('fresh');
+    const r = out.plan.strategy.result!;
+    commitOptimizerPlan({ ...out.plan, strategy: { ...out.plan.strategy, result: { ...r, optimizedBy: 'monte-carlo' } } });
+    expect(saved().strategy.result?.optimizedBy).toBe('monte-carlo');
+    expect(planStatus(saved())).toBe('fresh');
     await runOptimizer({ plan: saved(), goal: 'max-end-balance' }, fakeOptimize);
-    expect(saved().optimizedBy).toBe('optimizer');
+    expect(saved().strategy.result?.optimizedBy).toBe('optimizer');
+  });
+
+  it('switching to "Set it myself" keeps the result; switching back finds it fresh', async () => {
+    await runOptimizer({ plan: saved(), goal: 'max-end-balance' }, fakeOptimize);
+    usePlanStore.getState().setActiveStrategy('manual');
+    usePlanStore.getState().editManual({ preset: 'proportional' });
+    expect(saved().strategy.result).toBeDefined();
+    usePlanStore.getState().setActiveStrategy('optimizer');
+    expect(planStatus(saved())).toBe('fresh');
   });
 
   it('clears a robustness preview when a run starts and resets what-if on apply', async () => {
-    opt().setRobustnessPlan(samplePlan());
+    opt().setRobustnessPlan(sampleSaved());
     useWhatIfStore.setState({ active: true, overrides: { inflation: 0.04 } });
     await runOptimizer({ plan: saved(), goal: 'max-end-balance' }, fakeOptimize);
     expect(opt().robustnessPlan).toBeNull();
@@ -109,10 +139,17 @@ describe('§3.3 pathways through the runner', () => {
   });
 
   it('never compounds: a pending plan is not used as the next run input', async () => {
-    const before: Plan = saved();
+    const before = saved();
     await runOptimizer({ plan: before, goal: 'max-sustainable-spending' }, fakeOptimize);
     const second = await runOptimizer({ plan: saved(), goal: 'max-sustainable-spending' }, fakeOptimize);
-    const base = before.expenseStreams[0].annualAmount;
-    expect(second.plan.expenseStreams[0].annualAmount).toBeCloseTo(base * 1.1);
+    expect(second.plan.expenseStreams[0].annualAmount).toBeCloseTo(before.expenseStreams[0].annualAmount * 1.1);
+  });
+
+  it('a spending edit drops the solved spending multiplier but keeps the result', async () => {
+    await runOptimizer({ plan: saved(), goal: 'max-sustainable-spending' }, fakeOptimize);
+    commitOptimizerPlan(opt().pendingPlan!);
+    usePlanStore.getState().updateExpenseStream(saved().expenseStreams[0].id, { annualAmount: 1 });
+    expect(saved().strategy.result?.solvedSpendingMultiplier).toBeUndefined();
+    expect(resultStatus(saved())).toBe('stale');
   });
 });

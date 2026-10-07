@@ -36,4 +36,13 @@ describe('§3.3 one optimizer runner', () => {
     const offenders = RESULTS.filter((f) => /navigate\(\s*['"`]\/(personal|inputs)/.test(readFileSync(join(SRC, f), 'utf8')) || /<Navigate\b/.test(readFileSync(join(SRC, f), 'utf8')));
     expect(offenders).toEqual([]);
   });
+
+  it('app code reads status from the saved plan, never the flat engine policyStatus', () => {
+    const offenders = sourceFiles(SRC)
+      .filter((p) => /^(components|pages|hooks|store|storage)\//.test(rel(p)))
+      .filter((p) => !['store/planMigrations.ts'].includes(rel(p)))
+      .filter((p) => /\bpolicyStatus\(/.test(readFileSync(p, 'utf8')))
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
 });

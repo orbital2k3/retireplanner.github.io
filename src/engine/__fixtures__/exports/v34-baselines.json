@@ -1,0 +1,883 @@
+[
+  {
+    "name": "2026-07-31 as saved (no result)",
+    "v34Plan": {
+      "personA": {
+        "name": "Person A",
+        "dob": "1974-05-03",
+        "retirementAge": 59,
+        "ssPIA": 0,
+        "ssClaimAge": 67,
+        "planThroughAge": 100
+      },
+      "personB": {
+        "name": "Person B",
+        "dob": "1977-08-26",
+        "retirementAge": 63,
+        "ssPIA": 0,
+        "ssClaimAge": 67,
+        "planThroughAge": 100
+      },
+      "assumptions": {
+        "taxableReturn": 0.055,
+        "tradReturn": 0.055,
+        "rothReturn": 0.055,
+        "inflation": 0.025,
+        "modelACA": true,
+        "acaHouseholdSize": 1,
+        "acaBenchmarkPremium": 0,
+        "acaNoSubsidy": false,
+        "taxableDistributePct": 0,
+        "taxAdjOrdRate": 0.22,
+        "taxAdjLtcgRate": 0.15,
+        "taxableExemptYield": 0,
+        "taxableExemptStatePct": 1,
+        "taxableDivYield": 0,
+        "taxableQualifiedPct": 0.8
+      },
+      "portfolio": {
+        "personA": {
+          "taxable": 350000,
+          "traditional": 800000,
+          "roth": 300000,
+          "annualContribution": 60000,
+          "contribGrowth": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "contribSplit": {
+            "taxable": 0.1,
+            "traditional": 0.5,
+            "roth": 0.4
+          },
+          "taxableBasis": 175000
+        },
+        "personB": {
+          "taxable": 350000,
+          "traditional": 200000,
+          "roth": 200000,
+          "annualContribution": 40000,
+          "contribGrowth": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "contribSplit": {
+            "taxable": 0.2,
+            "traditional": 0.4,
+            "roth": 0.4
+          },
+          "taxableBasis": 175000
+        }
+      },
+      "incomeStreams": [
+        {
+          "id": "stream-default-1",
+          "description": "Person A SS",
+          "whose": "A",
+          "type": "SS",
+          "startAge": 70,
+          "annualAmount": 55000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "life"
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        },
+        {
+          "id": "stream-1785419527763-2h19",
+          "description": "SS 2",
+          "whose": "B",
+          "type": "SS",
+          "startAge": 62,
+          "annualAmount": 12000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "age",
+            "age": 67
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        },
+        {
+          "id": "stream-1785419544440-usjg",
+          "description": "SS3",
+          "whose": "B",
+          "type": "SS",
+          "startAge": 68,
+          "annualAmount": 15000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "life"
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        }
+      ],
+      "expenseStreams": [
+        {
+          "id": "expense-default-1",
+          "description": "Annual Exp",
+          "whose": "Household",
+          "startAge": 59,
+          "annualAmount": 150000,
+          "inflationPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "end": {
+            "mode": "lastSurvivor"
+          },
+          "survivorPct": 1
+        }
+      ],
+      "withdrawalStrategy": "bracketfill",
+      "conversion": {
+        "mode": "auto-window",
+        "startAge": 59,
+        "endAge": 75,
+        "autoAmount": 70000,
+        "bracketCeiling": 100800,
+        "manualSchedule": {},
+        "optimize": true
+      },
+      "state": "CUSTOM",
+      "goals": [],
+      "optimizedForGoal": "max-end-balance",
+      "customStateTaxRate": 0.05,
+      "payTaxFromBrokerage": false,
+      "lumpSumEvents": [],
+      "withdrawalBracketCeiling": 100800
+    },
+    "endTotalReal": 2974176.6069172802,
+    "lifetimeFedTax": 480974.22118011373,
+    "lifetimeConversion": 1736112.5485602566,
+    "status": "none"
+  },
+  {
+    "name": "2026-07-31 optimized for max end balance (fresh)",
+    "v34Plan": {
+      "personA": {
+        "name": "Person A",
+        "dob": "1974-05-03",
+        "retirementAge": 59,
+        "ssPIA": 0,
+        "ssClaimAge": 67,
+        "planThroughAge": 100
+      },
+      "personB": {
+        "name": "Person B",
+        "dob": "1977-08-26",
+        "retirementAge": 63,
+        "ssPIA": 0,
+        "ssClaimAge": 67,
+        "planThroughAge": 100
+      },
+      "assumptions": {
+        "taxableReturn": 0.055,
+        "tradReturn": 0.055,
+        "rothReturn": 0.055,
+        "inflation": 0.025,
+        "modelACA": true,
+        "acaHouseholdSize": 1,
+        "acaBenchmarkPremium": 0,
+        "acaNoSubsidy": false,
+        "taxableDistributePct": 0,
+        "taxAdjOrdRate": 0.22,
+        "taxAdjLtcgRate": 0.15,
+        "taxableExemptYield": 0,
+        "taxableExemptStatePct": 1,
+        "taxableDivYield": 0,
+        "taxableQualifiedPct": 0.8
+      },
+      "portfolio": {
+        "personA": {
+          "taxable": 350000,
+          "traditional": 800000,
+          "roth": 300000,
+          "annualContribution": 60000,
+          "contribGrowth": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "contribSplit": {
+            "taxable": 0.1,
+            "traditional": 0.5,
+            "roth": 0.4
+          },
+          "taxableBasis": 175000
+        },
+        "personB": {
+          "taxable": 350000,
+          "traditional": 200000,
+          "roth": 200000,
+          "annualContribution": 40000,
+          "contribGrowth": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "contribSplit": {
+            "taxable": 0.2,
+            "traditional": 0.4,
+            "roth": 0.4
+          },
+          "taxableBasis": 175000
+        }
+      },
+      "incomeStreams": [
+        {
+          "id": "stream-default-1",
+          "description": "Person A SS",
+          "whose": "A",
+          "type": "SS",
+          "startAge": 70,
+          "annualAmount": 55000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "life"
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        },
+        {
+          "id": "stream-1785419527763-2h19",
+          "description": "SS 2",
+          "whose": "B",
+          "type": "SS",
+          "startAge": 62,
+          "annualAmount": 12000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "age",
+            "age": 67
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        },
+        {
+          "id": "stream-1785419544440-usjg",
+          "description": "SS3",
+          "whose": "B",
+          "type": "SS",
+          "startAge": 68,
+          "annualAmount": 15000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "life"
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        }
+      ],
+      "expenseStreams": [
+        {
+          "id": "expense-default-1",
+          "description": "Annual Exp",
+          "whose": "Household",
+          "startAge": 59,
+          "annualAmount": 150000,
+          "inflationPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "end": {
+            "mode": "lastSurvivor"
+          },
+          "survivorPct": 1
+        }
+      ],
+      "withdrawalStrategy": "bracketfill",
+      "conversion": {
+        "mode": "off",
+        "startAge": 59,
+        "endAge": 75,
+        "autoAmount": 70000,
+        "bracketCeiling": 100800,
+        "manualSchedule": {},
+        "optimize": false
+      },
+      "state": "CUSTOM",
+      "goals": [],
+      "optimizedForGoal": "max-end-balance",
+      "customStateTaxRate": 0.05,
+      "payTaxFromBrokerage": false,
+      "lumpSumEvents": [],
+      "withdrawalBracketCeiling": 100800,
+      "customPolicy": {
+        "windows": [
+          {
+            "fromAge": 59,
+            "toAge": 62,
+            "pctTaxable": 0,
+            "pctTraditional": 0.875,
+            "pctRoth": 0.125
+          },
+          {
+            "fromAge": 63,
+            "toAge": 63,
+            "pctTaxable": 0.41666666666666663,
+            "pctTraditional": 0.5,
+            "pctRoth": 0.08333333333333337
+          },
+          {
+            "fromAge": 64,
+            "toAge": 64,
+            "pctTaxable": 0.3125,
+            "pctTraditional": 0.625,
+            "pctRoth": 0.06250000000000003
+          },
+          {
+            "fromAge": 65,
+            "toAge": 65,
+            "pctTaxable": 0,
+            "pctTraditional": 0.75,
+            "pctRoth": 0.25
+          },
+          {
+            "fromAge": 66,
+            "toAge": 67,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 68,
+            "toAge": 68,
+            "pctTaxable": 0,
+            "pctTraditional": 0.875,
+            "pctRoth": 0.125
+          },
+          {
+            "fromAge": 69,
+            "toAge": 69,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 70,
+            "toAge": 73,
+            "pctTaxable": 0.75,
+            "pctTraditional": 0.25,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 74,
+            "toAge": 74,
+            "pctTaxable": 0,
+            "pctTraditional": 0.875,
+            "pctRoth": 0.125
+          },
+          {
+            "fromAge": 75,
+            "toAge": 82,
+            "pctTaxable": 0.875,
+            "pctTraditional": 0.125,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 83,
+            "toAge": 83,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 84,
+            "toAge": 88,
+            "pctTaxable": 1,
+            "pctTraditional": 0,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 89,
+            "toAge": 89,
+            "pctTaxable": 0.96875,
+            "pctTraditional": 0,
+            "pctRoth": 0.03125
+          },
+          {
+            "fromAge": 90,
+            "toAge": 90,
+            "pctTaxable": 0.8919270833333333,
+            "pctTraditional": 0,
+            "pctRoth": 0.10807291666666674
+          },
+          {
+            "fromAge": 91,
+            "toAge": 92,
+            "pctTaxable": 0.8463541666666666,
+            "pctTraditional": 0,
+            "pctRoth": 0.15364583333333337
+          },
+          {
+            "fromAge": 93,
+            "toAge": 93,
+            "pctTaxable": 0.80078125,
+            "pctTraditional": 0,
+            "pctRoth": 0.19921875
+          },
+          {
+            "fromAge": 94,
+            "toAge": 94,
+            "pctTaxable": 0.11328125,
+            "pctTraditional": 0.625,
+            "pctRoth": 0.26171875
+          },
+          {
+            "fromAge": 95,
+            "toAge": 95,
+            "pctTaxable": 0.07552083333333333,
+            "pctTraditional": 0.75,
+            "pctRoth": 0.17447916666666669
+          },
+          {
+            "fromAge": 96,
+            "toAge": 96,
+            "pctTaxable": 1,
+            "pctTraditional": 0,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 97,
+            "toAge": 97,
+            "pctTaxable": 0.9479166666666667,
+            "pctTraditional": 0,
+            "pctRoth": 0.05208333333333326
+          },
+          {
+            "fromAge": 98,
+            "toAge": 98,
+            "pctTaxable": 0.8697916666666667,
+            "pctTraditional": 0,
+            "pctRoth": 0.13020833333333326
+          },
+          {
+            "fromAge": 99,
+            "toAge": 99,
+            "pctTaxable": 0.8046875,
+            "pctTraditional": 0,
+            "pctRoth": 0.1953125
+          },
+          {
+            "fromAge": 100,
+            "toAge": 101,
+            "pctTaxable": 0.5791015625,
+            "pctTraditional": 0.25,
+            "pctRoth": 0.17089843749999994
+          },
+          {
+            "fromAge": 102,
+            "toAge": 103,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          }
+        ],
+        "source": "optimizer",
+        "goal": "max-end-balance",
+        "inputKey": "{\"assumptions\":{\"acaBenchmarkPremium\":0,\"acaHouseholdSize\":1,\"acaNoSubsidy\":false,\"inflation\":0.025,\"modelACA\":true,\"rothReturn\":0.055,\"taxAdjLtcgRate\":0.15,\"taxAdjOrdRate\":0.22,\"taxableDistributePct\":0,\"taxableDivYield\":0,\"taxableExemptStatePct\":1,\"taxableExemptYield\":0,\"taxableQualifiedPct\":0.8,\"taxableReturn\":0.055,\"tradReturn\":0.055},\"conversion\":{\"autoAmount\":70000,\"bracketCeiling\":100800,\"endAge\":75,\"manualSchedule\":{},\"mode\":\"off\",\"optimize\":false,\"startAge\":59},\"customStateTaxRate\":0.05,\"expenseStreams\":[{\"annualAmount\":150000,\"description\":\"Annual Exp\",\"end\":{\"mode\":\"lastSurvivor\"},\"id\":\"expense-default-1\",\"inflationPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"startAge\":59,\"survivorPct\":1,\"whose\":\"Household\"}],\"incomeStreams\":[{\"annualAmount\":55000,\"description\":\"Person A SS\",\"end\":{\"mode\":\"life\"},\"growthPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"id\":\"stream-default-1\",\"startAge\":70,\"stateTaxablePct\":1,\"survivorPct\":0,\"taxablePct\":1,\"type\":\"SS\",\"whose\":\"A\"},{\"annualAmount\":12000,\"description\":\"SS 2\",\"end\":{\"age\":67,\"mode\":\"age\"},\"growthPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"id\":\"stream-1785419527763-2h19\",\"startAge\":62,\"stateTaxablePct\":1,\"survivorPct\":0,\"taxablePct\":1,\"type\":\"SS\",\"whose\":\"B\"},{\"annualAmount\":15000,\"description\":\"SS3\",\"end\":{\"mode\":\"life\"},\"growthPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"id\":\"stream-1785419544440-usjg\",\"startAge\":68,\"stateTaxablePct\":1,\"survivorPct\":0,\"taxablePct\":1,\"type\":\"SS\",\"whose\":\"B\"}],\"lumpSumEvents\":[],\"payTaxFromBrokerage\":false,\"personA\":{\"dob\":\"1974-05-03\",\"name\":\"Person A\",\"planThroughAge\":100,\"retirementAge\":59,\"ssClaimAge\":67,\"ssPIA\":0},\"personB\":{\"dob\":\"1977-08-26\",\"name\":\"Person B\",\"planThroughAge\":100,\"retirementAge\":63,\"ssClaimAge\":67,\"ssPIA\":0},\"portfolio\":{\"personA\":{\"annualContribution\":60000,\"contribGrowth\":{\"mode\":\"fixed\",\"rate\":0.025},\"contribSplit\":{\"roth\":0.4,\"taxable\":0.1,\"traditional\":0.5},\"roth\":300000,\"taxable\":350000,\"taxableBasis\":175000,\"traditional\":800000},\"personB\":{\"annualContribution\":40000,\"contribGrowth\":{\"mode\":\"fixed\",\"rate\":0.025},\"contribSplit\":{\"roth\":0.4,\"taxable\":0.2,\"traditional\":0.4},\"roth\":200000,\"taxable\":350000,\"taxableBasis\":175000,\"traditional\":200000}},\"state\":\"CUSTOM\"}",
+        "settings": {
+          "conversion": {
+            "mode": "off",
+            "startAge": 59,
+            "endAge": 75,
+            "autoAmount": 70000,
+            "bracketCeiling": 100800,
+            "manualSchedule": {},
+            "optimize": false
+          },
+          "payTaxFromBrokerage": false,
+          "withdrawalStrategy": "taxfirst",
+          "withdrawalBracketCeiling": 100800
+        }
+      },
+      "optimizedBy": "optimizer"
+    },
+    "endTotalReal": 2883902.662982953,
+    "lifetimeFedTax": 448007.42216944945,
+    "lifetimeConversion": 0,
+    "status": "fresh"
+  },
+  {
+    "name": "2026-07-31 optimized, then pay-tax toggled (stale, charts frozen)",
+    "v34Plan": {
+      "personA": {
+        "name": "Person A",
+        "dob": "1974-05-03",
+        "retirementAge": 59,
+        "ssPIA": 0,
+        "ssClaimAge": 67,
+        "planThroughAge": 100
+      },
+      "personB": {
+        "name": "Person B",
+        "dob": "1977-08-26",
+        "retirementAge": 63,
+        "ssPIA": 0,
+        "ssClaimAge": 67,
+        "planThroughAge": 100
+      },
+      "assumptions": {
+        "taxableReturn": 0.055,
+        "tradReturn": 0.055,
+        "rothReturn": 0.055,
+        "inflation": 0.025,
+        "modelACA": true,
+        "acaHouseholdSize": 1,
+        "acaBenchmarkPremium": 0,
+        "acaNoSubsidy": false,
+        "taxableDistributePct": 0,
+        "taxAdjOrdRate": 0.22,
+        "taxAdjLtcgRate": 0.15,
+        "taxableExemptYield": 0,
+        "taxableExemptStatePct": 1,
+        "taxableDivYield": 0,
+        "taxableQualifiedPct": 0.8
+      },
+      "portfolio": {
+        "personA": {
+          "taxable": 350000,
+          "traditional": 800000,
+          "roth": 300000,
+          "annualContribution": 60000,
+          "contribGrowth": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "contribSplit": {
+            "taxable": 0.1,
+            "traditional": 0.5,
+            "roth": 0.4
+          },
+          "taxableBasis": 175000
+        },
+        "personB": {
+          "taxable": 350000,
+          "traditional": 200000,
+          "roth": 200000,
+          "annualContribution": 40000,
+          "contribGrowth": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "contribSplit": {
+            "taxable": 0.2,
+            "traditional": 0.4,
+            "roth": 0.4
+          },
+          "taxableBasis": 175000
+        }
+      },
+      "incomeStreams": [
+        {
+          "id": "stream-default-1",
+          "description": "Person A SS",
+          "whose": "A",
+          "type": "SS",
+          "startAge": 70,
+          "annualAmount": 55000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "life"
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        },
+        {
+          "id": "stream-1785419527763-2h19",
+          "description": "SS 2",
+          "whose": "B",
+          "type": "SS",
+          "startAge": 62,
+          "annualAmount": 12000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "age",
+            "age": 67
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        },
+        {
+          "id": "stream-1785419544440-usjg",
+          "description": "SS3",
+          "whose": "B",
+          "type": "SS",
+          "startAge": 68,
+          "annualAmount": 15000,
+          "growthPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "taxablePct": 1,
+          "end": {
+            "mode": "life"
+          },
+          "survivorPct": 0,
+          "stateTaxablePct": 1
+        }
+      ],
+      "expenseStreams": [
+        {
+          "id": "expense-default-1",
+          "description": "Annual Exp",
+          "whose": "Household",
+          "startAge": 59,
+          "annualAmount": 150000,
+          "inflationPct": {
+            "mode": "fixed",
+            "rate": 0.025
+          },
+          "end": {
+            "mode": "lastSurvivor"
+          },
+          "survivorPct": 1
+        }
+      ],
+      "withdrawalStrategy": "bracketfill",
+      "conversion": {
+        "mode": "off",
+        "startAge": 59,
+        "endAge": 75,
+        "autoAmount": 70000,
+        "bracketCeiling": 100800,
+        "manualSchedule": {},
+        "optimize": false
+      },
+      "state": "CUSTOM",
+      "goals": [],
+      "optimizedForGoal": "max-end-balance",
+      "customStateTaxRate": 0.05,
+      "payTaxFromBrokerage": true,
+      "lumpSumEvents": [],
+      "withdrawalBracketCeiling": 100800,
+      "customPolicy": {
+        "windows": [
+          {
+            "fromAge": 59,
+            "toAge": 62,
+            "pctTaxable": 0,
+            "pctTraditional": 0.875,
+            "pctRoth": 0.125
+          },
+          {
+            "fromAge": 63,
+            "toAge": 63,
+            "pctTaxable": 0.41666666666666663,
+            "pctTraditional": 0.5,
+            "pctRoth": 0.08333333333333337
+          },
+          {
+            "fromAge": 64,
+            "toAge": 64,
+            "pctTaxable": 0.3125,
+            "pctTraditional": 0.625,
+            "pctRoth": 0.06250000000000003
+          },
+          {
+            "fromAge": 65,
+            "toAge": 65,
+            "pctTaxable": 0,
+            "pctTraditional": 0.75,
+            "pctRoth": 0.25
+          },
+          {
+            "fromAge": 66,
+            "toAge": 67,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 68,
+            "toAge": 68,
+            "pctTaxable": 0,
+            "pctTraditional": 0.875,
+            "pctRoth": 0.125
+          },
+          {
+            "fromAge": 69,
+            "toAge": 69,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 70,
+            "toAge": 73,
+            "pctTaxable": 0.75,
+            "pctTraditional": 0.25,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 74,
+            "toAge": 74,
+            "pctTaxable": 0,
+            "pctTraditional": 0.875,
+            "pctRoth": 0.125
+          },
+          {
+            "fromAge": 75,
+            "toAge": 82,
+            "pctTaxable": 0.875,
+            "pctTraditional": 0.125,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 83,
+            "toAge": 83,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 84,
+            "toAge": 88,
+            "pctTaxable": 1,
+            "pctTraditional": 0,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 89,
+            "toAge": 89,
+            "pctTaxable": 0.96875,
+            "pctTraditional": 0,
+            "pctRoth": 0.03125
+          },
+          {
+            "fromAge": 90,
+            "toAge": 90,
+            "pctTaxable": 0.8919270833333333,
+            "pctTraditional": 0,
+            "pctRoth": 0.10807291666666674
+          },
+          {
+            "fromAge": 91,
+            "toAge": 92,
+            "pctTaxable": 0.8463541666666666,
+            "pctTraditional": 0,
+            "pctRoth": 0.15364583333333337
+          },
+          {
+            "fromAge": 93,
+            "toAge": 93,
+            "pctTaxable": 0.80078125,
+            "pctTraditional": 0,
+            "pctRoth": 0.19921875
+          },
+          {
+            "fromAge": 94,
+            "toAge": 94,
+            "pctTaxable": 0.11328125,
+            "pctTraditional": 0.625,
+            "pctRoth": 0.26171875
+          },
+          {
+            "fromAge": 95,
+            "toAge": 95,
+            "pctTaxable": 0.07552083333333333,
+            "pctTraditional": 0.75,
+            "pctRoth": 0.17447916666666669
+          },
+          {
+            "fromAge": 96,
+            "toAge": 96,
+            "pctTaxable": 1,
+            "pctTraditional": 0,
+            "pctRoth": 0
+          },
+          {
+            "fromAge": 97,
+            "toAge": 97,
+            "pctTaxable": 0.9479166666666667,
+            "pctTraditional": 0,
+            "pctRoth": 0.05208333333333326
+          },
+          {
+            "fromAge": 98,
+            "toAge": 98,
+            "pctTaxable": 0.8697916666666667,
+            "pctTraditional": 0,
+            "pctRoth": 0.13020833333333326
+          },
+          {
+            "fromAge": 99,
+            "toAge": 99,
+            "pctTaxable": 0.8046875,
+            "pctTraditional": 0,
+            "pctRoth": 0.1953125
+          },
+          {
+            "fromAge": 100,
+            "toAge": 101,
+            "pctTaxable": 0.5791015625,
+            "pctTraditional": 0.25,
+            "pctRoth": 0.17089843749999994
+          },
+          {
+            "fromAge": 102,
+            "toAge": 103,
+            "pctTaxable": 0,
+            "pctTraditional": 1,
+            "pctRoth": 0
+          }
+        ],
+        "source": "optimizer",
+        "goal": "max-end-balance",
+        "inputKey": "{\"assumptions\":{\"acaBenchmarkPremium\":0,\"acaHouseholdSize\":1,\"acaNoSubsidy\":false,\"inflation\":0.025,\"modelACA\":true,\"rothReturn\":0.055,\"taxAdjLtcgRate\":0.15,\"taxAdjOrdRate\":0.22,\"taxableDistributePct\":0,\"taxableDivYield\":0,\"taxableExemptStatePct\":1,\"taxableExemptYield\":0,\"taxableQualifiedPct\":0.8,\"taxableReturn\":0.055,\"tradReturn\":0.055},\"conversion\":{\"autoAmount\":70000,\"bracketCeiling\":100800,\"endAge\":75,\"manualSchedule\":{},\"mode\":\"off\",\"optimize\":false,\"startAge\":59},\"customStateTaxRate\":0.05,\"expenseStreams\":[{\"annualAmount\":150000,\"description\":\"Annual Exp\",\"end\":{\"mode\":\"lastSurvivor\"},\"id\":\"expense-default-1\",\"inflationPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"startAge\":59,\"survivorPct\":1,\"whose\":\"Household\"}],\"incomeStreams\":[{\"annualAmount\":55000,\"description\":\"Person A SS\",\"end\":{\"mode\":\"life\"},\"growthPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"id\":\"stream-default-1\",\"startAge\":70,\"stateTaxablePct\":1,\"survivorPct\":0,\"taxablePct\":1,\"type\":\"SS\",\"whose\":\"A\"},{\"annualAmount\":12000,\"description\":\"SS 2\",\"end\":{\"age\":67,\"mode\":\"age\"},\"growthPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"id\":\"stream-1785419527763-2h19\",\"startAge\":62,\"stateTaxablePct\":1,\"survivorPct\":0,\"taxablePct\":1,\"type\":\"SS\",\"whose\":\"B\"},{\"annualAmount\":15000,\"description\":\"SS3\",\"end\":{\"mode\":\"life\"},\"growthPct\":{\"mode\":\"fixed\",\"rate\":0.025},\"id\":\"stream-1785419544440-usjg\",\"startAge\":68,\"stateTaxablePct\":1,\"survivorPct\":0,\"taxablePct\":1,\"type\":\"SS\",\"whose\":\"B\"}],\"lumpSumEvents\":[],\"payTaxFromBrokerage\":false,\"personA\":{\"dob\":\"1974-05-03\",\"name\":\"Person A\",\"planThroughAge\":100,\"retirementAge\":59,\"ssClaimAge\":67,\"ssPIA\":0},\"personB\":{\"dob\":\"1977-08-26\",\"name\":\"Person B\",\"planThroughAge\":100,\"retirementAge\":63,\"ssClaimAge\":67,\"ssPIA\":0},\"portfolio\":{\"personA\":{\"annualContribution\":60000,\"contribGrowth\":{\"mode\":\"fixed\",\"rate\":0.025},\"contribSplit\":{\"roth\":0.4,\"taxable\":0.1,\"traditional\":0.5},\"roth\":300000,\"taxable\":350000,\"taxableBasis\":175000,\"traditional\":800000},\"personB\":{\"annualContribution\":40000,\"contribGrowth\":{\"mode\":\"fixed\",\"rate\":0.025},\"contribSplit\":{\"roth\":0.4,\"taxable\":0.2,\"traditional\":0.4},\"roth\":200000,\"taxable\":350000,\"taxableBasis\":175000,\"traditional\":200000}},\"state\":\"CUSTOM\"}",
+        "settings": {
+          "conversion": {
+            "mode": "off",
+            "startAge": 59,
+            "endAge": 75,
+            "autoAmount": 70000,
+            "bracketCeiling": 100800,
+            "manualSchedule": {},
+            "optimize": false
+          },
+          "payTaxFromBrokerage": false,
+          "withdrawalStrategy": "taxfirst",
+          "withdrawalBracketCeiling": 100800
+        }
+      },
+      "optimizedBy": "optimizer"
+    },
+    "endTotalReal": 2883902.662982953,
+    "lifetimeFedTax": 448007.42216944945,
+    "lifetimeConversion": 0,
+    "status": "stale"
+  }
+]

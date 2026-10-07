@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { OptimizeResult } from '../engine/optimizer';
 import type { UserGoal } from '../engine/recommender';
-import type { Plan } from '../schemas/plan';
+import type { SavedPlan } from '../schemas/savedPlan';
 import type { MonteCarloResult, HistoricalSweepResult } from '../engine/monteCarlo';
 
 export interface RobustComparison {
@@ -14,7 +14,7 @@ export interface RobustComparison {
 
 /** Outcome of a robustness run. Exported so the store can hold it across navigation. */
 export interface RobustOutcome {
-  plan: Plan;
+  plan: SavedPlan;
   optResult: OptimizeResult;
   before: MonteCarloResult;
   after: MonteCarloResult;
@@ -28,14 +28,14 @@ interface OptimizerState {
   setResult: (r: OptimizeResult | null) => void;
   /** The optimizer-applied plan, held ephemerally until the user clicks "Apply to Plan".
    *  Never written to the persisted plan store until explicitly committed. */
-  pendingPlan: Plan | null;
-  setPendingPlan: (plan: Plan | null) => void;
+  pendingPlan: SavedPlan | null;
+  setPendingPlan: (plan: SavedPlan | null) => void;
   /** Which goal produced the current pendingPlan. */
   pendingGoal: UserGoal | null;
   setPendingGoal: (goal: UserGoal | null) => void;
   /** MC robustness-optimized plan preview. Survives navigation; discarded on Apply/Discard. */
-  robustnessPlan: Plan | null;
-  setRobustnessPlan: (plan: Plan | null) => void;
+  robustnessPlan: SavedPlan | null;
+  setRobustnessPlan: (plan: SavedPlan | null) => void;
   /** Before/after success-rate comparison from the most recent Optimize for Robustness run. */
   robustnessComparison: RobustComparison | null;
   setRobustnessComparison: (c: RobustComparison | null) => void;

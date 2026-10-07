@@ -2,6 +2,7 @@ import type React from 'react';
 import { usePlanStore } from '../../store/usePlanStore';
 import { chooseConversion, type ConversionChoice } from '../../store/strategyActions';
 import type { ConversionParams } from '../../schemas/plan';
+import type { ConversionSettings } from '../../schemas/savedPlan';
 import { pillStyle, selectPillStyle, editLinkStyle, type PillState } from './pillStyles';
 import Chk from './Chk';
 
@@ -15,8 +16,8 @@ const CONV_LABELS: Record<ConvMode, string> = {
 
 /** Roth conversion pills, shared by the Inputs page and the Dashboard strategy panel. Every pill
  *  saves immediately and shows the saved setting.
- *  - optimizer: shows "Optimizer decides"; mode pills are chosen only when optimize is off.
- *  - manual ("Set it myself"): no optimizer pill; the saved mode is chosen.
+ *  - optimizer: edits the "Optimize for me" settings and shows "Optimizer decides".
+ *  - manual: edits the "Set it myself" settings; no optimizer pill.
  *  `pending` marks the chosen pill amber (saved, takes effect on Re-optimize). */
 export default function ConversionPills({ variant, pending = false, ceilingOptions, onBeforeChoose, onEdit }: {
   variant: 'optimizer' | 'manual';
@@ -25,13 +26,13 @@ export default function ConversionPills({ variant, pending = false, ceilingOptio
   onBeforeChoose?: () => void;
   onEdit: () => void;
 }) {
-  const conv = usePlanStore((s) => s.plan.conversion);
-  const optimizeOn = conv.optimize ?? true;
-  const isSel = (m: ConvMode) => (variant === 'manual' || !optimizeOn) && conv.mode === m;
+  const conv = usePlanStore((s) => s.plan.strategy[variant].conversion);
+  const optimizeOn = usePlanStore((s) => variant === 'optimizer' && s.plan.strategy.optimizer.optimizerDecidesConversions);
+  const isSel = (m: ConvMode) => !optimizeOn && conv.mode === m;
   const stateOf = (sel: boolean): PillState => (sel ? (pending ? 'pending' : 'active') : 'idle');
-  const choose = (choice: ConversionChoice, extra?: Partial<ConversionParams>) => {
+  const choose = (choice: ConversionChoice, extra?: Partial<ConversionSettings>) => {
     onBeforeChoose?.();
-    chooseConversion(choice, extra);
+    chooseConversion(variant, choice, extra);
   };
 
   const col = (key: string, pill: React.ReactNode, link?: React.ReactNode) => (

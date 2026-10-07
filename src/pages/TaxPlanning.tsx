@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { usePlanStore, useProjection } from '../store/usePlanStore';
+import { usePlanStore, useProjection, useEnginePlan } from '../store/usePlanStore';
 import StalePlanBanner from '../components/StalePlanBanner';
 import IrmaaMagiLine from '../components/charts/IrmaaMagiLine';
 import TaxDrag from '../components/charts/TaxDrag';
@@ -15,7 +15,7 @@ type TaxTab = 'federal' | 'state' | 'irmaa';
 
 export default function TaxPlanning() {
   const proj = useProjection();
-  const plan = usePlanStore((s) => s.plan);
+  const plan = useEnginePlan();
   const displayMode = usePlanStore((s) => s.displayMode);
   const real = displayMode === 'real';
   const stateProfile = STATE_PROFILES[plan.state] ?? STATE_PROFILES.IL;

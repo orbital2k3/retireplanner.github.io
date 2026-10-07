@@ -799,18 +799,17 @@ export function GuideContent() {
             <li><strong>Traditional First</strong>: spend pre-tax accounts first, also reducing RMDs but increasing current taxable income.</li>
             <li><strong>Proportional</strong>: draw from all three account types in proportion to their balances. Simple but rarely the most tax-efficient.</li>
             <li><strong>Bracket-Fill</strong>: a dropdown that lets you pick a bracket ceiling. The engine pulls from traditional (pre-tax) accounts up to that ceiling each year, then covers remaining spending from Roth or taxable. Usually the most tax-efficient withdrawal approach over the long run.</li>
-            <li><strong>✎ Custom blend</strong>: opens an editor to define your own per-age-window blend. When the optimizer builds your plan, this is automatically active and reflects the optimizer's output. The Trad Cap and Conv $/yr columns follow the Today's $ / Nominal $ toggle. Switch to Nominal $ to enter future dollar amounts directly.</li>
+            <li><strong>✎ Custom blend</strong>: opens an editor to define your own per-age-window blend. It starts from the blend the charts show, so you can begin from the optimizer's result and adjust it. The Trad Cap and Conv $/yr columns follow the Today's $ / Nominal $ toggle. Switch to Nominal $ to enter future dollar amounts directly.</li>
           </ul>
         </li>
         <li><strong>Roth conversions · instant</strong>: four pills (None, Bracket-Fill, Fixed Amount, Manual) switch the active conversion mode immediately. Bracket-Fill and Fixed Amount show an "Edit details →" link to configure the window and amount; Manual opens a per-year schedule editor.</li>
         <li><strong>Pay taxes from brokerage</strong>: a toggle that directs the engine to cover your annual tax bill from your taxable account first, before touching your IRA or Roth balances. Useful when you want to preserve tax-deferred or tax-free growth as long as possible, or when you need to manage your taxable income precisely without being forced to withdraw extra from pre-tax accounts to cover the tax on the withdrawal itself.</li>
       </ul>
       <Tip>
-        <strong>Switching to any named preset replaces the optimizer&apos;s custom policy.</strong>{' '}
-        The moment you click Taxable First, Proportional, Bracket-Fill, or any other named preset
-        in the Set it myself tab, the optimizer output is erased. You will need to re-optimize to
-        get it back. If you want to explore a preset without losing the optimized plan, note your
-        key Dashboard numbers first.
+        <strong>Each tab keeps its own settings.</strong>{' '}
+        Your choices in Set it myself never change what the optimizer sees, and the optimized plan is
+        kept while you explore. Switch back to Optimize for me at any time to see it again, exactly as
+        you left it.
       </Tip>
 
       <H3>How withdrawal ordering and conversion mode interact</H3>

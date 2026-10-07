@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { PlanSchema, type Plan } from '../../schemas/plan';
 import { optimizerKey } from './optimizerInput';
-import { policyStatus } from '../policyStatus';
+import { savedOptimizerKey, planStatus, fromFlat } from './savedPlan';
 import { exportPlanToJSON, importPlanFromJSON } from '../../storage/exportImport';
 import { richPlan, shuffleKeys } from '../__testutil__/strategyPlans';
 
@@ -28,18 +28,17 @@ describe('§6.2 optimizerKey stability', () => {
     expect(optimizerKey(JSON.parse(JSON.stringify(p)))).toBe(optimizerKey(p));
   });
 
-  it('survives export then import', () => {
-    const p = parsed();
-    const r = importPlanFromJSON(exportPlanToJSON(shuffleKeys(p, 7)));
+  it('survives export then import (stored shape)', () => {
+    const saved = fromFlat(parsed(), false);
+    const r = importPlanFromJSON(exportPlanToJSON(shuffleKeys(saved, 7)));
     expect(r.ok).toBe(true);
-    expect(optimizerKey(r.plan!)).toBe(optimizerKey(p));
+    expect(savedOptimizerKey(r.plan!)).toBe(savedOptimizerKey(saved));
   });
 
   it('keeps a fresh result fresh through export then import', () => {
-    const p = parsed();
-    const fresh: Plan = { ...p, customPolicy: { ...p.customPolicy!, inputKey: optimizerKey(p) } };
-    expect(policyStatus(fresh)).toBe('fresh');
-    expect(policyStatus(importPlanFromJSON(exportPlanToJSON(shuffleKeys(fresh, 3))).plan!)).toBe('fresh');
+    const saved = fromFlat(parsed(), true);
+    expect(planStatus(saved)).toBe('fresh');
+    expect(planStatus(importPlanFromJSON(exportPlanToJSON(shuffleKeys(saved, 3))).plan!)).toBe('fresh');
   });
 
   it('ignores retired fields left on old saved plans', () => {

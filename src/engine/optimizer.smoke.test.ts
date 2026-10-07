@@ -23,7 +23,7 @@ describe('optimizeStrategy (smoke)', () => {
       },
     });
     expect(r.projection.endTaxAdjustedReal).toBeGreaterThanOrEqual(baseline.endTaxAdjustedReal - 1);
-  }, 60_000);
+  }, 120_000); // ~37s alone; slower when the opt tier runs files in parallel.
 
   it('tight plan (sustainable < amortAbs × 0.25) returns a real answer, not the 50%-fallback', () => {
     // The pre-fix downward-halving bug: old code set lo$ = 0.25×amortAbs untested, so the

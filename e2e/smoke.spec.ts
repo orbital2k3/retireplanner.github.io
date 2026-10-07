@@ -1,19 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
 import { planA_simple } from '../src/engine/__golden/plans';
 import { runProjection } from '../src/engine/projection';
+import { enginePlan } from '../src/engine/strategy/savedPlan';
 import { fmtM } from '../src/lib/format';
 import { PLAN_STORE_KEY } from '../src/store/planStoreVersion';
-import type { Plan } from '../src/schemas/plan';
-import { optimizedPlanA, optimizedPlanABracketFill, seedPlan, heroStat, gotoDashboard } from './fixtures';
+import type { SavedPlan } from '../src/schemas/savedPlan';
+import { optimizedPlanA, optimizedPlanABracketFill, seedPlan, heroStat, gotoDashboard, saved } from './fixtures';
 import { exportPlanToJSON } from '../src/storage/exportImport';
 
 // The UI optimizer runs in a Web Worker; max-spending on planA takes ~5s in Node.
 const OPTIMIZE_TIMEOUT = 60_000;
 
-async function storedPlan(page: Page): Promise<Plan> {
+async function storedPlan(page: Page): Promise<SavedPlan> {
   const raw = await page.evaluate((key) => localStorage.getItem(key), PLAN_STORE_KEY);
   return JSON.parse(raw!).state.plan;
 }
+
+const withGoal = (p: SavedPlan, goal: SavedPlan['strategy']['optimizer']['goal']): SavedPlan =>
+  ({ ...p, strategy: { ...p.strategy, optimizer: { ...p.strategy.optimizer, goal } } });
 
 const goalBadge = (page: Page, label: string) => page.locator('.badge', { hasText: `✓ ${label}` });
 const pendingBanner = (page: Page) => page.getByText(/result ready/);
@@ -44,7 +48,7 @@ test('main pages render without errors', async ({ page }) => {
 });
 
 test('Build Plan (max end balance) saves the plan and opens the Dashboard with no pending banner', async ({ page }) => {
-  await seedPlan(page, planA_simple());
+  await seedPlan(page, saved(planA_simple()));
   await page.goto('/#/inputs');
   await page.getByRole('button', { name: 'Build Plan →' }).click();
   await page.waitForURL('**/#/dashboard', { timeout: OPTIMIZE_TIMEOUT });
@@ -53,8 +57,8 @@ test('Build Plan (max end balance) saves the plan and opens the Dashboard with n
   await expect(pendingBanner(page)).toHaveCount(0);
   await expect(page.getByText('explain optimization rationale →')).toBeVisible();
   // The worker run must match the Node run that seeds the other tests.
-  await expect(heroStat(page, 'Gross End Balance')).toHaveText(fmtM(runProjection(optimizedPlanA()).endTotalReal));
-  expect((await storedPlan(page)).optimizedForGoal).toBe('max-end-balance');
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(fmtM(runProjection(enginePlan(optimizedPlanA())).endTotalReal));
+  expect((await storedPlan(page)).strategy.result?.goal).toBe('max-end-balance');
 });
 
 test('Re-optimize for max spending, then Apply saves the new strategy', async ({ page }) => {
@@ -65,14 +69,14 @@ test('Re-optimize for max spending, then Apply saves the new strategy', async ({
   await page.getByRole('button', { name: 'Apply to Plan' }).click();
   await expect(pendingBanner(page)).toHaveCount(0);
   await expect(goalBadge(page, 'Max Spending')).toBeVisible();
-  expect((await storedPlan(page)).optimizedForGoal).toBe('max-sustainable-spending');
+  expect((await storedPlan(page)).strategy.result?.goal).toBe('max-sustainable-spending');
 });
 
 test('Re-optimize for max spending, then Discard leaves the saved plan unchanged', async ({ page }) => {
   const plan = optimizedPlanA();
   await seedPlan(page, plan);
   await gotoDashboard(page);
-  const endBalance = fmtM(runProjection(plan).endTotalReal);
+  const endBalance = fmtM(runProjection(enginePlan(plan)).endTotalReal);
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
   await reoptimizeFor(page, 'Max Spending');
 
@@ -80,12 +84,13 @@ test('Re-optimize for max spending, then Discard leaves the saved plan unchanged
   await expect(pendingBanner(page)).toHaveCount(0);
   await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
-  expect(await storedPlan(page)).toEqual(plan);
+  // The goal pill is a saved setting; Discard / reload drops only the result.
+  expect(await storedPlan(page)).toEqual(withGoal(plan, 'max-sustainable-spending'));
 });
 
 test("Today's $ / Nominal $ toggle switches the end balance", async ({ page }) => {
   const plan = optimizedPlanA();
-  const proj = runProjection(plan);
+  const proj = runProjection(enginePlan(plan));
   expect(fmtM(proj.endTotalNominal)).not.toBe(fmtM(proj.endTotalReal));
   await seedPlan(page, plan);
   await gotoDashboard(page);
@@ -107,7 +112,7 @@ async function addIncomeStream(page: Page, amount: number) {
 
 test('an income change on Inputs updates the Plan Summary', async ({ page }) => {
   // No optimizer policy, so editing inputs does not gate the Dashboard.
-  const base = planA_simple();
+  const base = saved(planA_simple());
   await seedPlan(page, base);
   await addIncomeStream(page, 60_000);
   await page.getByRole('link', { name: 'Dashboard' }).click();
@@ -115,8 +120,8 @@ test('an income change on Inputs updates the Plan Summary', async ({ page }) => 
   const edited = await storedPlan(page);
   expect(edited.incomeStreams).toHaveLength(1);
   expect(edited.incomeStreams[0].annualAmount).toBe(60_000);
-  const expected = fmtM(runProjection(edited).endTotalReal);
-  expect(expected).not.toBe(fmtM(runProjection(base).endTotalReal));
+  const expected = fmtM(runProjection(enginePlan(edited)).endTotalReal);
+  expect(expected).not.toBe(fmtM(runProjection(enginePlan(base)).endTotalReal));
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(expected);
 });
 
@@ -138,7 +143,7 @@ test('P5 editing the age window on the Dashboard stays on the page, keeps the ch
   const plan = optimizedPlanABracketFill();
   await seedPlan(page, plan);
   await gotoDashboard(page);
-  const endBalance = fmtM(runProjection(plan).endTotalReal);
+  const endBalance = fmtM(runProjection(enginePlan(plan)).endTotalReal);
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
 
   await page.getByRole('button', { name: 'Edit age window →' }).click();
@@ -148,22 +153,31 @@ test('P5 editing the age window on the Dashboard stays on the page, keeps the ch
   await page.getByRole('button', { name: 'Close', exact: true }).click();
 
   await expect(page).toHaveURL(/#\/dashboard/);
-  expect((await storedPlan(page)).conversion.startAge).toBe(66);
+  expect((await storedPlan(page)).strategy.optimizer.conversion.startAge).toBe(66);
   await expect(staleBanner(page)).toBeVisible();
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
   await page.getByRole('button', { name: /^↗ Re-optimize/ }).click();
   await expect(staleBanner(page)).toHaveCount(0, { timeout: OPTIMIZE_TIMEOUT });
 });
 
-test('P9 switching to Set it myself and back keeps the optimizer result current', async ({ page }) => {
+test('P9 Set it myself changes the charts at once; switching back restores the optimizer result', async ({ page }) => {
   const plan = optimizedPlanA();
   await seedPlan(page, plan);
   await gotoDashboard(page);
+  const optimizedEnd = fmtM(runProjection(enginePlan(plan)).endTotalReal);
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(optimizedEnd);
+
   await page.getByRole('button', { name: /Set it myself/ }).click();
+  await page.getByRole('button', { name: /Roth-first/ }).click();
+  const manual = await storedPlan(page);
+  expect(manual.strategy).toMatchObject({ active: 'manual', manual: { preset: 'rothfirst' } });
+  expect(manual.strategy.result).toEqual(plan.strategy.result);
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(fmtM(runProjection(enginePlan(manual)).endTotalReal));
+
   await page.getByRole('button', { name: /Optimize for me/ }).click();
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(optimizedEnd);
   await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
   await expect(staleBanner(page)).toHaveCount(0);
-  expect(await storedPlan(page)).toEqual(plan);
 });
 
 test('P11 an input change shows the banner on every results page; Re-optimize from one clears it everywhere', async ({ page }) => {
@@ -187,11 +201,12 @@ test('P12 a pending Max Spending result does not survive a reload', async ({ pag
   await page.reload();
   await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
   await expect(pendingBanner(page)).toHaveCount(0);
-  expect(await storedPlan(page)).toEqual(plan);
+  // The goal pill is a saved setting; Discard / reload drops only the result.
+  expect(await storedPlan(page)).toEqual(withGoal(plan, 'max-sustainable-spending'));
 });
 
 test('P16 importing a fresh export shows no out-of-date banner', async ({ page }) => {
-  await seedPlan(page, planA_simple());
+  await seedPlan(page, saved(planA_simple()));
   await gotoDashboard(page);
   await page.locator('input[type="file"]').setInputFiles({
     name: 'plan.json', mimeType: 'application/json', buffer: Buffer.from(exportPlanToJSON(optimizedPlanA())),

@@ -22,7 +22,8 @@ import type { Plan } from '../schemas/plan';
 import OptimizerBadge from '../components/OptimizerBadge';
 import { GOAL_LABELS } from '../engine/goalLabels';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
-import { runOptimizer, commitOptimizerPlan } from '../store/strategyActions';
+import { runOptimizer, commitOptimizerPlan, optimizerPatchFromFlat } from '../store/strategyActions';
+import { enginePlan } from '../engine/strategy/savedPlan';
 import StalePlanBanner from '../components/StalePlanBanner';
 
 export default function Dashboard() {
@@ -43,7 +44,8 @@ export default function Dashboard() {
   const setResult = useOptimizerStore((s) => s.setResult);
   const proj = useProjection(pendingPlan ?? undefined);
 
-  const effectivePlan = pendingPlan ?? plan;
+  // The engine view of what the charts show (a pending result first).
+  const effectivePlan = useMemo(() => enginePlan(pendingPlan ?? plan), [pendingPlan, plan]);
   const cmp = useMemo(() => compareWithWithoutConversion(effectivePlan), [effectivePlan]);
   // Gated on rationaleOpen so the 11 counterfactual projections don't run on every render.
   const trace = useMemo<DecisionTrace | null>(
@@ -130,7 +132,7 @@ export default function Dashboard() {
     setRationaleOpen(false);
     setReoptimizing(true);
     try {
-      await runOptimizer({ plan, goal: optimizerResult.goal, patch });
+      await runOptimizer({ plan, goal: optimizerResult.goal, patch: optimizerPatchFromFlat(patch) });
     } catch (err) {
       console.error('[Dashboard] re-optimize failed:', err);
     } finally {
@@ -492,7 +494,7 @@ function Divider() {
 }
 
 
-function scenarioTemplates(plan: ReturnType<typeof usePlanStore.getState>['plan']): Array<{
+function scenarioTemplates(plan: Plan): Array<{
   id: string;
   name: string;
   overrides: Scenario['overrides'];

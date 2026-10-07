@@ -2,15 +2,18 @@ import { usePlanStore } from '../../store/usePlanStore';
 import { NumberInput } from '../inputs/NumberInput';
 import { calendarYearAge } from '../../lib/ageUtils';
 import { householdPlanThroughAgeA } from '../../engine/planInputKey';
+import { enginePlan } from '../../engine/strategy/savedPlan';
 
 /** Per-window withdrawal-blend editor (advanced). Extracted from the pre-refactor
  *  Strategy page; now lives inside the Dashboard "Customize" side sheet. */
 export default function CustomBlendPanel() {
-  const plan = usePlanStore((s) => s.plan);
+  const saved = usePlanStore((s) => s.plan);
+  const plan = enginePlan(saved);
   const displayMode = usePlanStore((s) => s.displayMode);
-  const setCustomPolicy = usePlanStore((s) => s.setCustomPolicy);
-  const clearCustomPolicy = usePlanStore((s) => s.clearCustomPolicy);
-  const policy = plan.customPolicy;
+  const editManual = usePlanStore((s) => s.editManual);
+  const setActiveStrategy = usePlanStore((s) => s.setActiveStrategy);
+  // Start from the blend the charts show: the saved custom blend, else the optimizer's.
+  const policy = saved.strategy.manual.customWindows ? { windows: saved.strategy.manual.customWindows } : plan.customPolicy;
   const retireAge = plan.personA.retirementAge;
   const planThroughAge = householdPlanThroughAgeA(plan);
   const isNominal = displayMode === 'nominal';
@@ -26,7 +29,9 @@ export default function CustomBlendPanel() {
   }];
 
   const commit = (next: typeof windows) => {
-    setCustomPolicy({ windows: next, source: 'manual' });
+    // A hand-built blend is a "Set it myself" setting; the optimizer result stays saved.
+    editManual({ customWindows: next });
+    setActiveStrategy('manual');
   };
 
   const updateWindow = (idx: number, patch: Partial<typeof windows[number]>) => {
@@ -63,7 +68,7 @@ export default function CustomBlendPanel() {
       <div className="panel-header">
         <div className="panel-title"><div className="panel-title-dot"></div>Custom Blend Editor</div>
         <div className="panel-actions">
-          {policy && <button className="btn btn-outline" onClick={() => clearCustomPolicy()} style={{ fontSize: 12, padding: '6px 12px' }}>Clear &amp; Use Preset</button>}
+          {policy && <button className="btn btn-outline" onClick={() => { editManual({ customWindows: undefined }); setActiveStrategy('manual'); }} style={{ fontSize: 12, padding: '6px 12px' }}>Clear &amp; Use Preset</button>}
           <button className="btn btn-gold" onClick={addWindow} disabled={windows[windows.length - 1].toAge >= planThroughAge} style={{ fontSize: 12, padding: '6px 12px' }}>+ Add Window</button>
         </div>
       </div>

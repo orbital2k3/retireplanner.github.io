@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import { PlanSchema, type Plan } from '../../schemas/plan';
 import { optimizerInput } from './optimizerInput';
 import { usePlanStore } from '../../store/usePlanStore';
+import { fromFlat, optimizerView } from './savedPlan';
 import { FED_BRACKETS_MFJ } from '../taxConstants';
 import { richPlan, MANUAL_WINDOW, OPT_WINDOW } from '../__testutil__/strategyPlans';
 
@@ -65,18 +66,17 @@ describe('§6.3 "Set it myself" settings never reach the optimizer', () => {
   });
 });
 
-describe('§6.3 store: withdrawal ceiling edit does not touch the conversion ceiling', () => {
+describe('§6.3 store: withdrawal ceiling edit does not touch the optimizer conversion ceiling', () => {
+  // Phase 1 kept this as it.fails: the ceiling clamp edited a conversion field shared with the
+  // optimizer. Phase 2 slots made the clamp a "Set it myself"-only rule.
   beforeEach(() => {
-    const p = manualStart(false);
-    usePlanStore.setState({ plan: { ...p, conversion: { ...p.conversion, mode: 'bracket-fill', bracketCeiling: FED_BRACKETS_MFJ[3][0] } } });
+    const p = fromFlat({ ...manualStart(false), conversion: { ...manualStart(false).conversion, mode: 'bracket-fill', optimize: false, bracketCeiling: FED_BRACKETS_MFJ[3][0] } }, false);
+    usePlanStore.setState({ plan: p });
   });
 
-  // Known leak, fixed in Phase 2 (§4: remove the ceiling clamp coupling once the slots split).
-  // Until then the conversion settings are shared, so the clamp is an edit to a shared field.
-  // it.fails flips to a failure when the clamp is removed; switch it to it() then.
-  it.fails('setWithdrawalBracketCeiling leaves conversion.bracketCeiling alone', () => {
-    const before = usePlanStore.getState().plan.conversion.bracketCeiling;
-    usePlanStore.getState().setWithdrawalBracketCeiling(FED_BRACKETS_MFJ[1][0]);
-    expect(optimizerInput(usePlanStore.getState().plan).conversion.bracketCeiling).toBe(before);
+  it('a manual withdrawal ceiling edit leaves the optimizer conversion ceiling alone', () => {
+    const before = optimizerView(usePlanStore.getState().plan).conversion.bracketCeiling;
+    usePlanStore.getState().editManual({ preset: 'bracketfill', withdrawalBracketCeiling: FED_BRACKETS_MFJ[1][0] });
+    expect(optimizerView(usePlanStore.getState().plan).conversion.bracketCeiling).toBe(before);
   });
 });

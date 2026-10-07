@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import type { Plan } from '../schemas/plan';
+import type { Plan, Assumptions } from '../schemas/plan';
+
+/** The fact fields what-if touches; satisfied by both the saved plan and the engine plan. */
+export type WhatIfTarget = Pick<Plan, 'personA' | 'personB' | 'expenseStreams'> & {
+  assumptions: Pick<Assumptions, 'taxableReturn' | 'tradReturn' | 'rothReturn' | 'inflation'>;
+};
 
 /** Ephemeral overrides to overlay on the saved plan for "what-if" exploration.
  *  These do NOT persist and never mutate the underlying plan — they exist only
@@ -35,7 +40,7 @@ export const useWhatIfStore = create<WhatIfState>()((set) => ({
 
 /** Apply the active what-if overrides to a plan and return a derived plan suitable
  *  for `runProjection`. Returns the input plan unchanged when no overrides are active. */
-export function applyWhatIf(plan: Plan, w: WhatIfState): Plan {
+export function applyWhatIf<T extends WhatIfTarget>(plan: T, w: WhatIfState): T {
   if (!w.active) return plan;
   const o = w.overrides;
   const baseExpenses = plan.expenseStreams;
@@ -44,7 +49,7 @@ export function applyWhatIf(plan: Plan, w: WhatIfState): Plan {
   const hasAny = o.retirementAgeA !== undefined || o.retirementAgeB !== undefined || o.returnRateDelta !== undefined || o.inflation !== undefined || hasSpending;
   if (!hasAny) return plan;
 
-  let next: Plan = plan;
+  let next: T = plan;
   if (o.retirementAgeA !== undefined) {
     const oldAge = plan.personA.retirementAge;
     const newAge = o.retirementAgeA;

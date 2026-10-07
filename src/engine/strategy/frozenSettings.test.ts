@@ -6,6 +6,8 @@ import { policyStatus } from '../policyStatus';
 import { planF_allTradCouple } from '../__golden/plans';
 import { FED_BRACKETS_MFJ } from '../taxConstants';
 import type { Plan } from '../../schemas/plan';
+import type { SavedPlan } from '../../schemas/savedPlan';
+import { fromFlat, optimizerView, applyResult, enginePlan, resultStatus } from './savedPlan';
 
 // §6.8 opt tier: real optimizer on a cheap fixture.
 const OPTS = { useNelderMead: false };
@@ -57,5 +59,21 @@ describe('§6.8 frozen settings with the real optimizer', () => {
     const b = optimizeCached(leaky, 'max-end-balance', OPTS);
     expect(b.policy.windows).toEqual(a.policy.windows);
     expect(b.projection.endTotalReal).toBe(a.projection.endTotalReal);
+  }, 180_000);
+});
+
+describe('Phase 2: the saved-plan path with the real optimizer', () => {
+  it('applyResult round-trips and the manual slot never changes the run', () => {
+    const base = fromFlat(bracketFill(FED_BRACKETS_MFJ[1][0]), false);
+    const result = optimizeCached(optimizerView(base), 'max-end-balance', OPTS);
+    const applied = applyResult(base, result);
+    expect(runProjection(enginePlan(applied)).endTotalReal).toBeCloseTo(result.projection.endTotalReal, 0);
+    expect(resultStatus(applied)).toBe('fresh');
+
+    const leaky: SavedPlan = {
+      ...base,
+      strategy: { ...base.strategy, manual: { ...base.strategy.manual, preset: 'proportional', withdrawalBracketCeiling: FED_BRACKETS_MFJ[3][0], customWindows: [{ fromAge: 60, toAge: 95, pctTaxable: 0, pctTraditional: 1, pctRoth: 0 }] } },
+    };
+    expect(optimizerView(leaky)).toEqual(optimizerView(base));
   }, 180_000);
 });

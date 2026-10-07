@@ -1,5 +1,6 @@
+import type { Plan } from '../schemas/plan';
 import { useMemo } from 'react';
-import { usePlanStore } from '../store/usePlanStore';
+import { usePlanStore, useEnginePlan } from '../store/usePlanStore';
 import { evaluateAll } from '../engine/scenario';
 import { runProjection, initialWithdrawalRate } from '../engine/projection';
 import { fmtM, fmtPct } from '../lib/format';
@@ -9,7 +10,7 @@ interface MetricDef {
   label: string;
   format: (v: number) => string;
   better: 'higher' | 'lower';
-  pick: (proj: ReturnType<typeof runProjection>, plan: ReturnType<typeof usePlanStore.getState>['plan']) => number;
+  pick: (proj: ReturnType<typeof runProjection>, plan: Plan) => number;
 }
 
 const METRICS: MetricDef[] = [
@@ -47,7 +48,7 @@ interface Props {
  *  Used full-screen on the Compare page and as an embedded "Pinned Comparisons"
  *  panel on the Dashboard (with limit=3 and a "see all" link). */
 export default function ScenarioCompare({ limit, metricKeys, allowRemove = true }: Props) {
-  const plan = usePlanStore((s) => s.plan);
+  const plan = useEnginePlan();
   const proj = useMemo(() => runProjection(plan), [plan]);
   const allScenarios = usePlanStore((s) => s.scenarios);
   const removeScenario = usePlanStore((s) => s.removeScenario);

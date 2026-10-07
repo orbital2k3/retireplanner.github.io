@@ -1,17 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { samplePlan, defaultPlan, type Plan } from '../../../schemas/plan';
+import type { Plan } from '../../../schemas/plan';
+import type { SavedPlan } from '../../../schemas/savedPlan';
 import type { OptimizeResult } from '../../optimizer';
 import type { UserGoal } from '../../recommender';
 import { runProjection } from '../../projection';
-import { policyStatus } from '../../policyStatus';
-import { optimizerKey } from '../optimizerInput';
+import { optimizerKey, canonicalStringify } from '../optimizerInput';
+import { enginePlan, savedOptimizerKey, planStatus, resultStatus, canReOptimize, optimizerView, defaultSavedPlan } from '../savedPlan';
+import { sampleSaved } from '../../__testutil__/savedPlans';
 import { usePlanStore } from '../../../store/usePlanStore';
 import { useOptimizerStore } from '../../../store/useOptimizerStore';
 import { useWhatIfStore } from '../../../store/useWhatIfStore';
 import { PLAN_STORE_VERSION } from '../../../store/planStoreVersion';
 import {
-  runOptimizer, commitOptimizerPlan, chooseConversion, applyRule, canReOptimize,
+  runOptimizer, commitOptimizerPlan, chooseConversion, applyRule,
   type OptimizeFn, type ConversionChoice,
 } from '../../../store/strategyActions';
 import { exportPlanToJSON, importPlanFromJSON } from '../../../storage/exportImport';
@@ -20,7 +22,7 @@ import { FED_BRACKETS_MFJ } from '../../taxConstants';
 /**
  * §6.4 model-based test. Random command sequences drive the real stores and the real runner;
  * only the worker is replaced by a deterministic fake whose policy depends on optimizerKey, so
- * runs are cheap and reproducible. The model tracks, independently of policyStatus, which key
+ * runs are cheap and reproducible. The model tracks, independently of resultStatus, which key
  * the current result was built for and what it projected to.
  */
 
@@ -50,6 +52,9 @@ type Cmd =
   | { t: 'EditPreset'; v: Plan['withdrawalStrategy'] }
   | { t: 'EditBlend'; pct: number }
   | { t: 'EditCeiling'; v: number }
+  | { t: 'EditManualConversion'; choice: Exclude<ConversionChoice, 'optimizer'>; age: number; v: number }
+  | { t: 'EditManualPayTax' }
+  | { t: 'SwitchTab' }
   | { t: 'SelectGoal'; g: UserGoal }
   | { t: 'Run' }
   | { t: 'ApplyPending' }
@@ -72,6 +77,9 @@ const cmd: fc.Arbitrary<Cmd> = fc.oneof(
   fc.record({ t: fc.constant('EditPreset' as const), v: fc.constantFrom<Plan['withdrawalStrategy']>('taxfirst', 'rothfirst', 'tradfirst', 'proportional', 'bracketfill') }),
   fc.record({ t: fc.constant('EditBlend' as const), pct: fc.integer({ min: 0, max: 10 }).map((x) => x / 10) }),
   fc.record({ t: fc.constant('EditCeiling' as const), v: fc.constantFrom(...CEILINGS) }),
+  fc.record({ t: fc.constant('EditManualConversion' as const), choice: fc.constantFrom<Exclude<ConversionChoice, 'optimizer'>>('off', 'bracket-fill', 'auto-window', 'manual'), age: fc.integer({ min: 55, max: 80 }), v: fc.integer({ min: 0, max: 100 }).map((x) => x * 1000) }),
+  fc.constant({ t: 'EditManualPayTax' as const }),
+  fc.constant({ t: 'SwitchTab' as const }), fc.constant({ t: 'SwitchTab' as const }),
   fc.record({ t: fc.constant('SelectGoal' as const), g: fc.constantFrom(...GOALS) }),
   fc.constant({ t: 'Run' as const }), fc.constant({ t: 'Run' as const }),
   fc.constant({ t: 'ApplyPending' as const }),
@@ -86,27 +94,30 @@ const cmd: fc.Arbitrary<Cmd> = fc.oneof(
 );
 
 /** Independent record of the current saved result: the key it was built for and its projection. */
-interface Model { resultKey: string | null; resultEnd: number | null; selectedGoal: UserGoal | null }
+interface Model { resultKey: string | null; resultEnd: number | null }
 
 const saved = () => usePlanStore.getState().plan;
 const opt = () => useOptimizerStore.getState();
-const end = (p: Plan) => runProjection(p).endTotalReal;
-const hasOptimizerResult = (p: Plan) => p.customPolicy?.source === 'optimizer';
+const end = (p: SavedPlan) => runProjection(enginePlan(p)).endTotalReal;
+const withActive = (p: SavedPlan, active: 'manual' | 'optimizer'): SavedPlan => ({ ...p, strategy: { ...p.strategy, active } });
+/** Projection of the saved optimizer result, whichever tab is open. */
+const resultEnd = (p: SavedPlan) => end(withActive(p, 'optimizer'));
 
 function recordSaved(m: Model) {
   const p = saved();
-  m.resultKey = hasOptimizerResult(p) ? optimizerKey(p) : null;
-  m.resultEnd = hasOptimizerResult(p) ? end(p) : null;
+  m.resultKey = p.strategy.result ? savedOptimizerKey(p) : null;
+  m.resultEnd = p.strategy.result ? resultEnd(p) : null;
 }
 
-const STRATEGY_EDITS = new Set<Cmd['t']>(['EditConversion', 'EditManualAmounts', 'EditPayTax', 'EditLegacyTarget']);
-const MANUAL_EDITS = new Set<Cmd['t']>(['EditPreset', 'EditBlend', 'EditCeiling']);
+const OPTIMIZER_EDITS = new Set<Cmd['t']>(['EditConversion', 'EditManualAmounts', 'EditPayTax', 'EditLegacyTarget']);
+const MANUAL_EDITS = new Set<Cmd['t']>(['EditPreset', 'EditBlend', 'EditCeiling', 'EditManualConversion', 'EditManualPayTax']);
 
 async function step(m: Model, c: Cmd): Promise<void> {
   const ps = usePlanStore.getState();
   const before = saved();
-  const beforeKey = optimizerKey(before);
-  const beforeEnd = hasOptimizerResult(before) ? end(before) : null;
+  const beforeKey = savedOptimizerKey(before);
+  const beforeView = canonicalStringify(optimizerView(before));
+  const beforeResultEnd = before.strategy.result ? resultEnd(before) : null;
 
   switch (c.t) {
     case 'EditFact':
@@ -115,22 +126,34 @@ async function step(m: Model, c: Cmd): Promise<void> {
       else ps.setPersonAPortfolio({ taxable: before.portfolio.personA.taxable + c.v * 10_000 });
       break;
     case 'EditConversion':
-      chooseConversion(c.choice, c.choice === 'bracket-fill' ? { bracketCeiling: c.ceiling } : undefined);
+      chooseConversion('optimizer', c.choice, c.choice === 'bracket-fill' ? { bracketCeiling: c.ceiling } : undefined);
       break;
     case 'EditManualAmounts':
-      ps.setConversion({ manualSchedule: { ...before.conversion.manualSchedule, [String(c.age)]: c.v } });
+      ps.setConversion('optimizer', { manualSchedule: { ...before.strategy.optimizer.conversion.manualSchedule, [String(c.age)]: c.v } });
       break;
-    case 'EditPayTax': ps.setPayTaxFromBrokerage(!before.payTaxFromBrokerage); break;
-    case 'EditLegacyTarget': ps.setAssumptions({ legacyTargetTaxAdjReal: c.v }); break;
-    case 'EditPreset': ps.setWithdrawalStrategy(c.v); break;
+    case 'EditPayTax': ps.editOptimizer({ payTaxFromBrokerage: !before.strategy.optimizer.payTaxFromBrokerage }); break;
+    case 'EditLegacyTarget': ps.editOptimizer({ legacyTargetTaxAdjReal: c.v }); break;
+    case 'EditPreset': ps.editManual({ preset: c.v, customWindows: undefined }); break;
     case 'EditBlend':
-      ps.setCustomPolicy({ windows: [{ fromAge: 40, toAge: 110, pctTaxable: c.pct, pctTraditional: 1 - c.pct, pctRoth: 0 }], source: 'manual' });
+      ps.editManual({ customWindows: [{ fromAge: 40, toAge: 110, pctTaxable: c.pct, pctTraditional: 1 - c.pct, pctRoth: 0 }] });
       break;
-    case 'EditCeiling': ps.setWithdrawalBracketCeiling(c.v); break;
-    case 'SelectGoal': m.selectedGoal = c.g; break;
+    case 'EditCeiling': ps.editManual({ preset: 'bracketfill', withdrawalBracketCeiling: c.v }); break;
+    case 'EditManualConversion':
+      chooseConversion('manual', c.choice);
+      ps.setConversion('manual', { manualSchedule: { ...before.strategy.manual.conversion.manualSchedule, [String(c.age)]: c.v } });
+      break;
+    case 'EditManualPayTax': ps.editManual({ payTaxFromBrokerage: !before.strategy.manual.payTaxFromBrokerage }); break;
+    case 'SwitchTab': {
+      const other = before.strategy.active === 'manual' ? 'optimizer' : 'manual';
+      ps.setActiveStrategy(other);
+      // I6: switching back returns the exact same plan.
+      expect(withActive(saved(), before.strategy.active)).toEqual(before);
+      break;
+    }
+    case 'SelectGoal': ps.editOptimizer({ goal: c.g }); break;
     case 'Run': {
-      const goal = m.selectedGoal ?? (before.optimizedForGoal as UserGoal | undefined) ?? 'max-end-balance';
-      const out = await runOptimizer({ plan: before, goal }, fakeOptimize);
+      const goal = before.strategy.optimizer.goal;
+      const out = await runOptimizer({ plan: before }, fakeOptimize);
       // I9: one apply rule for every caller.
       expect(out.kind).toBe(applyRule(goal));
       if (out.kind === 'pending') expect(saved()).toBe(before);
@@ -139,94 +162,101 @@ async function step(m: Model, c: Cmd): Promise<void> {
     case 'ApplyPending': if (opt().pendingPlan) commitOptimizerPlan(opt().pendingPlan!); break;
     case 'DiscardPending': opt().setPendingPlan(null); opt().setPendingGoal(null); break;
     case 'McRobustness': {
-      const goal = (before.optimizedForGoal as UserGoal | undefined) ?? 'max-end-balance';
+      const goal = before.strategy.result?.goal ?? before.strategy.optimizer.goal;
       const out = await runOptimizer({ plan: before, goal, mc: { mcSeed: 1, mcPosture: 'balanced', equityPct: 0.6 } }, fakeOptimize);
       expect(out.kind).toBe('preview');
       expect(saved()).toBe(before);
-      opt().setRobustnessPlan({ ...out.plan, optimizedBy: 'monte-carlo' });
+      const r = out.plan.strategy.result!;
+      opt().setRobustnessPlan({ ...out.plan, strategy: { ...out.plan.strategy, result: { ...r, optimizedBy: 'monte-carlo' } } });
       break;
     }
     case 'McApply': if (opt().robustnessPlan) commitOptimizerPlan(opt().robustnessPlan!); break;
     case 'McDiscard': opt().setRobustnessPlan(null); break;
     case 'WhatIf': useWhatIfStore.getState().setOverride('inflation', 0.02 + c.v / 100); break;
     case 'ExportImport': {
-      const statusBefore = policyStatus(before);
+      const statusBefore = planStatus(before);
       const r = importPlanFromJSON(exportPlanToJSON(before));
       expect(r.ok).toBe(true);
-      // I7: status and result survive export then import.
-      expect(policyStatus(r.plan!)).toBe(statusBefore);
-      expect(r.plan!.customPolicy?.windows).toEqual(before.customPolicy?.windows);
+      // I7: status, the active tab, both slots and the result survive export then import.
+      expect(planStatus(r.plan!)).toBe(statusBefore);
+      expect(resultStatus(r.plan!)).toBe(resultStatus(before));
+      expect(r.plan!.strategy.active).toBe(before.strategy.active);
+      expect(r.plan!.strategy.result?.policy).toEqual(before.strategy.result?.policy);
+      expect(canonicalStringify(optimizerView(r.plan!))).toBe(canonicalStringify(optimizerView(JSON.parse(JSON.stringify(before)))));
       usePlanStore.setState({ plan: r.plan! });
       break;
     }
     case 'Reload': {
-      const statusBefore = policyStatus(before);
+      const statusBefore = planStatus(before);
       const persisted = JSON.parse(JSON.stringify({ state: { plan: before }, version: PLAN_STORE_VERSION }));
       usePlanStore.setState({ plan: persisted.state.plan });
       useOptimizerStore.setState({ pendingPlan: null, pendingGoal: null, robustnessPlan: null, robustnessComparison: null, result: null });
       useWhatIfStore.getState().reset();
-      m.selectedGoal = null;
       // I8: the saved plan and its status survive; ephemeral state is gone.
-      expect(policyStatus(saved())).toBe(statusBefore);
+      expect(planStatus(saved())).toBe(statusBefore);
       break;
     }
     case 'Reset':
-      usePlanStore.setState({ plan: samplePlan() });
+      usePlanStore.setState({ plan: sampleSaved() });
       useOptimizerStore.setState({ pendingPlan: null, pendingGoal: null, robustnessPlan: null, robustnessComparison: null, result: null });
-      m.selectedGoal = null;
       break;
   }
 
   const after = saved();
-  // The saved result changes only when a result is committed or a manual edit discards it.
-  if (after.customPolicy !== before.customPolicy && c.t !== 'ExportImport' && c.t !== 'Reload') recordSaved(m);
+  // The saved result changes only when one is committed or the plan is reset.
+  if (after.strategy.result !== before.strategy.result && c.t !== 'ExportImport' && c.t !== 'Reload') recordSaved(m);
 
-  // I2: status is fresh exactly when the saved result was built for the current key.
-  const modelFresh = m.resultKey !== null && optimizerKey(after) === m.resultKey;
-  expect(policyStatus(after) === 'fresh').toBe(modelFresh);
+  // I2: the result is fresh exactly when it was built for the current key.
+  const modelFresh = m.resultKey !== null && savedOptimizerKey(after) === m.resultKey;
+  expect(resultStatus(after) === 'fresh').toBe(modelFresh);
 
-  // I3: while fresh, the projection is the one the result produced.
-  if (modelFresh) expect(end(after)).toBe(m.resultEnd);
+  // I3: while fresh, the optimizer tab projects what the result produced.
+  if (modelFresh) expect(resultEnd(after)).toBe(m.resultEnd);
 
-  // I4: strategy edits while optimized never move the charts.
-  if (STRATEGY_EDITS.has(c.t) && beforeEnd !== null && hasOptimizerResult(after)) expect(end(after)).toBe(beforeEnd);
+  // I4: optimizer-setting edits never move the result's charts.
+  if (OPTIMIZER_EDITS.has(c.t) && beforeResultEnd !== null) expect(resultEnd(after)).toBe(beforeResultEnd);
   // I4: a spending change always moves them.
   if (c.t === 'EditFact' && c.what === 'expense') expect(end(after)).not.toBe(end(before));
 
-  // I5: "Set it myself" edits never change optimizerKey. The ceiling edit can clamp the shared
-  // conversion ceiling (known, Phase 2), so it is checked only when no clamp happens.
-  const clamped = c.t === 'EditCeiling' && before.conversion.bracketCeiling > c.v;
-  if (MANUAL_EDITS.has(c.t) && !clamped) expect(optimizerKey(after)).toBe(beforeKey);
+  // I5: "Set it myself" edits and tab switches never reach the optimizer and never touch the result.
+  if (MANUAL_EDITS.has(c.t) || c.t === 'SwitchTab') {
+    expect(savedOptimizerKey(after)).toBe(beforeKey);
+    expect(canonicalStringify(optimizerView(after))).toBe(beforeView);
+    expect(after.strategy.result).toBe(before.strategy.result);
+  }
 
   // I1: Re-optimize is enabled exactly when there is no current result for the selected goal.
   const effective = opt().pendingPlan ?? after;
-  const resultGoal = effective.optimizedForGoal as UserGoal | undefined;
-  const currentForGoal = policyStatus(effective) === 'fresh' && (m.selectedGoal === null || m.selectedGoal === resultGoal);
-  expect(canReOptimize(policyStatus(effective), m.selectedGoal, resultGoal)).toBe(!currentForGoal);
+  const r = effective.strategy.result;
+  const currentForGoal = resultStatus(effective) === 'fresh' && r?.goal === effective.strategy.optimizer.goal;
+  expect(canReOptimize(effective)).toBe(!currentForGoal);
 
-  // I10: "Optimizer decides" never leaves a mode that could fire.
-  if (after.conversion.optimize) expect(after.conversion.mode).toBe('off');
+  // I10: no contradictory conversion state: while the optimizer decides, nothing user-chosen fires.
+  if (after.strategy.optimizer.optimizerDecidesConversions) {
+    expect(optimizerView(after).conversion).toMatchObject({ optimize: true, mode: 'off', manualSchedule: {} });
+  }
 }
 
 const RUNS = process.env.HEAVY === '1' ? 10_000 : 500;
 
 describe('§6.4 strategy state machine', () => {
-  it(`holds I1-I5, I7-I10 over ${RUNS} random command sequences`, async () => {
+  it(`holds I1-I10 over ${RUNS} random command sequences`, async () => {
     await fc.assert(
       fc.asyncProperty(fc.array(cmd, { minLength: 1, maxLength: 25 }), async (cmds) => {
-        usePlanStore.setState({ plan: samplePlan() });
+        usePlanStore.setState({ plan: sampleSaved() });
         useOptimizerStore.setState({ pendingPlan: null, pendingGoal: null, robustnessPlan: null, robustnessComparison: null, result: null });
         useWhatIfStore.getState().reset();
-        const m: Model = { resultKey: null, resultEnd: null, selectedGoal: null };
+        const m: Model = { resultKey: null, resultEnd: null };
         for (const c of cmds) await step(m, c);
       }),
       { numRuns: RUNS },
     );
   }, 600_000);
 
-  it('a blank plan starts with no result and Re-optimize enabled', () => {
-    const p = defaultPlan();
-    expect(policyStatus(p)).toBe('none');
-    expect(canReOptimize('none', null, undefined)).toBe(true);
+  it('a blank plan starts on "Set it myself" with no result and Re-optimize enabled', () => {
+    const p = defaultSavedPlan();
+    expect(p.strategy.active).toBe('manual');
+    expect(planStatus(p)).toBe('none');
+    expect(canReOptimize(p)).toBe(true);
   });
 });

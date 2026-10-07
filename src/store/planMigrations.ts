@@ -5,9 +5,11 @@
  * and exportImport.ts (on import).  Each function mutates the raw persisted
  * object in-place — Zod parses the result afterward.
  */
-import type { Plan } from '../schemas/plan';
+import { PlanSchema, type Plan } from '../schemas/plan';
+import type { SavedPlan } from '../schemas/savedPlan';
 import { optimizerKey } from '../engine/strategy/optimizerInput';
 import { liveSettings } from '../engine/strategy/resultSettings';
+import { fromFlat } from '../engine/strategy/savedPlan';
 
 /**
  * v23 → v24
@@ -229,4 +231,22 @@ export function migratePlanToV34(raw: Record<string, unknown>): void {
 export function stampLegacySettings(raw: Record<string, unknown>): void {
   const cp = raw.customPolicy as Record<string, unknown> | undefined;
   if (cp?.source === 'optimizer' && !cp.settings && raw.conversion) cp.settings = liveSettings(raw as unknown as Plan);
+}
+
+/** True when a flat plan's optimizer result matches its v34 key (judged on the object as stored). */
+export function wasV34Fresh(raw: Record<string, unknown>): boolean {
+  const cp = raw.customPolicy as Record<string, unknown> | undefined;
+  return cp?.source === 'optimizer' && typeof cp.inputKey === 'string' && cp.inputKey === optimizerKey(raw as unknown as Plan);
+}
+
+/**
+ * v34 → v35
+ *
+ * The flat strategy fields move into `strategy` slots ("Set it myself", "Optimize for me", and the
+ * optimizer result). The active slot is the one the flat plan was showing, so projections are
+ * unchanged, and a result that was current stays current. Returns the new plan object.
+ */
+export function migrateFlatToSaved(raw: Record<string, unknown>, fresh = wasV34Fresh(raw)): SavedPlan {
+  const parsed = PlanSchema.safeParse(raw);
+  return fromFlat(parsed.success ? parsed.data : (raw as unknown as Plan), fresh);
 }

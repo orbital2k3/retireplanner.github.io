@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { usePlanStore } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { runOptimizer } from '../store/strategyActions';
-import { policyStatus } from '../engine/policyStatus';
-import type { UserGoal } from '../engine/recommender';
+import { planStatus } from '../engine/strategy/savedPlan';
 
 /**
  * Non-blocking notice for result pages when inputs changed after the optimizer ran.
@@ -15,8 +14,9 @@ export default function StalePlanBanner() {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (pendingPlan !== null || policyStatus(plan) !== 'stale') return null;
-  const goal = (plan.optimizedForGoal ?? 'max-end-balance') as UserGoal;
+  if (pendingPlan !== null || planStatus(plan) !== 'stale') return null;
+  // Re-run the goal the stale result was built for.
+  const goal = plan.strategy.result!.goal;
 
   const reoptimize = async () => {
     setProgress(0);

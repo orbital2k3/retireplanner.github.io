@@ -4,13 +4,13 @@ import { LegacyTargetInput } from './inputs/LegacyTargetInput';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { STRATEGIES } from '../engine/strategyPresets';
 import { USER_GOALS, type UserGoal } from '../engine/recommender';
-import { runOptimizer, canReOptimize } from '../store/strategyActions';
+import { runOptimizer } from '../store/strategyActions';
+import { resultStatus, canReOptimize } from '../engine/strategy/savedPlan';
 import StrategyCustomizeSheet from './strategy/StrategyCustomizeSheet';
 import ConversionPills from './strategy/ConversionPills';
 import { pillStyle, selectPillStyle, editLinkStyle } from './strategy/pillStyles';
 import Chk from './strategy/Chk';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE } from '../engine/taxConstants';
-import { policyStatus } from '../engine/policyStatus';
 import { GOAL_LABELS as GOAL_SHORT_LABELS } from '../engine/goalLabels';
 
 const inlineLabelStyle: React.CSSProperties = {
@@ -20,10 +20,9 @@ const inlineLabelStyle: React.CSSProperties = {
 
 export default function StrategyChooser() {
   const plan = usePlanStore((s) => s.plan);
-  const setStrategy = usePlanStore((s) => s.setWithdrawalStrategy);
-  const setWithdrawalBracketCeiling = usePlanStore((s) => s.setWithdrawalBracketCeiling);
-  const clearCustomPolicy = usePlanStore((s) => s.clearCustomPolicy);
-  const setPayTaxFromBrokerage = usePlanStore((s) => s.setPayTaxFromBrokerage);
+  const setActiveStrategy = usePlanStore((s) => s.setActiveStrategy);
+  const editManual = usePlanStore((s) => s.editManual);
+  const editOptimizer = usePlanStore((s) => s.editOptimizer);
   const setPendingPlan = useOptimizerStore((s) => s.setPendingPlan);
   const setPendingGoal = useOptimizerStore((s) => s.setPendingGoal);
   const pendingPlan = useOptimizerStore((s) => s.pendingPlan);
@@ -33,22 +32,14 @@ export default function StrategyChooser() {
 
   // A pending result (Max Spending / Earliest Retire awaiting Apply) is what the charts show.
   const effectivePlan = pendingPlan ?? plan;
-  const hasCustom = !!effectivePlan.customPolicy;
-  const activeGoal = effectivePlan.optimizedForGoal as UserGoal | undefined;
-  const optimizerDriven = hasCustom && activeGoal != null;
-  const handEdited = hasCustom && activeGoal == null;
-  const status = policyStatus(effectivePlan);
+  const { manual } = plan.strategy;
+  const result = effectivePlan.strategy.result;
+  const approach: 'optimize' | 'manual' = plan.strategy.active === 'optimizer' ? 'optimize' : 'manual';
+  const handEdited = manual.customWindows !== undefined;
+  const status = resultStatus(effectivePlan);
   const stale = status === 'stale';
-
-  const [approach, setApproach] = useState<'optimize' | 'manual'>(optimizerDriven ? 'optimize' : 'manual');
-  // The goal to run next. An action argument, not plan state; defaults to the result's goal.
-  const [selectedGoal, setSelectedGoal] = useState<UserGoal | null>(activeGoal ?? null);
-  const [seenGoal, setSeenGoal] = useState<UserGoal | undefined>(activeGoal);
-  if (activeGoal !== seenGoal) {
-    setSeenGoal(activeGoal);
-    setSelectedGoal(activeGoal ?? null);
-  }
-  const reOptimizeEnabled = !optimizing && canReOptimize(status, selectedGoal, activeGoal);
+  const selectedGoal = effectivePlan.strategy.optimizer.goal;
+  const reOptimizeEnabled = !optimizing && canReOptimize(effectivePlan);
 
   const brackets = plan.personB ? FED_BRACKETS_MFJ : FED_BRACKETS_SINGLE;
   const bracketOptions = brackets.slice(0, 5).map(([top, rate]) => ({
@@ -58,7 +49,7 @@ export default function StrategyChooser() {
   // that withdrawal preset is active: you can't convert above the bracket you're already filling.
   // "Optimize for me" is never restricted: the optimizer searches all brackets freely.
   const convBracketOptionsManual = bracketOptions
-    .filter(({ value }) => plan.withdrawalStrategy !== 'bracketfill' || value <= plan.withdrawalBracketCeiling);
+    .filter(({ value }) => manual.preset !== 'bracketfill' || value <= manual.withdrawalBracketCeiling);
 
   /** A saved strategy edit replaces any result still waiting for Apply. */
   const dropPending = () => {
@@ -69,7 +60,7 @@ export default function StrategyChooser() {
   const runReOptimize = async () => {
     setOptimizing(true);
     try {
-      await runOptimizer({ plan, goal: selectedGoal ?? activeGoal ?? 'max-end-balance' });
+      await runOptimizer({ plan });
     } catch (err) {
       console.error('[StrategyChooser] Re-optimize failed:', err);
     } finally {
@@ -77,10 +68,22 @@ export default function StrategyChooser() {
     }
   };
 
-  const pickWithdrawal = (key: typeof STRATEGIES[number]['key']) => {
-    if (hasCustom) clearCustomPolicy();
+  const switchApproach = (tab: 'optimize' | 'manual') => {
+    // The pending result belongs to "Optimize for me"; leaving the tab declines it.
+    if (tab === 'manual') dropPending();
+    setActiveStrategy(tab === 'optimize' ? 'optimizer' : 'manual');
+  };
+
+  const selectGoal = (goal: UserGoal) => {
     dropPending();
-    setStrategy(key);
+    editOptimizer({ goal });
+  };
+
+  const pickWithdrawal = (preset: typeof STRATEGIES[number]['key'], ceiling?: number) => {
+    // Within "Set it myself" the conversion ceiling can't exceed a bracket-fill withdrawal ceiling.
+    const conversion = preset === 'bracketfill' && ceiling !== undefined && manual.conversion.bracketCeiling > ceiling
+      ? { ...manual.conversion, bracketCeiling: ceiling } : manual.conversion;
+    editManual({ preset, customWindows: undefined, conversion, ...(ceiling !== undefined ? { withdrawalBracketCeiling: ceiling } : {}) });
   };
 
   const conversionRow = (tab: 'optimize' | 'manual') => {
@@ -97,7 +100,6 @@ export default function StrategyChooser() {
         onBeforeChoose={dropPending} onEdit={() => setSheetMode('conversion')} />
     ) : (
       <ConversionPills variant="manual" ceilingOptions={convBracketOptionsManual}
-        onBeforeChoose={() => { if (hasCustom) clearCustomPolicy(); dropPending(); }}
         onEdit={() => setSheetMode('conversion')} />
     );
   };
@@ -112,7 +114,7 @@ export default function StrategyChooser() {
             {(['optimize', 'manual'] as const).map((tab) => {
               const active = approach === tab;
               return (
-                <button key={tab} onClick={() => setApproach(tab)} style={{
+                <button key={tab} onClick={() => switchApproach(tab)} style={{
                   flex: 1, display: 'flex', alignItems: 'center',
                   padding: '0 18px', textAlign: 'left', border: 'none', whiteSpace: 'nowrap',
                   borderLeft: `4px solid ${active ? 'var(--gold)' : 'transparent'}`,
@@ -147,11 +149,11 @@ export default function StrategyChooser() {
               }}>
                 {(Object.keys(USER_GOALS) as UserGoal[]).map((key) => {
                   const selected = key === selectedGoal;
-                  const applied = optimizerDriven && key === activeGoal;
+                  const applied = result?.goal === key;
                   if (key === 'max-sustainable-spending') {
                     return (
                       <div key={key} style={{ position: 'relative' }}>
-                        <button onClick={() => setSelectedGoal(key)} title={USER_GOALS[key].description}
+                        <button onClick={() => selectGoal(key)} title={USER_GOALS[key].description}
                           style={pillStyle(selected ? 'active' : 'idle')}>
                           {applied && <Chk />}{GOAL_SHORT_LABELS[key]}
                         </button>
@@ -164,7 +166,7 @@ export default function StrategyChooser() {
                     );
                   }
                   return (
-                    <button key={key} onClick={() => setSelectedGoal(key)} title={USER_GOALS[key].description}
+                    <button key={key} onClick={() => selectGoal(key)} title={USER_GOALS[key].description}
                       style={pillStyle(selected ? 'active' : 'idle')}>
                       {applied && <Chk />}{GOAL_SHORT_LABELS[key]}
                     </button>
@@ -194,7 +196,7 @@ export default function StrategyChooser() {
               <div style={{ ...inlineLabelStyle, paddingTop: 9 }}>Roth conversions</div>
               <div>
                 {conversionRow('optimize')}
-                {optimizerDriven && stale && <div style={{ fontSize: 11.5, color: 'var(--warning)', fontWeight: 600, marginTop: 8 }}>Saved. Takes effect when you re-optimize.</div>}
+                {stale && <div style={{ fontSize: 11.5, color: 'var(--warning)', fontWeight: 600, marginTop: 8 }}>Saved. Takes effect when you re-optimize.</div>}
               </div>
               <div style={{ paddingTop: 9, display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={() => setSheetMode('chart')} style={{ ...editLinkStyle, fontSize: 12 }}>📊 Conversions vs RMDs →</button>
@@ -206,18 +208,15 @@ export default function StrategyChooser() {
               <div style={{ ...inlineLabelStyle, paddingTop: 9 }}>Withdrawal order</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {STRATEGIES.map((s) => {
-                  const isActive = s.key === plan.withdrawalStrategy && !hasCustom;
+                  const isActive = s.key === manual.preset && !handEdited;
                   if (s.key === 'bracketfill') {
                     return (
                       <select key={s.key} title={s.description}
-                        value={isActive ? plan.withdrawalBracketCeiling : ''}
+                        value={isActive ? manual.withdrawalBracketCeiling : ''}
                         onChange={(e) => {
                           const val = parseInt(e.target.value, 10);
                           if (isNaN(val)) return;
-                          if (hasCustom) clearCustomPolicy();
-                          dropPending();
-                          setStrategy('bracketfill');
-                          setWithdrawalBracketCeiling(val);
+                          pickWithdrawal('bracketfill', val);
                         }}
                         style={selectPillStyle(isActive ? 'active' : 'idle')}>
                         <option value="">Bracket-Fill</option>
@@ -256,8 +255,11 @@ export default function StrategyChooser() {
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', userSelect: 'none' }}>
                 <input
                   type="checkbox"
-                  checked={plan.payTaxFromBrokerage ?? false}
-                  onChange={(e) => { dropPending(); setPayTaxFromBrokerage(e.target.checked); }}
+                  checked={plan.strategy[approach === 'optimize' ? 'optimizer' : 'manual'].payTaxFromBrokerage}
+                  onChange={(e) => {
+                    if (approach === 'optimize') { dropPending(); editOptimizer({ payTaxFromBrokerage: e.target.checked }); }
+                    else editManual({ payTaxFromBrokerage: e.target.checked });
+                  }}
                   style={{ accentColor: 'var(--gold)', width: 13, height: 13 }}
                 />
                 Pay IRA withdrawal taxes from brokerage
@@ -273,7 +275,7 @@ export default function StrategyChooser() {
         open={sheetMode !== null}
         mode={sheetMode ?? 'blend'}
         onClose={() => setSheetMode(null)}
-        unrestrictedCeiling={approach === 'optimize'}
+        slot={approach === 'optimize' ? 'optimizer' : 'manual'}
       />
     </>
   );

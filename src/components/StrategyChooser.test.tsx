@@ -1,9 +1,8 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
-import { samplePlan, type Plan } from '../schemas/plan';
-import type { UserGoal } from '../engine/recommender';
-import type { BlendWindow } from '../engine/blendPolicy';
+import type { SavedPlan } from '../schemas/savedPlan';
+import { MANUAL_WINDOW } from '../engine/__testutil__/strategyPlans';
 
 // jsdom here exposes a bare `localStorage`; stub a working one before the persisted store loads.
 const mem = new Map<string, string>();
@@ -18,35 +17,27 @@ vi.mock('./strategy/StrategyCustomizeSheet', () => ({ default: () => null }));
 
 const { usePlanStore } = await import('../store/usePlanStore');
 const { useOptimizerStore } = await import('../store/useOptimizerStore');
-const { optimizerKey } = await import('../engine/strategy/optimizerInput');
-const { optimizerSettings } = await import('../engine/strategy/resultSettings');
-const { policyStatus } = await import('../engine/policyStatus');
+const { planStatus, resultStatus, enginePlan } = await import('../engine/strategy/savedPlan');
 const { runProjection } = await import('../engine/projection');
+const { sampleSaved, optimizedSaved, staleSaved } = await import('../engine/__testutil__/savedPlans');
 const { default: StrategyChooser } = await import('./StrategyChooser');
-
-const WINDOW: BlendWindow = { fromAge: 59, toAge: 98, pctTaxable: 0.5, pctTraditional: 0.3, pctRoth: 0.2, convAmt: 20_000 };
-
-function optimized(goal: UserGoal, base: Plan = samplePlan()): Plan {
-  return {
-    ...base,
-    customPolicy: { windows: [WINDOW], source: 'optimizer', goal, inputKey: optimizerKey(base), settings: optimizerSettings(base) },
-    optimizedForGoal: goal, optimizedBy: 'optimizer',
-  };
-}
 
 type State = 'none' | 'fresh' | 'stale' | 'hand-edited' | 'pending';
 function setup(state: State) {
-  const base = samplePlan();
-  const plans: Record<State, Plan> = {
-    none: base,
-    fresh: optimized('max-end-balance'),
-    stale: { ...optimized('max-end-balance'), customPolicy: { ...optimized('max-end-balance').customPolicy!, inputKey: 'old' } },
-    'hand-edited': { ...base, customPolicy: { windows: [WINDOW], source: 'manual' } },
-    pending: optimized('max-end-balance'),
+  const handEdited: SavedPlan = (() => {
+    const p = sampleSaved();
+    return { ...p, strategy: { ...p.strategy, manual: { ...p.strategy.manual, customWindows: [MANUAL_WINDOW] } } };
+  })();
+  const plans: Record<State, SavedPlan> = {
+    none: sampleSaved(),
+    fresh: optimizedSaved(),
+    stale: staleSaved(),
+    'hand-edited': handEdited,
+    pending: optimizedSaved(),
   };
   usePlanStore.setState({ plan: plans[state] });
   useOptimizerStore.setState({
-    pendingPlan: state === 'pending' ? optimized('max-sustainable-spending') : null,
+    pendingPlan: state === 'pending' ? optimizedSaved(sampleSaved(), 'max-sustainable-spending') : null,
     pendingGoal: state === 'pending' ? 'max-sustainable-spending' : null,
   });
   render(<StrategyChooser />);
@@ -57,12 +48,13 @@ const tab = (name: 'optimize' | 'manual') =>
 const reopt = () => screen.getByRole('button', { name: /Re-optimize|Optimizing/ });
 const goalPill = (label: string) => screen.getByRole('button', { name: new RegExp(label) });
 const saved = () => usePlanStore.getState().plan;
+const end = (p: SavedPlan) => runProjection(enginePlan(p)).endTotalReal;
 
 beforeEach(() => runOptimizer.mockClear());
 afterEach(cleanup);
 
 describe('§6.7 StrategyChooser: Re-optimize enabled ⇔ no current result for the selected goal', () => {
-  // [state, goal pill to click (null = keep default), expected enabled]
+  // [state, goal pill to click (null = keep), expected enabled]
   const TABLE: Array<[State, string | null, boolean]> = [
     ['none', null, true],
     ['fresh', null, false],
@@ -71,7 +63,9 @@ describe('§6.7 StrategyChooser: Re-optimize enabled ⇔ no current result for t
     ['stale', null, true],
     ['hand-edited', null, true],
     ['pending', null, false],
-    ['pending', 'Max End Balance', true],
+    // Picking a goal saves it and declines the pending result; the saved Max End Balance result is current.
+    ['pending', 'Max End Balance', false],
+    ['pending', 'Earliest Retire', true],
   ];
   for (const [state, goal, enabled] of TABLE) {
     it(`${state}${goal ? ` + select ${goal}` : ''} → ${enabled ? 'enabled' : 'disabled'}`, () => {
@@ -82,7 +76,7 @@ describe('§6.7 StrategyChooser: Re-optimize enabled ⇔ no current result for t
     });
   }
 
-  it('opens on the tab matching the saved strategy', () => {
+  it('opens on the saved active tab', () => {
     setup('fresh');
     expect(screen.queryByText(/Withdrawal order/i)).toBeNull();
     cleanup();
@@ -90,42 +84,50 @@ describe('§6.7 StrategyChooser: Re-optimize enabled ⇔ no current result for t
     expect(screen.getByText(/Withdrawal order/i)).toBeTruthy();
   });
 
-  it('the applied goal pill carries the check mark', () => {
+  it('the applied goal pill carries the check mark; the selected goal is saved', () => {
     setup('fresh');
     expect(goalPill('Max End Balance').textContent).toContain('✓');
-    expect(goalPill('Max Spending').textContent).not.toContain('✓');
+    fireEvent.click(goalPill('Max Spending'));
+    expect(saved().strategy.optimizer.goal).toBe('max-sustainable-spending');
+    expect(goalPill('Max End Balance').textContent).toContain('✓');
   });
 });
 
-describe('§6.7 StrategyChooser: every control saves immediately', () => {
-  it('P4 a conversion pick under Optimize for me saves, keeps the result and the charts, and enables Re-optimize', () => {
+describe('§6.7 StrategyChooser: every control saves to its own slot', () => {
+  it('P4 a conversion pick under Optimize for me saves to the optimizer slot, keeps the result and the charts', () => {
     setup('fresh');
-    const before = runProjection(saved()).endTotalReal;
+    const before = end(saved());
     expect(screen.getByRole('button', { name: /Optimizer decides/ }).textContent).toContain('✓');
     fireEvent.click(screen.getByRole('button', { name: /Fixed Amount/ }));
-    expect(saved().conversion).toMatchObject({ optimize: false, mode: 'auto-window' });
-    expect(saved().customPolicy?.source).toBe('optimizer');
-    expect(policyStatus(saved())).toBe('stale');
-    expect(runProjection(saved()).endTotalReal).toBe(before);
+    expect(saved().strategy.optimizer).toMatchObject({ optimizerDecidesConversions: false, conversion: { mode: 'auto-window' } });
+    expect(saved().strategy.manual).toEqual(optimizedSaved().strategy.manual);
+    expect(planStatus(saved())).toBe('stale');
+    expect(end(saved())).toBe(before);
     expect((reopt() as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText(/Takes effect when you re-optimize/)).toBeTruthy();
   });
 
-  it('P20 "Optimizer decides" after Manual resets the mode', () => {
+  it('P20 "Optimizer decides" after Manual never fires the remembered schedule', () => {
     setup('none');
-    usePlanStore.getState().setConversion({ optimize: false, mode: 'manual', manualSchedule: { '50': 40_000, '70': 40_000 } });
+    usePlanStore.getState().editOptimizer({ optimizerDecidesConversions: false });
+    usePlanStore.getState().setConversion('optimizer', { mode: 'manual', manualSchedule: { '50': 40_000, '70': 40_000 } });
     tab('optimize');
     fireEvent.click(screen.getByRole('button', { name: /Optimizer decides/ }));
-    expect(saved().conversion).toMatchObject({ optimize: true, mode: 'off' });
-    expect(runProjection(saved()).lifetimeConversion).toBe(0);
+    expect(saved().strategy.optimizer.optimizerDecidesConversions).toBe(true);
+    expect(runProjection(enginePlan(saved())).lifetimeConversion).toBe(0);
   });
 
-  it('P8 pay-tax-from-brokerage saves immediately on either tab', () => {
+  it('P8 pay-tax-from-brokerage saves to the slot of the open tab', () => {
     setup('fresh');
-    const before = saved().payTaxFromBrokerage;
+    const before = saved().strategy.optimizer.payTaxFromBrokerage;
     fireEvent.click(screen.getByRole('checkbox'));
-    expect(saved().payTaxFromBrokerage).toBe(!before);
-    expect(policyStatus(saved())).toBe('stale');
+    expect(saved().strategy.optimizer.payTaxFromBrokerage).toBe(!before);
+    expect(planStatus(saved())).toBe('stale');
+    tab('manual');
+    const manualBefore = saved().strategy.manual.payTaxFromBrokerage;
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(saved().strategy.manual.payTaxFromBrokerage).toBe(!manualBefore);
+    expect(saved().strategy.optimizer.payTaxFromBrokerage).toBe(!before);
   });
 
   it('a strategy edit drops a result still waiting for Apply', () => {
@@ -135,26 +137,42 @@ describe('§6.7 StrategyChooser: every control saves immediately', () => {
     expect(useOptimizerStore.getState().pendingPlan).toBeNull();
   });
 
-  it('P10 a withdrawal preset under Set it myself saves and replaces the optimizer result', () => {
+  it('P9/P10 a preset under Set it myself changes the charts at once and keeps the optimizer result', () => {
     setup('fresh');
+    const optimizedEnd = end(saved());
     tab('manual');
     fireEvent.click(screen.getByRole('button', { name: /Roth-first/ }));
-    expect(saved().withdrawalStrategy).toBe('rothfirst');
-    expect(saved().customPolicy).toBeUndefined();
+    expect(saved().strategy).toMatchObject({ active: 'manual', manual: { preset: 'rothfirst' } });
+    expect(end(saved())).not.toBe(optimizedEnd);
+    expect(resultStatus(saved())).toBe('fresh');
+    tab('optimize');
+    expect(end(saved())).toBe(optimizedEnd);
+    expect((reopt() as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('P10 a conversion pick under Set it myself saves without the optimizer pill', () => {
+  it('P10 a conversion pick under Set it myself saves to the manual slot without the optimizer pill', () => {
     setup('none');
     expect(screen.queryByRole('button', { name: /Optimizer decides/ })).toBeNull();
     const row = screen.getByText(/Roth conversions/i).parentElement!.parentElement!;
     fireEvent.click(within(row).getByRole('button', { name: /Fixed Amount/ }));
-    expect(saved().conversion).toMatchObject({ optimize: false, mode: 'auto-window' });
+    expect(saved().strategy.manual.conversion.mode).toBe('auto-window');
+    expect(saved().strategy.optimizer.conversion.mode).toBe(sampleSaved().strategy.optimizer.conversion.mode);
   });
 
-  it('Re-optimize runs the saved plan with the selected goal', () => {
+  it('lowering the manual withdrawal ceiling caps only the manual conversion ceiling', () => {
+    setup('none');
+    usePlanStore.getState().setConversion('manual', { bracketCeiling: 403_550 });
+    usePlanStore.getState().setConversion('optimizer', { bracketCeiling: 403_550 });
+    fireEvent.change(screen.getByTitle(/bracket/i), { target: { value: '100800' } });
+    expect(saved().strategy.manual).toMatchObject({ preset: 'bracketfill', withdrawalBracketCeiling: 100_800, conversion: { bracketCeiling: 100_800 } });
+    expect(saved().strategy.optimizer.conversion.bracketCeiling).toBe(403_550);
+  });
+
+  it('Re-optimize runs the saved plan, whose goal is the selected one', () => {
     setup('fresh');
     fireEvent.click(goalPill('Earliest Retire'));
     fireEvent.click(reopt());
-    expect(runOptimizer).toHaveBeenCalledWith(expect.objectContaining({ plan: saved(), goal: 'min-retirement-age' }));
+    expect(runOptimizer).toHaveBeenCalledWith(expect.objectContaining({ plan: saved() }));
+    expect(saved().strategy.optimizer.goal).toBe('min-retirement-age');
   });
 });

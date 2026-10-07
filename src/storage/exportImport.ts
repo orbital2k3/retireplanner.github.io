@@ -1,7 +1,7 @@
-import type { Plan } from '../schemas/plan';
+import { SavedPlanSchema, type SavedPlan } from '../schemas/savedPlan';
 import { PlanSchema } from '../schemas/plan';
-import { migratePlanToV24, migratePlanToV25, wasLegacyFresh, stampLegacySettings } from '../store/planMigrations';
-import { optimizerKey } from '../engine/strategy/optimizerInput';
+import { migratePlanToV24, migratePlanToV25, wasLegacyFresh, wasV34Fresh } from '../store/planMigrations';
+import { savedOptimizerKey, fromFlat } from '../engine/strategy/savedPlan';
 import { PLAN_STORE_VERSION } from '../store/planStoreVersion';
 
 export interface ExportPayload {
@@ -10,10 +10,10 @@ export interface ExportPayload {
   exportedAt: string;
   /** Plan store version that wrote the file. Absent on files exported before v34. */
   planVersion?: number;
-  plan: Plan;
+  plan: SavedPlan;
 }
 
-export function exportPlanToJSON(plan: Plan): string {
+export function exportPlanToJSON(plan: SavedPlan): string {
   const payload: ExportPayload = {
     app: 'retirement-optimizer',
     version: 1,
@@ -24,7 +24,7 @@ export function exportPlanToJSON(plan: Plan): string {
   return JSON.stringify(payload, null, 2);
 }
 
-export function downloadPlan(plan: Plan, filename = 'retirement-optimizer-plan.json'): void {
+export function downloadPlan(plan: SavedPlan, filename = 'retirement-optimizer-plan.json'): void {
   const json = exportPlanToJSON(plan);
   const a = document.createElement('a');
   a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
@@ -36,7 +36,7 @@ export function downloadPlan(plan: Plan, filename = 'retirement-optimizer-plan.j
 
 export interface ImportResult {
   ok: boolean;
-  plan?: Plan;
+  plan?: SavedPlan;
   error?: string;
 }
 
@@ -52,24 +52,32 @@ export function importPlanFromJSON(raw: string): ImportResult {
   const planVersion = (parsed as { planVersion?: unknown }).planVersion;
   if (!candidate || typeof candidate !== 'object') return { ok: false, error: 'File does not contain a plan.' };
   const rawPlan = candidate as Record<string, unknown>;
-  // Judge the stored result as the file stores the plan, before migrations or parsing reshape it.
-  const policy = rawPlan.customPolicy as { inputKey?: unknown } | undefined;
-  const wasFresh = wasLegacyFresh(rawPlan) || (typeof policy?.inputKey === 'string' && policy.inputKey === optimizerKey(rawPlan as unknown as Plan));
-  // Old files need the field migrations. Files from v34 on are already current, and re-running
-  // v25 on them would rewrite streams that happen to end at a plan-through age.
+  const issues = (e: { issues: { path: PropertyKey[]; message: string }[] }) =>
+    ({ ok: false, error: e.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
+
+  // v35+ files store strategy slots.
+  if ('strategy' in rawPlan) {
+    const r = rawPlan.strategy as { result?: { inputKey?: unknown } } | undefined;
+    // Judge the stored result as the file stores the plan, before parsing reshapes it.
+    const wasFresh = typeof r?.result?.inputKey === 'string' && r.result.inputKey === savedOptimizerKey(rawPlan as unknown as SavedPlan);
+    const result = SavedPlanSchema.safeParse(rawPlan);
+    if (!result.success) return issues(result.error);
+    const plan = result.data;
+    if (wasFresh && plan.strategy.result) plan.strategy.result.inputKey = savedOptimizerKey(plan);
+    return { ok: true, plan };
+  }
+
+  // Older files store the flat plan. Judge freshness as stored, before migrations reshape it.
+  const wasFresh = wasLegacyFresh(rawPlan) || wasV34Fresh(rawPlan);
+  // Files from v25 on are already field-current; re-running v25 would rewrite streams that
+  // happen to end at a plan-through age.
   if (typeof planVersion !== 'number' || planVersion < 25) {
     migratePlanToV24(rawPlan);
     migratePlanToV25(rawPlan);
   }
-  const result = PlanSchema.safeParse(rawPlan);
-  if (!result.success) {
-    return { ok: false, error: result.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
-  }
-  const plan = result.data;
-  // Keep a result that was current in the file current after import.
-  if (wasFresh && plan.customPolicy) plan.customPolicy = { ...plan.customPolicy, inputKey: optimizerKey(plan) };
-  stampLegacySettings(plan as unknown as Record<string, unknown>);
-  return { ok: true, plan };
+  const flat = PlanSchema.safeParse(rawPlan);
+  if (!flat.success) return issues(flat.error);
+  return { ok: true, plan: fromFlat(flat.data, wasFresh) };
 }
 
 export async function readFileAsText(file: File): Promise<string> {

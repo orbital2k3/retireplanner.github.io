@@ -1,0 +1,121 @@
+{
+  "app": "retirement-optimizer",
+  "version": 1,
+  "exportedAt": "2026-07-31T14:42:13.955Z",
+  "plan": {
+    "personA": {
+      "name": "Person A",
+      "dob": "1974-05-03",
+      "retirementAge": 59,
+      "planToAge": 100,
+      "passingAge": 100,
+      "ssPIA": 0,
+      "ssClaimAge": 67
+    },
+    "personB": {
+      "name": "Person B",
+      "dob": "1977-08-26",
+      "retirementAge": 63,
+      "planToAge": 100,
+      "passingAge": 100,
+      "ssPIA": 0,
+      "ssClaimAge": 67
+    },
+    "assumptions": {
+      "taxableReturn": 0.055,
+      "tradReturn": 0.055,
+      "rothReturn": 0.055,
+      "inflation": 0.025,
+      "equityPct": 0.6,
+      "modelACA": true,
+      "acaHouseholdSize": 1,
+      "acaBenchmarkPremium": 0,
+      "acaNoSubsidy": false
+    },
+    "portfolio": {
+      "personA": {
+        "taxable": 350000,
+        "traditional": 800000,
+        "roth": 300000,
+        "annualContribution": 60000,
+        "contribGrowth": 0.025,
+        "contribSplit": {
+          "taxable": 0.1,
+          "traditional": 0.5,
+          "roth": 0.4
+        }
+      },
+      "personB": {
+        "taxable": 350000,
+        "traditional": 200000,
+        "roth": 200000,
+        "annualContribution": 40000,
+        "contribGrowth": 0.025,
+        "contribSplit": {
+          "taxable": 0.2,
+          "traditional": 0.4,
+          "roth": 0.4
+        }
+      }
+    },
+    "incomeStreams": [
+      {
+        "id": "stream-default-1",
+        "description": "Person A SS",
+        "whose": "A",
+        "type": "SS",
+        "startAge": 70,
+        "stopAge": 100,
+        "annualAmount": 55000,
+        "growthPct": 0.025,
+        "taxablePct": 1
+      },
+      {
+        "id": "stream-1785419527763-2h19",
+        "description": "SS 2",
+        "whose": "B",
+        "type": "SS",
+        "startAge": 62,
+        "stopAge": 67,
+        "annualAmount": 12000,
+        "growthPct": 0.025,
+        "taxablePct": 1
+      },
+      {
+        "id": "stream-1785419544440-usjg",
+        "description": "SS3",
+        "whose": "B",
+        "type": "SS",
+        "startAge": 68,
+        "stopAge": 100,
+        "annualAmount": 15000,
+        "growthPct": 0.025,
+        "taxablePct": 1
+      }
+    ],
+    "expenseStreams": [
+      {
+        "id": "expense-default-1",
+        "description": "Annual Exp",
+        "whose": "Household",
+        "startAge": 59,
+        "stopAge": 100,
+        "annualAmount": 150000,
+        "inflationPct": 0.025
+      }
+    ],
+    "withdrawalStrategy": "bracketfill",
+    "conversion": {
+      "mode": "auto-window",
+      "startAge": 59,
+      "endAge": 75,
+      "autoAmount": 70000,
+      "bracketCeiling": 96950,
+      "manualSchedule": {}
+    },
+    "state": "CUSTOM",
+    "goals": [],
+    "optimizedForGoal": "max-end-balance",
+    "customStateTaxRate": 0.05
+  }
+}

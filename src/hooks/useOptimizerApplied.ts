@@ -1,8 +1,8 @@
 import { usePlanStore } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
-import { policyStatus } from '../engine/policyStatus';
+import { planStatus } from '../engine/strategy/savedPlan';
 import type { UserGoal } from '../engine/recommender';
-import type { Plan } from '../schemas/plan';
+import type { SavedPlan } from '../schemas/savedPlan';
 
 /** Where the committed strategy came from. Absent on plans saved before provenance tracking. */
 export type OptimizerSource = 'optimizer' | 'monte-carlo' | 'unknown';
@@ -10,8 +10,8 @@ export type OptimizerSource = 'optimizer' | 'monte-carlo' | 'unknown';
 export type OptimizerAppliedState =
   | { kind: 'none' }
   | { kind: 'pending'; goal: UserGoal | null }
-  | { kind: 'stale'; goal: UserGoal; source: OptimizerSource; mcTuning: Plan['mcTuning'] }
-  | { kind: 'applied'; goal: UserGoal; source: OptimizerSource; mcTuning: Plan['mcTuning'] }
+  | { kind: 'stale'; goal: UserGoal; source: OptimizerSource; mcTuning: NonNullable<SavedPlan['strategy']['result']>['mcTuning'] }
+  | { kind: 'applied'; goal: UserGoal; source: OptimizerSource; mcTuning: NonNullable<SavedPlan['strategy']['result']>['mcTuning'] }
   | { kind: 'hand-edited' };
 
 /** Returns the optimizer applied state for the committed plan.
@@ -25,17 +25,13 @@ export function useOptimizerApplied(): OptimizerAppliedState {
     return { kind: 'pending', goal: pendingGoal };
   }
 
-  const status = policyStatus(plan);
-  const { optimizedForGoal } = plan;
-
+  const status = planStatus(plan);
   if (status === 'none') return { kind: 'none' };
   if (status === 'hand-edited') return { kind: 'hand-edited' };
 
-  // status is 'fresh' or 'stale' — customPolicy.source === 'optimizer'
-  const goal = optimizedForGoal as UserGoal | undefined;
-  if (!goal) return { kind: 'none' };
-  const source: OptimizerSource = plan.optimizedBy ?? 'unknown';
-  const { mcTuning } = plan;
+  // status is 'fresh' or 'stale': "Optimize for me" is active with a saved result.
+  const { goal, optimizedBy, mcTuning } = plan.strategy.result!;
+  const source: OptimizerSource = optimizedBy ?? 'unknown';
   if (status === 'stale') return { kind: 'stale', goal, source, mcTuning };
   return { kind: 'applied', goal, source, mcTuning };
 }
