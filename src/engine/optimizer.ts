@@ -1267,10 +1267,18 @@ export function measureOptimalityGap(
   return { runs, bestScore, worstScore, spreadPct, depletedCount: runs.length - nonDepleted.length };
 }
 
-/** Minimum margin by which the no-conversion baseline must beat the with-conversion result before
- *  adoption. Depletion-first, then strict improvement beyond this margin. Exported so tests use
+/** Minimum margin by which conversions must beat the no-conversion baseline to ship. Conversions
+ *  add complexity and pay tax early, so near-ties go to the simpler plan. Exported so tests use
  *  the same constant rather than hard-coding a figure that drifts with legitimate search changes. */
-export const CONVERSION_BASELINE_MARGIN = (score: number) => Math.max(1000, Math.abs(score) * 1e-4);
+export const CONVERSION_MIN_GAIN = (baselineScore: number) => Math.max(1000, Math.abs(baselineScore) * 1e-3);
+
+/** Depletion-first, then strict improvement beyond CONVERSION_MIN_GAIN. Deliberately NOT isBetter,
+ *  which tolerates near-ties via TV penalty to prefer smoother policies. */
+function conversionsEarnTheirPlace(withConv: InnerEval, baseline: InnerEval): boolean {
+  if (withConv.ranOut && !baseline.ranOut) return false;
+  if (!withConv.ranOut && baseline.ranOut) return true;
+  return withConv.score - baseline.score > CONVERSION_MIN_GAIN(baseline.score);
+}
 
 /** No-conversion counterfactual for the Roth Conversion Benefit metric (max-end-balance only).
  *  Re-runs the optimizer with conversions disabled so the withdrawal ordering re-adapts to the
@@ -1356,20 +1364,13 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
     // so the deterministic metric is the reference point for the adoption guard.
     const conversionBaseline = computeConversionBaseline(plan, opts, evalCounter, finalInner);
 
-    // Adoption guard: if the no-conversion baseline beats the with-conversion result, ship the
-    // baseline. Uses depletion-first, then strict improvement beyond a margin — deliberately NOT
-    // reusing isBetter (which tolerates near-ties via TV penalty to prefer smoother policies).
+    // Adoption guard: ship the no-conversion baseline unless conversions clearly beat it.
     let shippedInner = finalInner;
     let conversionsDisabled: boolean | undefined;
     let conversionBaselinePolicy: BlendPolicy | undefined;
     const conversionBaselineMetric = conversionBaseline?.eval.score;
     if (conversionBaseline != null) {
-      const margin = CONVERSION_BASELINE_MARGIN(finalInner.score);
-      const baselineWins =
-        (!conversionBaseline.eval.ranOut && finalInner.ranOut) ||
-        (!conversionBaseline.eval.ranOut && !finalInner.ranOut &&
-          conversionBaseline.eval.score - finalInner.score > margin);
-      if (baselineWins) {
+      if (!conversionsEarnTheirPlace(finalInner, conversionBaseline.eval)) {
         shippedInner = conversionBaseline.eval;
         conversionsDisabled = true;
         // conversionBaselinePolicy stays undefined: benefit is definitionally 0 when adopted.
@@ -1452,15 +1453,9 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
       }
 
       // The rewrite is value-neutral to within rounding, but the adoption guard above ran on the
-      // pre-rewrite score. Re-check against the stored baseline so the shipped result can never be
-      // one the no-conversion baseline beats, rather than relying on the drift staying small.
+      // pre-rewrite score. Re-check so rounding drift can never ship conversions below the bar.
       if (conversionBaseline != null) {
-        const margin = CONVERSION_BASELINE_MARGIN(shippedInner.score);
-        const baselineWins =
-          (!conversionBaseline.eval.ranOut && shippedInner.ranOut) ||
-          (!conversionBaseline.eval.ranOut && !shippedInner.ranOut &&
-            conversionBaseline.eval.score - shippedInner.score > margin);
-        if (baselineWins) {
+        if (!conversionsEarnTheirPlace(shippedInner, conversionBaseline.eval)) {
           shippedInner = conversionBaseline.eval;
           conversionsDisabled = true;
           conversionBaselinePolicy = undefined;

@@ -16,6 +16,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.2.3',
+    date: '2026-10-07',
+    summary: 'Optimizer now defaults to the simpler no-conversion plan when conversions do not provide a clear benefit.',
+    changes: [
+      {
+        kind: 'fix',
+        title: 'Roth conversions must earn their place',
+        text: 'The optimizer now recommends Roth conversions only when they improve your after-tax ending balance by at least 0.1% over doing no conversions. Before this change, near-ties defaulted to the conversion plan, leading to unnecessary early tax payments with little or no benefit. You can still choose any conversion strategy yourself under "Set it myself."',
+      },
+    ],
+  },
+  {
     version: '2.2.2',
     date: '2026-10-07',
     summary: 'A refreshed approach to how your strategy settings, optimizer results and Re-optimize work together.',

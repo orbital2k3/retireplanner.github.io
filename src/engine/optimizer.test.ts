@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runProjection, effectiveBracketCeiling } from './projection';
-import { optimizeStrategy, CONVERSION_BASELINE_MARGIN, rowsToSeed } from './optimizer';
+import { optimizeStrategy, CONVERSION_MIN_GAIN, rowsToSeed } from './optimizer';
 import { optimizeCached } from './__testutil__/optimizeCached';
 import { applyResultToPlan } from './applyOptimizerResult';
 import { planP_tightPlan, planG_californiaCouple } from './__golden/plans';
@@ -171,11 +171,9 @@ describe('Optimizer ↔ Projection coordination', () => {
     }
   }, 300_000);
 
-  it('metric >= conversionBaselineMetric - margin on all golden plans (adoption guard holds)', () => {
-    // Durable invariant: the shipped result must never score worse than the no-conversion
-    // baseline by more than the adoption margin. If this fires, the adoption guard failed to
-    // adopt a superior baseline — either a new code path bypasses it or the margin constant drifted.
-    // Does NOT pin absolute dollar figures so legitimate search improvements don't break this.
+  it('conversions ship only when they beat the no-conversion baseline by CONVERSION_MIN_GAIN', () => {
+    // Durable invariant: near-ties go to the simpler no-conversion plan. If this fires, a new code
+    // path bypasses the adoption guard. Does NOT pin absolute dollar figures.
     const goldenPlans = [
       defaultPlan(),
       planG_californiaCouple(),
@@ -183,12 +181,12 @@ describe('Optimizer ↔ Projection coordination', () => {
     ];
     for (const plan of goldenPlans) {
       const r = optimizeCached(plan, 'max-end-balance', { thorough: false });
-      if (r.conversionBaselineMetric !== undefined) {
-        const margin = CONVERSION_BASELINE_MARGIN(r.metric);
+      if (r.conversionBaselineMetric !== undefined && !r.conversionsDisabled && !r.projection.ranOut) {
+        const margin = CONVERSION_MIN_GAIN(r.conversionBaselineMetric);
         expect(
-          r.metric,
-          `Plan scored ${r.metric.toFixed(0)} but no-conv baseline scored ${r.conversionBaselineMetric.toFixed(0)} — adoption guard should have fired (margin ${margin.toFixed(0)})`
-        ).toBeGreaterThanOrEqual(r.conversionBaselineMetric - margin);
+          r.metric - r.conversionBaselineMetric,
+          `Shipped conversions scoring ${r.metric.toFixed(0)} vs no-conv baseline ${r.conversionBaselineMetric.toFixed(0)}; gain must exceed ${margin.toFixed(0)}`
+        ).toBeGreaterThan(margin);
       }
     }
   }, 300_000);
