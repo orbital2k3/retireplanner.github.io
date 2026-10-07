@@ -134,7 +134,14 @@ export const usePlanStore = create<PlanState>()(
       addGoal: (g) => set((s) => ({ plan: { ...s.plan, goals: [...(s.plan.goals ?? []), g] } })),
       updateGoal: (id, patch) => set((s) => ({ plan: { ...s.plan, goals: (s.plan.goals ?? []).map((x) => x.id === id ? { ...x, ...patch } : x) } })),
       removeGoal: (id) => set((s) => ({ plan: { ...s.plan, goals: (s.plan.goals ?? []).filter((x) => x.id !== id) } })),
-      resetPlan: () => { disposeEngineWorker(); set({ plan: defaultSavedPlan() }); },
+      resetPlan: () => {
+        disposeEngineWorker();
+        // A pending or preview result describes the old plan; Apply would bring it back.
+        useOptimizerStore.setState({ result: null, pendingPlan: null, pendingGoal: null });
+        useOptimizerStore.getState().clearMcResults();
+        useWhatIfStore.getState().reset();
+        set({ plan: defaultSavedPlan() });
+      },
     }),
     {
       name: PLAN_STORE_KEY,

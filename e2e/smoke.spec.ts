@@ -214,3 +214,42 @@ test('P16 importing a fresh export shows no out-of-date banner', async ({ page }
   await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
   await expect(staleBanner(page)).toHaveCount(0);
 });
+
+for (const [label, goal] of [['Max Spending', 'max-sustainable-spending'], ['Earliest Retire', 'min-retirement-age']] as const) {
+  test(`P1 Build Plan for ${label} opens the Dashboard with a pending result; Apply saves it`, async ({ page }) => {
+    test.setTimeout(2 * OPTIMIZE_TIMEOUT);
+    await seedPlan(page, saved(planA_simple()));
+    await page.goto('/#/inputs');
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.getByRole('button', { name: 'Build Plan →' }).click();
+    await page.waitForURL('**/#/dashboard', { timeout: OPTIMIZE_TIMEOUT });
+
+    await expect(page.getByText(`${label} result ready`)).toBeVisible();
+    const before = await storedPlan(page);
+    expect(before.strategy.result).toBeUndefined();
+    expect(before.strategy.optimizer.goal).toBe(goal);
+
+    await page.getByRole('button', { name: 'Apply to Plan' }).click();
+    await expect(pendingBanner(page)).toHaveCount(0);
+    await expect(goalBadge(page, label)).toBeVisible();
+    await expect(staleBanner(page)).toHaveCount(0);
+    expect((await storedPlan(page)).strategy).toMatchObject({ active: 'optimizer', result: { goal } });
+  });
+}
+
+test('P18 Reset after a pending result leaves no result, no pending result and no banner', async ({ page }) => {
+  await seedPlan(page, optimizedPlanA());
+  await gotoDashboard(page);
+  await reoptimizeFor(page, 'Max Spending');
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Reset', exact: true }).first().click();
+  await page.waitForURL('**/#/inputs');
+
+  const plan = await storedPlan(page);
+  expect(plan.strategy.result).toBeUndefined();
+  expect(plan.strategy.active).toBe('manual');
+  await page.getByRole('link', { name: 'Dashboard' }).click();
+  await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
+  await expect(pendingBanner(page)).toHaveCount(0);
+  await expect(staleBanner(page)).toHaveCount(0);
+});
