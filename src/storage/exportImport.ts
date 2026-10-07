@@ -1,6 +1,6 @@
 import { SavedPlanSchema, type SavedPlan } from '../schemas/savedPlan';
 import { PlanSchema } from '../schemas/plan';
-import { migratePlanToV24, migratePlanToV25, wasLegacyFresh, wasV34Fresh } from '../store/planMigrations';
+import { migrateFlatFields, wasLegacyFresh, wasV34Fresh } from '../store/planMigrations';
 import { savedOptimizerKey, fromFlat } from '../engine/strategy/savedPlan';
 import { PLAN_STORE_VERSION } from '../store/planStoreVersion';
 
@@ -69,12 +69,9 @@ export function importPlanFromJSON(raw: string): ImportResult {
 
   // Older files store the flat plan. Judge freshness as stored, before migrations reshape it.
   const wasFresh = wasLegacyFresh(rawPlan) || wasV34Fresh(rawPlan);
-  // Files from v25 on are already field-current; re-running v25 would rewrite streams that
-  // happen to end at a plan-through age.
-  if (typeof planVersion !== 'number' || planVersion < 25) {
-    migratePlanToV24(rawPlan);
-    migratePlanToV25(rawPlan);
-  }
+  // Same field migrations as the store. Files before v34 carry no version, so all steps run;
+  // each is guarded by shape, so a step that already applied leaves the plan alone.
+  migrateFlatFields(rawPlan, typeof planVersion === 'number' ? planVersion : 0);
   const flat = PlanSchema.safeParse(rawPlan);
   if (!flat.success) return issues(flat.error);
   return { ok: true, plan: fromFlat(flat.data, wasFresh) };

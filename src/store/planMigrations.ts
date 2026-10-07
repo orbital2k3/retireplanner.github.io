@@ -11,6 +11,7 @@ import { optimizerKey } from '../engine/strategy/optimizerInput';
 import { liveSettings } from '../engine/strategy/resultSettings';
 import { fromFlat } from '../engine/strategy/savedPlan';
 import { policyStatus } from '../engine/policyStatus';
+import { FED_BRACKETS_MFJ } from '../engine/taxConstants';
 
 /**
  * v23 → v24
@@ -249,4 +250,245 @@ export function wasV34Fresh(raw: Record<string, unknown>): boolean {
 export function migrateFlatToSaved(raw: Record<string, unknown>, fresh = wasV34Fresh(raw)): SavedPlan {
   const parsed = PlanSchema.safeParse(raw);
   return fromFlat(parsed.success ? parsed.data : (raw as unknown as Plan), fresh);
+}
+
+/**
+ * v1 → v33 field migrations on a flat plan, in place. The store runs them on load and import runs
+ * them on old files, so every file version the app has written loads the same way. Steps are
+ * guarded by `fromVersion` and by shape, so running one on an already-current plan is harmless.
+ */
+export function migrateFlatFields(plan: Record<string, unknown>, fromVersion: number): void {
+  // Oldest first: each step expects the shape the steps before it produce. v34 and v35 run
+  // after these (migratePlanToV34, migrateFlatToSaved).
+  if (fromVersion < 2) {
+    const oldPf = (plan.portfolio ?? {}) as Record<string, number>;
+    // Only migrate if it looks like the v1 flat shape
+    if ('taxable' in oldPf || 'splitTaxable' in oldPf) {
+      const split = {
+        taxable: typeof oldPf.splitTaxable === 'number' ? oldPf.splitTaxable : 0.2,
+        traditional: typeof oldPf.splitTraditional === 'number' ? oldPf.splitTraditional : 0.4,
+        roth: typeof oldPf.splitRoth === 'number' ? oldPf.splitRoth : 0.4,
+      };
+      plan.portfolio = {
+        personA: {
+          taxable: oldPf.taxable ?? 0,
+          traditional: oldPf.traditional ?? 0,
+          roth: oldPf.roth ?? 0,
+          annualContribution: oldPf.contribA ?? 0,
+          contribSplit: split,
+        },
+        personB: plan.personB
+          ? {
+              taxable: 0,
+              traditional: 0,
+              roth: 0,
+              annualContribution: oldPf.contribB ?? 0,
+              contribSplit: split,
+            }
+          : undefined,
+      };
+    }
+  }
+  if (fromVersion < 3 && !Array.isArray(plan.goals)) {
+    plan.goals = [];
+  }
+  if (fromVersion < 4) {
+    const assumptions = plan.assumptions as Record<string, unknown> | undefined;
+    if (assumptions) {
+      if (!('modelACA' in assumptions)) assumptions.modelACA = false;
+      if (!('acaHouseholdSize' in assumptions)) assumptions.acaHouseholdSize = 2;
+      if (!('acaBenchmarkPremium' in assumptions)) assumptions.acaBenchmarkPremium = 0;
+      if (!('acaNoSubsidy' in assumptions)) assumptions.acaNoSubsidy = false;
+    }
+  }
+  // v5: contribGrowth moved from assumptions (household-wide) to each person's
+  // portfolio. Copy the old single value onto both people so projections are
+  // unchanged; persisted plans without it would otherwise yield NaN factors.
+  if (fromVersion < 5) {
+    const asm = plan.assumptions as Record<string, unknown> | undefined;
+    const oldCg = asm && typeof asm.contribGrowth === 'number' ? asm.contribGrowth : 0;
+    const pf = plan.portfolio as { personA?: Record<string, unknown>; personB?: Record<string, unknown> } | undefined;
+    if (pf?.personA && typeof pf.personA === 'object' && !('contribGrowth' in pf.personA)) pf.personA.contribGrowth = oldCg;
+    if (pf?.personB && typeof pf.personB === 'object' && !('contribGrowth' in pf.personB)) pf.personB.contribGrowth = oldCg;
+    if (asm && 'contribGrowth' in asm) delete asm.contribGrowth;
+  }
+  // v6 backfilled assumptions.equityPct; removed, since v30 deletes that field.
+  // v7: replace preRetReturn/postRetReturn with per-bucket taxableReturn/tradReturn/rothReturn.
+  // Remove any income streams with removed types Wages/Rental.
+  if (fromVersion < 7) {
+    const asm = plan.assumptions as Record<string, unknown> | undefined;
+    if (asm) {
+      const pre = typeof asm.preRetReturn === 'number' ? asm.preRetReturn : 0.065;
+      const post = typeof asm.postRetReturn === 'number' ? asm.postRetReturn : 0.05;
+      if (!('taxableReturn' in asm)) asm.taxableReturn = pre;
+      if (!('tradReturn' in asm)) asm.tradReturn = pre;
+      if (!('rothReturn' in asm)) asm.rothReturn = post;
+      delete asm.preRetReturn;
+      delete asm.postRetReturn;
+    }
+    const streams = plan.incomeStreams;
+    if (Array.isArray(streams)) {
+      plan.incomeStreams = streams.filter((s: Record<string, unknown>) => s.type !== 'Wages' && s.type !== 'Rental');
+    }
+  }
+  // v8: rmdStartAge removed from assumptions (now derived from personA.dob).
+  if (fromVersion < 8) {
+    const asm = plan.assumptions as Record<string, unknown> | undefined;
+    if (asm) delete asm.rmdStartAge;
+  }
+  // v9: withdrawalBracketCeiling added (configurable bracket-fill ceiling for withdrawal ordering).
+  if (fromVersion < 9) {
+    if (!('withdrawalBracketCeiling' in plan)) plan.withdrawalBracketCeiling = FED_BRACKETS_MFJ[1][0];
+  }
+  // v10: migrate stale 2025 bracket thresholds → 2026 values (taxConstants update).
+  if (fromVersion < 10) {
+    const OLD_TO_NEW: Record<number, number> = { 23850: 24800, 96950: 100800, 206700: 211400, 394600: 403550 };
+    const wdCur = plan.withdrawalBracketCeiling as number | undefined;
+    if (wdCur !== undefined && OLD_TO_NEW[wdCur] !== undefined) plan.withdrawalBracketCeiling = OLD_TO_NEW[wdCur];
+    const conv = plan.conversion as Record<string, unknown> | undefined;
+    if (conv) {
+      const convCur = conv.bracketCeiling as number | undefined;
+      if (convCur !== undefined && OLD_TO_NEW[convCur] !== undefined) conv.bracketCeiling = OLD_TO_NEW[convCur];
+    }
+  }
+  // v11: initialize taxableBasis to 50% of taxable balance (preserves prior 50% flat assumption).
+  if (fromVersion < 11) {
+    const pf = plan.portfolio as Record<string, unknown> | undefined;
+    const pA = pf?.personA as Record<string, unknown> | undefined;
+    const pB = pf?.personB as Record<string, unknown> | undefined;
+    if (pA && pA.taxableBasis == null) pA.taxableBasis = ((pA.taxable as number) ?? 0) * 0.5;
+    if (pB && pB.taxableBasis == null) pB.taxableBasis = ((pB.taxable as number) ?? 0) * 0.5;
+  }
+  // v12: backfill stateTaxablePct = 1 on existing income streams.
+  if (fromVersion < 12) {
+    const streams = plan.incomeStreams as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(streams)) {
+      for (const s of streams) {
+        if (s.stateTaxablePct == null) s.stateTaxablePct = 1;
+      }
+    }
+  }
+  // v13: backfill conversion.optimize = true (preserves prior optimizer-decides-conversions behavior).
+  if (fromVersion < 13) {
+    const conv = plan.conversion as Record<string, unknown> | undefined;
+    if (conv && typeof conv === 'object' && conv.optimize == null) conv.optimize = true;
+  }
+  // v14: add lumpSumEvents array to plan.
+  if (fromVersion < 14) {
+    if (!Array.isArray(plan.lumpSumEvents)) plan.lumpSumEvents = [];
+  }
+  // v15: rename legacy bucket values 'trad'→'inheritedPreTaxIRA', 'roth'→'inheritedRoth'.
+  if (fromVersion < 15) {
+    const events = plan.lumpSumEvents as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(events)) {
+      for (const ev of events) {
+        if (ev.bucket === 'trad') ev.bucket = 'inheritedPreTaxIRA';
+        else if (ev.bucket === 'roth') ev.bucket = 'inheritedRoth';
+      }
+    }
+  }
+  // v16: convert growthPct/inflationPct/contribGrowth from number to GrowthRate object.
+  if (fromVersion < 16) {
+    const incomes = plan.incomeStreams as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(incomes)) {
+      for (const s of incomes) {
+        if (typeof s.growthPct === 'number') s.growthPct = { mode: 'fixed', rate: s.growthPct };
+      }
+    }
+    const expenses = plan.expenseStreams as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(expenses)) {
+      for (const e of expenses) {
+        if (typeof e.inflationPct === 'number') e.inflationPct = { mode: 'fixed', rate: e.inflationPct };
+      }
+    }
+    const pf = plan.portfolio as Record<string, unknown> | undefined;
+    const pA = pf?.personA as Record<string, unknown> | undefined;
+    const pB = pf?.personB as Record<string, unknown> | undefined;
+    if (pA && typeof pA.contribGrowth === 'number') pA.contribGrowth = { mode: 'fixed', rate: pA.contribGrowth };
+    if (pB && typeof pB.contribGrowth === 'number') pB.contribGrowth = { mode: 'fixed', rate: pB.contribGrowth };
+  }
+  // v17: add taxableDivYield and taxableQualifiedPct to assumptions.
+  if (fromVersion < 17 && plan.assumptions && typeof plan.assumptions === 'object') {
+    const asm = plan.assumptions as Record<string, unknown>;
+    asm.taxableDivYield    ??= 0;
+    asm.taxableQualifiedPct ??= 0.80;
+  }
+  // v18: remove base* snapshot fields (optimizer results are now ephemeral in useOptimizerStore).
+  if (fromVersion < 18) {
+    delete plan.baseExpenseStreams;
+    delete plan.basePersonA;
+    delete plan.basePersonB;
+  }
+  // v19: add acaStartAgeA / acaStartAgeB (optional; engine falls back to retirement age).
+  // v20: add payTaxFromBrokerage (default false — preserves existing behavior).
+  if (fromVersion < 20) {
+    if (!('payTaxFromBrokerage' in plan)) plan.payTaxFromBrokerage = false;
+  }
+  // v21: tax-exempt income (MuniBond/VA streams + portfolio exempt yield). Defaults preserve existing behavior.
+  if (fromVersion < 21 && plan.assumptions && typeof plan.assumptions === 'object') {
+    const asm = plan.assumptions as Record<string, unknown>;
+    asm.taxableExemptYield    ??= 0;
+    asm.taxableExemptStatePct ??= 1;
+  }
+  // v22: tax-adjusted balance rates. 22% / 15% are the new modeling defaults; the
+  // pre-v22 behavior is exactly 0% / 0% (no tax adjustment).
+  if (fromVersion < 22 && plan.assumptions && typeof plan.assumptions === 'object') {
+    const asm = plan.assumptions as Record<string, unknown>;
+    asm.taxAdjOrdRate  ??= 0.22;
+    asm.taxAdjLtcgRate ??= 0.15;
+  }
+  // v23: dividend payout election. Default 0 = full reinvestment (DRIP), preserving pre-v23 behavior.
+  if (fromVersion < 23 && plan.assumptions && typeof plan.assumptions === 'object') {
+    const asm = plan.assumptions as Record<string, unknown>;
+    asm.taxableDistributePct ??= 0;
+  }
+  // v24: planToAge → planThroughAge; stopAge → end: EndRule; add survivorPct.
+  if (fromVersion < 24) {
+    migratePlanToV24(plan);
+  }
+  // v25: upgrade streams with end.age === planThroughAge to semantic EndRule modes
+  // (life / lastSurvivor) so they follow the owner's lifetime rather than a baked-in age.
+  if (fromVersion < 25) {
+    migratePlanToV25(plan);
+  }
+  // v27: add per-person spousalContribution / spousalTarget (spousal IRA while the other
+  // spouse still works). Both optional; absent === 0 === pre-v27 behavior, so no data
+  // rewrite is needed. Version bumped only to record the schema change.
+  // v28: add assumptions.legacyTargetTaxAdjReal (after-tax legacy floor for max-spending).
+  // Absent === 0 === unconstrained === pre-v28 behavior. No data rewrite needed.
+  // v29: stamp inputKey on existing optimizer-authored customPolicy so users aren't gated on
+  // first load after the upgrade. Treats already-persisted policies as fresh (mirrors pre-v29 behavior).
+  if (fromVersion < 29) {
+    const cp = plan.customPolicy as Record<string, unknown> | undefined;
+    if (cp && cp.source === 'optimizer' && !cp.inputKey) {
+      cp.inputKey = legacyPlanInputKey(plan);
+    }
+  }
+  // v30: equityPct moved out of the plan. It is a Monte Carlo stress-test setting, not plan
+  // data, and leaving it in assumptions put it inside planInputKey, where changing the mix
+  // would mark an optimizer policy stale. Now a UI preference (lib/mcPrefs.ts). Delete the
+  // stale key so it stops riding along in plan exports.
+  if (fromVersion < 30) {
+    const asm = plan.assumptions as Record<string, unknown> | undefined;
+    if (asm && 'equityPct' in asm) delete asm.equityPct;
+  }
+  // v31: add plan.optimizedBy + plan.mcTuning (strategy provenance: the goal optimizer vs a
+  // Monte Carlo robustness run). Existing optimizer-authored policies predate the Monte Carlo
+  // apply path, so stamp them as 'optimizer'. Absent === unknown provenance elsewhere.
+  if (fromVersion < 31) {
+    const cp = plan.customPolicy as Record<string, unknown> | undefined;
+    if (cp && cp.source === 'optimizer' && !plan.optimizedBy) plan.optimizedBy = 'optimizer';
+  }
+  // v32: add optional lumpSumEvents[].ownerStartedRmds (annual RMDs on inherited pre-tax IRAs).
+  // Absent === false === pre-v32 behavior, so no data rewrite is needed.
+  // v33: stamped a manual-schedule key; superseded by v34, which treats a missing one as current.
+}
+
+/** Every migration from `fromVersion` to the current store version, for a persisted plan. */
+export function migrateStoredPlan(plan: Record<string, unknown>, fromVersion: number): Record<string, unknown> {
+  migrateFlatFields(plan, fromVersion);
+  if (fromVersion < 34) migratePlanToV34(plan);
+  // v35: flat strategy fields → strategy slots (runs after every flat-shape migration).
+  if (fromVersion < 35) return migrateFlatToSaved(plan) as unknown as Record<string, unknown>;
+  return plan;
 }

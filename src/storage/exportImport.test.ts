@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
 import { importPlanFromJSON, exportPlanToJSON } from './exportImport';
 import { optimizerKey } from '../engine/strategy/optimizerInput';
-import { planStatus } from '../engine/strategy/savedPlan';
+import { planStatus, enginePlan } from '../engine/strategy/savedPlan';
+import { runProjection } from '../engine/projection';
+import { migrateStoredPlan } from '../store/planMigrations';
+import { SavedPlanSchema, type SavedPlan } from '../schemas/savedPlan';
 import { samplePlan, type Plan } from '../schemas/plan';
 import { optimizedSaved, staleSaved, sampleSaved } from '../engine/__testutil__/savedPlans';
 import { MANUAL_WINDOW } from '../engine/__testutil__/strategyPlans';
@@ -67,4 +71,30 @@ describe('importPlanFromJSON: v35 files (I7)', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/strategy\.active/);
   });
+});
+
+describe('importPlanFromJSON: files older than v24 (full migration chain)', () => {
+
+  const OLD = ['fireopt-2026-05-29.json', 'fireopt-optimized.json'];
+  const read = (f: string) => readFileSync(`src/engine/__fixtures__/exports/${f}`, 'utf8');
+
+  for (const f of OLD) {
+    it(`${f} imports and projects finite numbers`, () => {
+      const r = importPlanFromJSON(read(f));
+      expect(r.error).toBeUndefined();
+      const proj = runProjection(enginePlan(r.plan!));
+      expect(Number.isFinite(proj.endTotalReal)).toBe(true);
+      expect(proj.rows.every((row) => Number.isFinite(row.totalWD) && Number.isFinite(row.rothConv))).toBe(true);
+      // A result built by an old optimizer is kept, out of date, so the user is asked to re-run.
+      if (r.plan!.strategy.result) expect(planStatus(r.plan!)).toBe('stale');
+    });
+
+    it(`${f} imports to the same plan the store migration produces from the same data`, () => {
+      const file = JSON.parse(read(f));
+      const fromStore = migrateStoredPlan(file.plan, 0);
+      const imported = importPlanFromJSON(read(f)).plan!;
+      const strip = (p: SavedPlan) => ({ ...p, strategy: { ...p.strategy, result: p.strategy.result && { ...p.strategy.result, inputKey: '' } } });
+      expect(strip(imported)).toEqual(strip(SavedPlanSchema.parse(fromStore)));
+    });
+  }
 });
