@@ -16,6 +16,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.2.2',
+    date: '2026-10-07',
+    summary: 'A refreshed approach to how your strategy settings, optimizer results and Re-optimize work together.',
+    changes: [
+      {
+        kind: 'fix',
+        title: 'Refreshed approach to strategy and optimizer results',
+        text: 'Your strategy choices now save right away and behave the same on every page. "Set it myself" and "Optimize for me" each keep their own settings, so switching tabs never loses your optimized strategy. Re-optimize turns on whenever your plan changed since the last run. Older plan files import again.',
+      },
+    ],
+  },
+  {
     version: '2.2.1',
     date: '2026-10-06',
     summary: 'Re-optimize lights up again after you edit manual Roth conversion amounts.',
