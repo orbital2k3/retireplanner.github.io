@@ -2,6 +2,7 @@ import type { Plan } from '../schemas/plan';
 import type { OptimizeResult } from './optimizer';
 import { shiftRetirementAge } from './retirementAgeShift';
 import { optimizerKey } from './strategy/optimizerInput';
+import { optimizerSettings } from './strategy/resultSettings';
 
 /** Pure function that returns the plan as it would be after the optimizer runs.
  *  The caller is responsible for deciding whether to commit this to the plan store
@@ -75,10 +76,11 @@ export function applyResultToPlan(plan: Plan, result: OptimizeResult): Plan {
 
   // Stamp the fingerprint from the fully-mutated plan so the key stays valid even when
   // max-sustainable-spending or min-retirement-age rewrites fields that are inside optimizerKey.
+  // The settings snapshot is what the optimizer ran with, so projection reproduces its result.
   next = {
     ...next,
     customPolicy: next.customPolicy
-      ? { ...next.customPolicy, inputKey: optimizerKey(next) }
+      ? { ...next.customPolicy, inputKey: optimizerKey(next), settings: optimizerSettings(next) }
       : next.customPolicy,
   };
 

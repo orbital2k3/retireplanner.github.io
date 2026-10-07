@@ -1,6 +1,6 @@
 import type { Plan } from '../schemas/plan';
 import { PlanSchema } from '../schemas/plan';
-import { migratePlanToV24, migratePlanToV25, wasLegacyFresh } from '../store/planMigrations';
+import { migratePlanToV24, migratePlanToV25, wasLegacyFresh, stampLegacySettings } from '../store/planMigrations';
 import { optimizerKey } from '../engine/strategy/optimizerInput';
 import { PLAN_STORE_VERSION } from '../store/planStoreVersion';
 
@@ -68,6 +68,7 @@ export function importPlanFromJSON(raw: string): ImportResult {
   const plan = result.data;
   // Keep a result that was current in the file current after import.
   if (wasFresh && plan.customPolicy) plan.customPolicy = { ...plan.customPolicy, inputKey: optimizerKey(plan) };
+  stampLegacySettings(plan as unknown as Record<string, unknown>);
   return { ok: true, plan };
 }
 

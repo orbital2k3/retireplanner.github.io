@@ -8,6 +8,7 @@ import { wrRule } from './rules/wr';
 import { taxRule } from './rules/tax';
 import { legacyRule } from './rules/legacy';
 import { sequenceRiskRule } from './rules/sequenceRisk';
+import { resolveStrategy } from '../strategy/resultSettings';
 
 export type InsightSurface = 'dashboard' | 'strategy' | 'mc' | 'taxes';
 export type InsightSeverity = 'info' | 'caution' | 'warning';
@@ -40,7 +41,8 @@ const RULES: Rule[] = [
   sequenceRiskRule,
 ];
 
-export function generateInsights(plan: Plan, proj: ProjectionResult, mc?: MonteCarloResult): Insight[] {
+export function generateInsights(livePlan: Plan, proj: ProjectionResult, mc?: MonteCarloResult): Insight[] {
+  const plan = resolveStrategy(livePlan);
   const ctx: InsightContext = { plan, proj, mc };
   const all: Insight[] = [];
   for (const rule of RULES) {

@@ -2,6 +2,7 @@ import type { Plan } from '../schemas/plan';
 import { firstRetirementAgeA } from './streamWindow';
 import { calendarYearAge } from '../lib/ageUtils';
 import { INHERITED_DEADLINE_YEARS } from './taxConstants';
+import { resolveStrategy } from './strategy/resultSettings';
 
 /**
  * Ages (Person A's frame) with a non-zero manual Roth conversion that will actually run before the
@@ -9,7 +10,8 @@ import { INHERITED_DEADLINE_YEARS } from './taxConstants';
  * are retirement-gated in `rothConversion()`, and `optimize: true` means the optimizer owns
  * conversions, which projection gates to 0 during accumulation.
  */
-export function preRetirementConversionAges(plan: Plan): number[] {
+export function preRetirementConversionAges(livePlan: Plan): number[] {
+  const plan = resolveStrategy(livePlan);
   if (plan.conversion.mode !== 'manual') return [];
   if (plan.conversion.optimize ?? true) return [];
   const firstRetA = firstRetirementAgeA(plan);
@@ -25,7 +27,8 @@ export interface PlanWarning {
   message: string;
 }
 
-export function computePlanWarnings(plan: Plan): PlanWarning[] {
+export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
+  const plan = resolveStrategy(livePlan);
   const warnings: PlanWarning[] = [];
   const hasB = !!plan.personB;
 

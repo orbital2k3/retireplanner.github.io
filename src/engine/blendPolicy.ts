@@ -3,6 +3,8 @@
  * (taxable / traditional / roth) that must sum to 100%. Optional Trad cap.
  * RMDs are always honored first by the withdrawal engine.
  */
+import type { ResultSettings } from '../schemas/plan';
+
 export interface BlendWindow {
   fromAge: number;
   toAge: number;
@@ -18,6 +20,7 @@ export interface BlendPolicy {
   source?: 'optimizer' | 'manual';
   goal?: string;
   inputKey?: string;
+  settings?: ResultSettings;
 }
 
 export type PresetKey = 'taxfirst' | 'rothfirst' | 'tradfirst' | 'proportional' | 'bracketfill';

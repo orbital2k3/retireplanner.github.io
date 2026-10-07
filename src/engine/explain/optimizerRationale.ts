@@ -5,6 +5,7 @@ import { runProjection } from '../projection';
 import { fmtUSD } from '../../lib/format';
 import { rmdStartAgeForDob } from '../rmd';
 import { generateInsights, insightsForSurface } from './index';
+import { resolveStrategy } from '../strategy/resultSettings';
 
 export interface RationaleSection {
   kind: 'decision' | 'timing' | 'outcome' | 'insights';
@@ -25,7 +26,8 @@ export interface PolicyRationale {
  *  Pass `trace` (from `buildDecisionTrace`) so the headline can cite the runner-up
  *  and the conv-off counterfactual reuses the badge's baseline rather than re-deriving it.
  *  `trace` is optional: the function degrades gracefully without it. */
-export function explainPolicy(plan: Plan, result: OptimizeResult, trace?: DecisionTrace): PolicyRationale {
+export function explainPolicy(livePlan: Plan, result: OptimizeResult, trace?: DecisionTrace): PolicyRationale {
+  const plan = resolveStrategy(livePlan);
   const rows = result.projection.rows;
 
   // Conversion benefit: prefer the trace's conv-off counterfactual (same source as the

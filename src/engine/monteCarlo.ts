@@ -2,6 +2,7 @@ import type { Plan } from '../schemas/plan';
 import { runProjection } from './projection';
 import { mulberry32, parametricNormal, historicalBootstrap, historicalSequence, DEFAULT_EQUITY_PCT } from './returnModels';
 import { indexOfYear, START_YEAR, N_YEARS } from './marketHistory';
+import { resolveStrategy } from './strategy/resultSettings';
 
 export type ReturnModel = 'historical' | 'parametric';
 
@@ -98,7 +99,8 @@ function projectWithReturns(
   };
 }
 
-export function runMonteCarlo(plan: Plan, opts: MonteCarloOptions = {}): MonteCarloResult {
+export function runMonteCarlo(livePlan: Plan, opts: MonteCarloOptions = {}): MonteCarloResult {
+  const plan = resolveStrategy(livePlan);
   const trials = opts.trials ?? 500;
   const model: ReturnModel = opts.model ?? 'historical';
   const equityPct = opts.equityPct ?? DEFAULT_EQUITY_PCT;
@@ -294,7 +296,8 @@ export interface HistoricalSweepResult {
  * using actual sequential market returns + CPI. Equivalent to cFIREsim's rolling
  * window analysis. Pre-retirement years use the plan's tradReturn.
  */
-export function runHistoricalSweep(plan: Plan, opts: { equityPct?: number } = {}): HistoricalSweepResult {
+export function runHistoricalSweep(livePlan: Plan, opts: { equityPct?: number } = {}): HistoricalSweepResult {
+  const plan = resolveStrategy(livePlan);
   const equityPct = opts.equityPct ?? DEFAULT_EQUITY_PCT;
   const baseline = runProjection(plan);
   const nYears = baseline.rows.length;

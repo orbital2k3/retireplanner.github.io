@@ -16,6 +16,7 @@ import { yearFederalTax, standardDeduction, taxableSocialSecurity, seniorBonusDe
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS } from './taxConstants';
 import { rothConversion } from './conversion';
 import { applyWithdrawalOrder, applyBlendPolicy, type SpillKind, type WithdrawalOutputs } from './withdrawal';
+import { resolveStrategy } from './strategy/resultSettings';
 import type { BlendPolicy } from './blendPolicy';
 import { findWindow } from './blendPolicy';
 import { annualIRMAACost } from './irmaa';
@@ -265,7 +266,8 @@ export function isPastInheritedEvent(ev: LumpSumEvent, ageNow: number): boolean 
   return yearsElapsed > 0 && yearsElapsed <= INHERITED_DEADLINE_YEARS;
 }
 
-export function runProjection(plan: Plan, opts?: ProjectionOptions): ProjectionResult {
+export function runProjection(livePlan: Plan, opts?: ProjectionOptions): ProjectionResult {
+  const plan = resolveStrategy(livePlan);
   const activePolicy: BlendPolicy | undefined = opts?.policy ?? (plan.customPolicy as BlendPolicy | undefined);
   const startYear = new Date().getFullYear();
   const startAgeA = ageAt(plan.personA.dob, startYear);

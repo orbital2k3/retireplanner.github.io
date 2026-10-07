@@ -1,10 +1,12 @@
 import type { Plan } from '../schemas/plan';
 import { runProjection, type ProjectionResult } from './projection';
+import { resolveStrategy } from './strategy/resultSettings';
 
 /** Returns false when an optimizer-authored customPolicy has no stored no-conversion baseline.
  *  In that case the ordering was co-optimized against the conversion schedule, so holding it
  *  fixed yields a meaningless counterfactual rather than a fair "conversions off" experiment. */
-export function hasComparableConversionBaseline(plan: Plan): boolean {
+export function hasComparableConversionBaseline(livePlan: Plan): boolean {
+  const plan = resolveStrategy(livePlan);
   return !(plan.customPolicy?.source === 'optimizer' && plan.conversionBaselinePolicy == null);
 }
 
@@ -41,7 +43,8 @@ export interface ComparisonResult {
  *    the conversion schedule, so holding it fixed compares against an arbitrary counterfactual. Use
  *    the optimizer's re-adapted no-conversion ordering (`conversionBaselinePolicy`, computed at
  *    optimize time) instead — a best-vs-best comparison that is stable across withdrawal presets. */
-export function compareWithWithoutConversion(plan: Plan): ComparisonResult {
+export function compareWithWithoutConversion(livePlan: Plan): ComparisonResult {
+  const plan = resolveStrategy(livePlan);
   const withConv = runProjection(plan);
   const useOptimizedBaseline =
     plan.customPolicy?.source === 'optimizer' && plan.conversionBaselinePolicy != null;

@@ -27,7 +27,9 @@ export function optimizerInput(plan: Plan): Plan {
     if (cls === 'manualSetting') out[key] = neutral[key];
     else if (cls === 'output') out[key] = undefined;
   }
-  out.customPolicy = plan.customPolicy?.source === 'optimizer' ? plan.customPolicy : undefined;
+  const cp = plan.customPolicy;
+  // The seed's frozen settings are dropped: the optimizer runs on the live settings.
+  out.customPolicy = cp?.source === 'optimizer' ? { ...cp, settings: undefined } : undefined;
   out.conversion = optimizerConversion(plan.conversion);
   return out as Plan;
 }

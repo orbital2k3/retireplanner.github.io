@@ -1,5 +1,6 @@
 import type { Plan } from '../schemas/plan';
 import { runProjection, type ProjectionResult } from './projection';
+import { resolveStrategy } from './strategy/resultSettings';
 
 export type DeepPartial<T> = T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -34,7 +35,8 @@ export function mergeOverrides<T>(base: T, overrides: DeepPartial<T>): T {
   return out as T;
 }
 
-export function evaluateScenario(base: Plan, scenario: Scenario): ScenarioResult {
+export function evaluateScenario(liveBase: Plan, scenario: Scenario): ScenarioResult {
+  const base = resolveStrategy(liveBase);
   let effectivePlan = mergeOverrides(base, scenario.overrides);
 
   const retireAChanged = scenario.overrides.personA?.retirementAge !== undefined

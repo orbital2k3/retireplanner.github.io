@@ -7,6 +7,7 @@
  */
 import type { Plan } from '../schemas/plan';
 import { optimizerKey } from '../engine/strategy/optimizerInput';
+import { liveSettings } from '../engine/strategy/resultSettings';
 
 /**
  * v23 → v24
@@ -213,10 +214,19 @@ export function wasLegacyFresh(raw: Record<string, unknown>): boolean {
  * Staleness moves to a single key, optimizerKey. Re-stamp results that were current under the
  * old keys so no plan turns stale on upgrade; results already out of date stay out of date.
  * manualScheduleKey is retired (the schedule is part of optimizerKey now).
+ * Optimizer results get a settings snapshot of the plan's current strategy fields, so the
+ * projection is unchanged today and stays put when those fields are edited later.
  */
 export function migratePlanToV34(raw: Record<string, unknown>): void {
   const cp = raw.customPolicy as Record<string, unknown> | undefined;
   if (!cp) return;
   if (wasLegacyFresh(raw)) cp.inputKey = optimizerKey(raw as unknown as Plan);
   delete cp.manualScheduleKey;
+  stampLegacySettings(raw);
+}
+
+/** Freezes the current strategy fields onto an optimizer result saved without a snapshot. */
+export function stampLegacySettings(raw: Record<string, unknown>): void {
+  const cp = raw.customPolicy as Record<string, unknown> | undefined;
+  if (cp?.source === 'optimizer' && !cp.settings && raw.conversion) cp.settings = liveSettings(raw as unknown as Plan);
 }

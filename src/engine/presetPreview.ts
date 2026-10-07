@@ -1,6 +1,7 @@
 import type { Plan } from '../schemas/plan';
 import { runProjection, depletionAge, type ProjectionResult } from './projection';
 import { householdPlanThroughAgeA } from './planInputKey';
+import { resolveStrategy } from './strategy/resultSettings';
 
 const PRESETS: Array<Plan['withdrawalStrategy']> = [
   'taxfirst',
@@ -26,7 +27,8 @@ export type PresetPreviewResult = Record<Plan['withdrawalStrategy'], PresetMetri
  *  Important: each preview clears `customPolicy` so the preset truly drives the
  *  projection — otherwise an existing optimized policy would dominate every preset's
  *  output and the previews would all be identical. */
-export function previewAllPresets(plan: Plan): PresetPreviewResult {
+export function previewAllPresets(livePlan: Plan): PresetPreviewResult {
+  const plan = resolveStrategy(livePlan);
   const out = {} as PresetPreviewResult;
   for (const preset of PRESETS) {
     const presetPlan: Plan = { ...plan, withdrawalStrategy: preset, customPolicy: undefined };

@@ -8,6 +8,7 @@ import { runProjection, depletionAge as calcDepletionAge } from '../projection';
 import { compareWithWithoutConversion, hasComparableConversionBaseline } from '../comparison';
 import { REC_GOALS } from '../recommender';
 import { FED_BRACKETS_MFJ } from '../taxConstants';
+import { resolveStrategy } from '../strategy/resultSettings';
 
 export type CfKind = 'conversion' | 'ordering' | 'taxSourcing' | 'assumption';
 export type CfAdaptation = 're-adapted' | 'policy-held' | 'rescored';
@@ -174,7 +175,8 @@ function buildOrdRateSensitivity(
 /** Build the decision trace for the optimizer rationale modal.
  *  Pass `effectivePlan` (the What-If-aware plan), not the raw stored plan, so
  *  the trace and the Dashboard's Roth Conversion Benefit badge measure the same plan. */
-export function buildDecisionTrace(plan: Plan, result: OptimizeResult): DecisionTrace {
+export function buildDecisionTrace(livePlan: Plan, result: OptimizeResult): DecisionTrace {
+  const plan = resolveStrategy(livePlan);
   const chosenScore = REC_GOALS['max-end'].score(result.projection);
   const goal = result.goal;
   const degraded: string[] = [];

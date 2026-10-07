@@ -187,6 +187,29 @@ export const ExpenseStreamSchema = z.object({
 });
 export type ExpenseStream = z.infer<typeof ExpenseStreamSchema>;
 
+export const ConversionParamsSchema = z.object({
+  mode: z.enum(['off', 'manual', 'auto-window', 'bracket-fill']),
+  startAge: z.number().int().default(65),
+  endAge: z.number().int().default(72),
+  autoAmount: z.number().nonnegative().default(70000),
+  bracketCeiling: z.number().nonnegative().default(BRACKET_12_TOP_MFJ),
+  manualSchedule: z.record(z.string(), z.number()).default({}),
+  // When true (default), the optimizer freely searches Roth conversion amounts, overriding `mode`.
+  // When false, the optimizer leaves conversions to `mode` (skips the conversion search dimension).
+  optimize: z.boolean().default(true),
+});
+export type ConversionParams = z.infer<typeof ConversionParamsSchema>;
+
+export const WithdrawalStrategySchema = z.enum(['taxfirst', 'rothfirst', 'tradfirst', 'proportional', 'bracketfill']);
+
+export const ResultSettingsSchema = z.object({
+  conversion: ConversionParamsSchema,
+  payTaxFromBrokerage: z.boolean(),
+  withdrawalStrategy: WithdrawalStrategySchema,
+  withdrawalBracketCeiling: z.number().nonnegative(),
+});
+export type ResultSettings = z.infer<typeof ResultSettingsSchema>;
+
 export const BlendWindowSchema = z.object({
   fromAge: z.number().int(),
   toAge: z.number().int(),
@@ -201,21 +224,12 @@ export const BlendPolicySchema = z.object({
   source: z.enum(['optimizer', 'manual']).optional(),
   goal: z.string().optional(),
   inputKey: z.string().optional(),
+  /** Strategy settings the optimizer ran with. While this optimizer result is active, projection
+   *  uses these instead of the live fields, so strategy edits don't move the charts until
+   *  Re-optimize. Facts always stay live. */
+  settings: ResultSettingsSchema.optional(),
 });
 export type BlendPolicySchemaT = z.infer<typeof BlendPolicySchema>;
-
-export const ConversionParamsSchema = z.object({
-  mode: z.enum(['off', 'manual', 'auto-window', 'bracket-fill']),
-  startAge: z.number().int().default(65),
-  endAge: z.number().int().default(72),
-  autoAmount: z.number().nonnegative().default(70000),
-  bracketCeiling: z.number().nonnegative().default(BRACKET_12_TOP_MFJ),
-  manualSchedule: z.record(z.string(), z.number()).default({}),
-  // When true (default), the optimizer freely searches Roth conversion amounts, overriding `mode`.
-  // When false, the optimizer leaves conversions to `mode` (skips the conversion search dimension).
-  optimize: z.boolean().default(true),
-});
-export type ConversionParams = z.infer<typeof ConversionParamsSchema>;
 
 export const GoalSchema = z.object({
   id: z.string(),
@@ -240,7 +254,7 @@ export const PlanSchema = z.object({
   incomeStreams: z.array(IncomeStreamSchema).default([]),
   lumpSumEvents: z.array(LumpSumEventSchema).default([]),
   expenseStreams: z.array(ExpenseStreamSchema).default([]),
-  withdrawalStrategy: z.enum(['taxfirst', 'rothfirst', 'tradfirst', 'proportional', 'bracketfill']),
+  withdrawalStrategy: WithdrawalStrategySchema,
   withdrawalBracketCeiling: z.number().nonnegative().default(BRACKET_12_TOP_MFJ),
   customPolicy: BlendPolicySchema.optional(),
   /** Optimizer-authored no-conversion counterfactual: the withdrawal ordering the optimizer

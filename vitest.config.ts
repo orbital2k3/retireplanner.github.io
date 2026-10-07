@@ -19,6 +19,7 @@ const OPT_FILES = [
   'src/engine/optimizer.swl.test.ts',
   'src/engine/applyOptimizerResult.test.ts',
   'src/engine/conversionBenefit.test.ts',
+  'src/engine/strategy/frozenSettings.test.ts',
 ];
 
 const HEAVY_EXCLUDE = HEAVY ? [] : ['src/engine/__study__/**'];
