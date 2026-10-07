@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { runOptimizer } from '../store/strategyActions';
+import ConversionPills from '../components/strategy/ConversionPills';
 import { useNavigate } from 'react-router-dom';
 import { usePlanStore } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
@@ -68,16 +69,6 @@ const inputPillStyle = (active: boolean): React.CSSProperties => ({
   color: active ? '#7a5c10' : 'var(--text-secondary)',
   cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
   display: 'inline-flex', alignItems: 'center', gap: 5,
-});
-
-const inputSelectPillStyle = (active: boolean): React.CSSProperties => ({
-  height: 34, boxSizing: 'border-box', padding: '0 8px 0 12px',
-  fontSize: 13, fontWeight: 600, borderRadius: 999,
-  border: active ? '2px solid var(--gold)' : '1px solid var(--border-light)',
-  background: active ? 'rgba(201,168,76,0.08)' : '#fff',
-  color: active ? '#7a5c10' : 'var(--text-primary)',
-  cursor: 'pointer', fontFamily: 'inherit',
-  width: 'fit-content', minWidth: 0,
 });
 
 const stepperBtnStyle: React.CSSProperties = {
@@ -215,7 +206,6 @@ export default function InputsPage() {
   const addExpenseStream = usePlanStore((s) => s.addExpenseStream);
   const updateExpenseStream = usePlanStore((s) => s.updateExpenseStream);
   const removeExpenseStream = usePlanStore((s) => s.removeExpenseStream);
-  const setConversion = usePlanStore((s) => s.setConversion);
   const setPayTaxFromBrokerage = usePlanStore((s) => s.setPayTaxFromBrokerage);
   const pendingGoal = useOptimizerStore((s) => s.pendingGoal);
 
@@ -256,7 +246,6 @@ export default function InputsPage() {
   const A = plan.personA;
   const B = plan.personB;
   const asm = plan.assumptions;
-  const conv = plan.conversion;
   const brackets = B ? FED_BRACKETS_MFJ : FED_BRACKETS_SINGLE;
   const convBracketOptions = brackets.slice(0, 5).map(([top, rate]: readonly [number, number]) => ({
     value: top, label: `${Math.round(rate * 100)}% ($${top.toLocaleString()})`,
@@ -934,51 +923,7 @@ export default function InputsPage() {
 
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ ...inlineLabelStyle, paddingTop: 8 }}>Roth conversions</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                <button
-                  onClick={() => setConversion({ optimize: true })}
-                  title="The optimizer searches conversion amounts for you"
-                  style={inputPillStyle(conv.optimize === true)}
-                >
-                  {conv.optimize === true && <Chk />}🎯 Optimizer decides
-                </button>
-                <button onClick={() => setConversion({ optimize: false, mode: 'off' })}
-                  style={inputPillStyle(!conv.optimize && conv.mode === 'off')}>
-                  {!conv.optimize && conv.mode === 'off' && <Chk />}None
-                </button>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
-                  <select
-                    value={!conv.optimize && conv.mode === 'bracket-fill' ? conv.bracketCeiling : ''}
-                    onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setConversion({ optimize: false, mode: 'bracket-fill', bracketCeiling: v }); }}
-                    style={inputSelectPillStyle(!conv.optimize && conv.mode === 'bracket-fill')}
-                    aria-label="Bracket-Fill conversion ceiling"
-                  >
-                    <option value="">Bracket-Fill</option>
-                    {convBracketOptions.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-                  </select>
-                  {!conv.optimize && conv.mode === 'bracket-fill' && (
-                    <button style={{ border: 'none', background: 'transparent', color: 'var(--gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, padding: '0 2px' }} onClick={() => setConvSheetOpen(true)}>Edit age window →</button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
-                  <button onClick={() => setConversion({ optimize: false, mode: 'auto-window' })}
-                    style={inputPillStyle(!conv.optimize && conv.mode === 'auto-window')}>
-                    {!conv.optimize && conv.mode === 'auto-window' && <Chk />}Fixed Amount
-                  </button>
-                  {!conv.optimize && conv.mode === 'auto-window' && (
-                    <button style={{ border: 'none', background: 'transparent', color: 'var(--gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, padding: '0 2px' }} onClick={() => setConvSheetOpen(true)}>Edit details →</button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
-                  <button onClick={() => setConversion({ optimize: false, mode: 'manual' })}
-                    style={inputPillStyle(!conv.optimize && conv.mode === 'manual')}>
-                    {!conv.optimize && conv.mode === 'manual' && <Chk />}Manual
-                  </button>
-                  {!conv.optimize && conv.mode === 'manual' && (
-                    <button style={{ border: 'none', background: 'transparent', color: 'var(--gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, padding: '0 2px' }} onClick={() => setConvSheetOpen(true)}>Edit details →</button>
-                  )}
-                </div>
-              </div>
+              <ConversionPills variant="optimizer" ceilingOptions={convBracketOptions} onEdit={() => setConvSheetOpen(true)} />
             </div>
             <StrategyCustomizeSheet open={convSheetOpen} mode="conversion" onClose={() => setConvSheetOpen(false)} />
 

@@ -5,11 +5,8 @@ import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE } from '../../engine/taxConstants
 import { firstRetirementAgeA, householdPlanThroughAgeA } from '../../engine/streamWindow';
 import { preRetirementConversionAges } from '../../engine/planWarnings';
 import { calendarYearAge } from '../../lib/ageUtils';
-import type { ConversionParams } from '../../schemas/plan';
 
 type Props = {
-  convOverride?: Partial<ConversionParams>;
-  onUpdate?: (updates: Partial<ConversionParams>) => void;
   // Optimize-for-me: the optimizer replaces the withdrawal preset, so its bracket-fill cap doesn't apply.
   unrestrictedCeiling?: boolean;
 };
@@ -17,14 +14,13 @@ type Props = {
 /** Data-entry detail for the active Roth conversion mode, shown inside the Dashboard side sheet.
  *  Mode SELECTION lives inline as pills in StrategyChooser; this renders only the fields the chosen
  *  mode needs — Fixed Amount (amount + window), Bracket-Fill (ceiling + window), Manual (per-year table).
- *  For 'off' there's nothing to enter. Store-driven; accepts convOverride + onUpdate for pending state. */
-export default function ConversionDetail({ convOverride, onUpdate, unrestrictedCeiling }: Props = {}) {
+ *  For 'off' there's nothing to enter. Saves to the store immediately. */
+export default function ConversionDetail({ unrestrictedCeiling }: Props = {}) {
   const plan = usePlanStore((s) => s.plan);
   const displayMode = usePlanStore((s) => s.displayMode);
   const setConversion = usePlanStore((s) => s.setConversion);
-  const storeConv = plan.conversion;
-  const conv = convOverride ? { ...storeConv, ...convOverride } as typeof storeConv : storeConv;
-  const updateConv = onUpdate ?? setConversion;
+  const conv = plan.conversion;
+  const updateConv = setConversion;
 
   const brackets = plan.personB ? FED_BRACKETS_MFJ : FED_BRACKETS_SINGLE;
   const convBracketOptions = brackets.slice(0, 5)

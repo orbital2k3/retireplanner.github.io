@@ -760,15 +760,14 @@ export function GuideContent() {
       </P>
       <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 2, paddingLeft: 20, margin: '0 0 12px' }}>
         <li><strong>Goal</strong>: pick what to optimize for: Max End Balance, Max Spending, or Earliest Retire. A ✓ marks the goal the plan was last built for. For Max Spending, you can also set a legacy target (after tax) — the optimizer will limit spending to ensure that floor is met. Selecting a different goal highlights it but does not run the optimizer yet.</li>
-        <li><strong>Roth conversions</strong>: five pills let you constrain how the optimizer handles conversions: <em>Optimizer decides</em> (the optimizer searches for the best amount), <em>None</em>, <em>Bracket-Fill</em>, <em>Fixed Amount</em>, or <em>Manual</em>. Picking any conversion pill turns it amber as a "pending" state. The charts do not change yet.</li>
+        <li><strong>Roth conversions</strong>: five pills let you constrain how the optimizer handles conversions: <em>Optimizer decides</em> (the optimizer searches for the best amount), <em>None</em>, <em>Bracket-Fill</em>, <em>Fixed Amount</em>, or <em>Manual</em>. Your pick is saved right away and turns amber until you re-optimize. The charts do not change yet.</li>
       </ul>
       <P>
-        The <strong>↗ Re-optimize</strong> button in the top-right of the panel applies your
-        selections. When a pending conversion pill is waiting, the button shows a dot and reads
-        "Re-optimize · Apply", a reminder that the charts still reflect the previous run.
-        Click it to run the optimizer with your new goal and conversion choice; the charts update
-        only after it completes. A small hint "Takes effect when you re-optimize" appears below
-        the conversion pills while a selection is pending.
+        The <strong>↗ Re-optimize</strong> button in the top-right of the panel turns on when your
+        plan or settings changed since the last run, or when you pick a different goal. A dot on the
+        button means the charts still show the previous run. Click it to run the optimizer with your
+        saved settings; the charts update when it finishes. A small hint "Saved. Takes effect when you
+        re-optimize" appears below the conversion pills until then.
       </P>
       <P>
         When the optimizer finishes, the result appears as a <strong>preview</strong>: an ⚡ banner

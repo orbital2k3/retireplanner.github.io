@@ -1,9 +1,10 @@
 import * as Comlink from 'comlink';
-import type { Plan } from '../schemas/plan';
+import type { Plan, ConversionParams } from '../schemas/plan';
 import type { OptimizeResult } from '../engine/optimizer';
 import type { UserGoal } from '../engine/recommender';
 import type { OptimizeWorkerOptions } from '../engine/worker';
 import { applyResultToPlan } from '../engine/applyOptimizerResult';
+import type { PolicyStatus } from '../engine/policyStatus';
 import { getEngineWorker } from '../engine/workerClient';
 import { usePlanStore } from './usePlanStore';
 import { useOptimizerStore } from './useOptimizerStore';
@@ -36,6 +37,11 @@ export type OptimizeFn = (
 /** Goals that rewrite inputs (expenses, retirement age) wait for the user's Apply. */
 export function applyRule(goal: UserGoal): 'applied' | 'pending' {
   return goal === 'max-sustainable-spending' || goal === 'min-retirement-age' ? 'pending' : 'applied';
+}
+
+/** Re-optimize is offered exactly when there is no current result for the selected goal. */
+export function canReOptimize(status: PolicyStatus, selectedGoal: UserGoal | null, resultGoal: UserGoal | undefined): boolean {
+  return status !== 'fresh' || (selectedGoal !== null && selectedGoal !== resultGoal);
 }
 
 /** Pure core: runs the optimizer and decides what the result is. No store access. */
@@ -83,4 +89,15 @@ export async function runOptimizer(args: RunOptimizerArgs, optimize: OptimizeFn 
     useWhatIfStore.getState().reset();
   }
   return outcome;
+}
+
+/** "Optimizer decides", or a conversion mode the user picks. */
+export type ConversionChoice = 'optimizer' | ConversionParams['mode'];
+
+/** The one write for a conversion choice, on every page. "Optimizer decides" also resets the mode,
+ *  so a leftover manual schedule can never fire; any picked mode turns the optimizer's search off. */
+export function chooseConversion(choice: ConversionChoice, extra?: Partial<ConversionParams>): void {
+  usePlanStore.getState().setConversion(
+    choice === 'optimizer' ? { optimize: true, mode: 'off' } : { ...extra, optimize: false, mode: choice },
+  );
 }

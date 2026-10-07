@@ -4,152 +4,72 @@ import { LegacyTargetInput } from './inputs/LegacyTargetInput';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { STRATEGIES } from '../engine/strategyPresets';
 import { USER_GOALS, type UserGoal } from '../engine/recommender';
-import type { ConversionParams, Plan } from '../schemas/plan';
-import { runOptimizer } from '../store/strategyActions';
+import { runOptimizer, canReOptimize } from '../store/strategyActions';
 import StrategyCustomizeSheet from './strategy/StrategyCustomizeSheet';
+import ConversionPills from './strategy/ConversionPills';
+import { pillStyle, selectPillStyle, editLinkStyle } from './strategy/pillStyles';
+import Chk from './strategy/Chk';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE } from '../engine/taxConstants';
 import { policyStatus } from '../engine/policyStatus';
 import { GOAL_LABELS as GOAL_SHORT_LABELS } from '../engine/goalLabels';
-
-type ConvMode = ConversionParams['mode'];
-const CONV_LABELS: Record<ConvMode, string> = {
-  'off': 'None',
-  'bracket-fill': 'Bracket-Fill',
-  'auto-window': 'Fixed Amount',
-  'manual': 'Manual',
-};
-
-type PillState = 'idle' | 'active' | 'pending';
-const PILL_BORDER: Record<PillState, string> = {
-  idle: '1px solid var(--border-light)', active: '2px solid var(--gold)', pending: '2px solid var(--warning)',
-};
-const PILL_BG: Record<PillState, string> = {
-  idle: '#fff', active: 'rgba(201,168,76,0.08)', pending: 'var(--warning-light)',
-};
-const PILL_COLOR: Record<PillState, string> = {
-  idle: 'var(--text-secondary)', active: '#7a5c10', pending: '#8a4a08',
-};
-
-// Pills and pill-styled selects share a fixed height so they align on one row.
-const pillStyle = (state: PillState): React.CSSProperties => ({
-  height: 34, boxSizing: 'border-box', padding: '0 13px',
-  fontSize: 13, fontWeight: 600, borderRadius: 999,
-  border: PILL_BORDER[state], background: PILL_BG[state], color: PILL_COLOR[state],
-  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-  display: 'inline-flex', alignItems: 'center', gap: 5,
-});
-const selectPillStyle = (state: PillState): React.CSSProperties => ({
-  height: 34, boxSizing: 'border-box', padding: '0 8px 0 12px',
-  fontSize: 13, fontWeight: 600, borderRadius: 999,
-  border: PILL_BORDER[state], background: PILL_BG[state], color: state === 'idle' ? 'var(--text-primary)' : PILL_COLOR[state],
-  cursor: 'pointer', fontFamily: 'inherit',
-  // Override the design system's global `select { width: 100% }`.
-  width: 'fit-content', minWidth: 0,
-});
 
 const inlineLabelStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1,
   color: 'var(--text-secondary)', flexShrink: 0, whiteSpace: 'nowrap',
 };
-const editLinkStyle: React.CSSProperties = {
-  border: 'none', background: 'transparent', color: 'var(--gold)', cursor: 'pointer',
-  fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600, padding: '0 2px', whiteSpace: 'nowrap',
-};
-const Chk = () => <span style={{ color: 'var(--gold)', fontWeight: 800 }}>✓</span>;
 
 export default function StrategyChooser() {
   const plan = usePlanStore((s) => s.plan);
   const setStrategy = usePlanStore((s) => s.setWithdrawalStrategy);
   const setWithdrawalBracketCeiling = usePlanStore((s) => s.setWithdrawalBracketCeiling);
   const clearCustomPolicy = usePlanStore((s) => s.clearCustomPolicy);
-  const setConversion = usePlanStore((s) => s.setConversion);
   const setPayTaxFromBrokerage = usePlanStore((s) => s.setPayTaxFromBrokerage);
   const setPendingPlan = useOptimizerStore((s) => s.setPendingPlan);
   const setPendingGoal = useOptimizerStore((s) => s.setPendingGoal);
   const pendingPlan = useOptimizerStore((s) => s.pendingPlan);
 
   const [sheetMode, setSheetMode] = useState<null | 'blend' | 'conversion' | 'chart'>(null);
-  const [sheetConvOverride, setSheetConvOverride] = useState<Partial<ConversionParams> | null>(null);
   const [optimizing, setOptimizing] = useState(false);
 
-  // Derive active state from the pending plan (if one exists) or the committed plan store.
+  // A pending result (Max Spending / Earliest Retire awaiting Apply) is what the charts show.
   const effectivePlan = pendingPlan ?? plan;
   const hasCustom = !!effectivePlan.customPolicy;
-  const activeKey = plan.withdrawalStrategy;
   const activeGoal = effectivePlan.optimizedForGoal as UserGoal | undefined;
   const optimizerDriven = hasCustom && activeGoal != null;
   const handEdited = hasCustom && activeGoal == null;
-  // True when plan store inputs changed since the optimizer last ran against them.
-  const planInputsChanged = policyStatus(plan) === 'stale';
-  const conv = effectivePlan.conversion;
-  const optimizeOn = conv.optimize ?? true;
+  const status = policyStatus(effectivePlan);
+  const stale = status === 'stale';
 
   const [approach, setApproach] = useState<'optimize' | 'manual'>(optimizerDriven ? 'optimize' : 'manual');
-  // Snapshot conv at the moment re-optimization runs so we can detect mode drift afterward.
-  const [convSnapshot, setConvSnapshot] = useState<Pick<ConversionParams, 'optimize' | 'mode' | 'bracketCeiling' | 'autoAmount' | 'startAge' | 'endAge'>>(() => ({
-    optimize: conv.optimize, mode: conv.mode, bracketCeiling: conv.bracketCeiling,
-    autoAmount: conv.autoAmount, startAge: conv.startAge, endAge: conv.endAge,
-  }));
-  // Pending conv selection in "Optimize for me" tab — not written to plan store until re-optimize runs.
-  const [pendingConv, setPendingConv] = useState<Partial<ConversionParams> | null>(null);
-  // Pending payTaxFromBrokerage in "Optimize for me" tab — staged until re-optimize runs.
-  const [pendingPayTaxFromBrok, setPendingPayTaxFromBrok] = useState<boolean | null>(null);
-  // When a tab is just entered via switchApproach, all pills show idle until user explicitly clicks one.
-  const [tabFreshEntry, setTabFreshEntry] = useState<'none' | 'optimize' | 'manual'>('none');
-
-  // Highlighted goal; null = no explicit selection yet (shows idle pills).
+  // The goal to run next. An action argument, not plan state; defaults to the result's goal.
   const [selectedGoal, setSelectedGoal] = useState<UserGoal | null>(activeGoal ?? null);
   const [seenGoal, setSeenGoal] = useState<UserGoal | undefined>(activeGoal);
-  // Sync when the active goal changes externally (e.g. pendingPlan updated by a different code path).
   if (activeGoal !== seenGoal) {
     setSeenGoal(activeGoal);
     setSelectedGoal(activeGoal ?? null);
   }
+  const reOptimizeEnabled = !optimizing && canReOptimize(status, selectedGoal, activeGoal);
 
   const brackets = plan.personB ? FED_BRACKETS_MFJ : FED_BRACKETS_SINGLE;
-  const wdBracketOptions = brackets.slice(0, 5).map(([top, rate]) => ({
+  const bracketOptions = brackets.slice(0, 5).map(([top, rate]) => ({
     value: top, label: `${Math.round(rate * 100)}% ($${top.toLocaleString()})`,
   }));
-  const convBracketOptionsAll = brackets.slice(0, 5)
-    .map(([top, rate]) => ({ value: top, label: `${Math.round(rate * 100)}% ($${top.toLocaleString()})` }));
   // "Set it myself" bracket-fill ceiling is capped at the withdrawal bracket-fill ceiling when
-  // that withdrawal preset is active — you can't convert above the bracket you're already filling.
+  // that withdrawal preset is active: you can't convert above the bracket you're already filling.
   // "Optimize for me" is never restricted: the optimizer searches all brackets freely.
-  const convBracketOptionsManual = brackets.slice(0, 5)
-    .filter(([top]) => plan.withdrawalStrategy !== 'bracketfill' || top <= plan.withdrawalBracketCeiling)
-    .map(([top, rate]) => ({ value: top, label: `${Math.round(rate * 100)}% ($${top.toLocaleString()})` }));
+  const convBracketOptionsManual = bracketOptions
+    .filter(({ value }) => plan.withdrawalStrategy !== 'bracketfill' || value <= plan.withdrawalBracketCeiling);
 
-  const policyHasNumericConv = effectivePlan.customPolicy?.windows.some((w) => w.convAmt != null) ?? false;
-  // Stale if optimize flag flipped vs policy, conv mode drifted since last run, or pending selection exists.
-  const convModeDrifted = optimizerDriven && !optimizeOn && (
-    conv.mode !== convSnapshot.mode ||
-    conv.bracketCeiling !== convSnapshot.bracketCeiling ||
-    conv.autoAmount !== convSnapshot.autoAmount ||
-    conv.startAge !== convSnapshot.startAge ||
-    conv.endAge !== convSnapshot.endAge
-  );
-  const convStale = optimizerDriven && (optimizeOn !== policyHasNumericConv || convModeDrifted || pendingConv !== null);
-  const goalChanged = selectedGoal !== null && selectedGoal !== activeGoal;
-  const payTaxPending = pendingPayTaxFromBrok !== null;
-  const otherPending = goalChanged || convStale || payTaxPending || !hasCustom || planInputsChanged;
-  const canReOptimize = !optimizing && tabFreshEntry !== 'optimize' && otherPending;
+  /** A saved strategy edit replaces any result still waiting for Apply. */
+  const dropPending = () => {
+    setPendingPlan(null);
+    setPendingGoal(null);
+  };
 
   const runReOptimize = async () => {
     setOptimizing(true);
     try {
-      // Staged selections ride along as a patch and are saved with the result.
-      const patch: Partial<Plan> = {
-        ...(pendingConv ? { conversion: { ...plan.conversion, ...pendingConv } } : {}),
-        ...(pendingPayTaxFromBrok !== null ? { payTaxFromBrokerage: pendingPayTaxFromBrok } : {}),
-      };
-      const goalToUse = (selectedGoal ?? activeGoal ?? 'max-end-balance') as UserGoal;
-      await runOptimizer({ plan, goal: goalToUse, patch });
-      setTabFreshEntry('none');
-      // Commit staged selections to the plan store: they're user preferences, not optimizer outputs.
-      if (pendingConv) { setConversion(pendingConv); setPendingConv(null); }
-      if (pendingPayTaxFromBrok !== null) { setPayTaxFromBrokerage(pendingPayTaxFromBrok); setPendingPayTaxFromBrok(null); }
-      const c = { ...plan.conversion, ...pendingConv };
-      setConvSnapshot({ optimize: c.optimize, mode: c.mode, bracketCeiling: c.bracketCeiling, autoAmount: c.autoAmount, startAge: c.startAge, endAge: c.endAge });
+      await runOptimizer({ plan, goal: selectedGoal ?? activeGoal ?? 'max-end-balance' });
     } catch (err) {
       console.error('[StrategyChooser] Re-optimize failed:', err);
     } finally {
@@ -157,28 +77,12 @@ export default function StrategyChooser() {
     }
   };
 
-  const switchApproach = (next: 'optimize' | 'manual') => {
-    if (pendingConv) setPendingConv(null);
-    if (pendingPayTaxFromBrok !== null) setPendingPayTaxFromBrok(null);
-    // Preserve goal selection when returning to an active optimizer result; clear it otherwise.
-    if (!hasCustom) setSelectedGoal(null);
-    // Force idle on manual only when coming from an active optimizer result (hasCustom).
-    // Force idle on optimize only when user actually engaged manual (customPolicy cleared).
-    setTabFreshEntry(next === 'manual' ? (hasCustom ? 'manual' : 'none') : (hasCustom ? 'none' : 'optimize'));
-    setApproach(next);
-  };
-
   const pickWithdrawal = (key: typeof STRATEGIES[number]['key']) => {
     if (hasCustom) clearCustomPolicy();
-    // User is explicitly choosing a manual strategy — discard any pending optimizer result so
-    // effectivePlan (pendingPlan ?? plan) doesn't keep hasCustom = true via pendingPlan.customPolicy.
-    setPendingPlan(null);
-    setPendingGoal(null);
-    setTabFreshEntry('none');
+    dropPending();
     setStrategy(key);
   };
 
-  // ── Conversion row (shared) — each option is a column so its "Edit …" link sits under the pill.
   const conversionRow = (tab: 'optimize' | 'manual') => {
     if (tab === 'manual' && handEdited) {
       return (
@@ -188,119 +92,13 @@ export default function StrategyChooser() {
         </div>
       );
     }
-
-    // In "optimize" tab, pill selection writes to pendingConv (not the plan store) so projections
-    // don't update until the user actually re-runs the optimizer.
-    const effOptimizeOn = tab === 'optimize' && pendingConv !== null
-      ? (pendingConv.optimize ?? false) : optimizeOn;
-    const effMode = tab === 'optimize' && pendingConv !== null
-      ? (pendingConv.mode ?? conv.mode) : conv.mode;
-    const effCeiling = tab === 'optimize' && pendingConv !== null
-      ? (pendingConv.bracketCeiling ?? conv.bracketCeiling) : conv.bracketCeiling;
-
-    const isSel = (m: ConvMode) => tab === 'optimize'
-      ? (!effOptimizeOn && effMode === m)
-      : (tabFreshEntry !== 'manual' && !hasCustom && conv.mode === m);
-
-    const stateFor = (m: ConvMode): PillState => {
-      const sel = isSel(m);
-      if (tab === 'optimize') {
-        if (tabFreshEntry === 'optimize') return 'idle';
-        // Pending selection wins: only the pending pill is amber, everything else idle.
-        if (pendingConv !== null) return sel ? 'pending' : 'idle';
-        // No pending: applied selection is gold-active (or amber if drift-stale from prior session).
-        return sel && convStale ? 'pending' : sel ? 'active' : 'idle';
-      }
-      return sel ? 'active' : 'idle';
-    };
-
-    const selectMode = (m: ConvMode, extra?: Partial<ConversionParams>) => {
-      if (tab === 'optimize') {
-        setTabFreshEntry('none');
-        // Revert (clear pending) only when there's an active optimizer result to revert to
-        // and the selection matches the committed store state exactly.
-        const storeC = plan.conversion;
-        const matchesStore = optimizerDriven && !storeC.optimize && storeC.mode === m && !convModeDrifted &&
-          (!extra || (Object.keys(extra) as (keyof ConversionParams)[]).every((k) => storeC[k] === extra[k]));
-        if (matchesStore) {
-          setPendingConv(null);
-        } else {
-          setPendingConv({ optimize: false, mode: m, ...extra });
-        }
-      } else {
-        if (hasCustom) clearCustomPolicy();
-        // Discard pending optimizer result for the same reason as pickWithdrawal.
-        setPendingPlan(null);
-        setPendingGoal(null);
-        setTabFreshEntry('none');
-        setConversion({ mode: m, optimize: false, ...extra });
-      }
-    };
-
-    const editLink = (label: string) => (
-      <button style={editLinkStyle} onClick={() => {
-        // In optimize tab, pass pendingConv as override so ConversionDetail shows the pending
-        // mode without committing to the store (which would mark the plan stale).
-        setSheetConvOverride(tab === 'optimize' && pendingConv !== null ? pendingConv : null);
-        setSheetMode('conversion');
-      }}>{label} →</button>
-    );
-    const col = (key: string, pill: React.ReactNode, link?: React.ReactNode) => (
-      <div key={key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>{pill}{link}</div>
-    );
-    const modePill = (m: ConvMode) => {
-      const st = stateFor(m);
-      return <button onClick={() => selectMode(m)} style={pillStyle(st)}>{st === 'active' && <Chk />}{CONV_LABELS[m]}</button>;
-    };
-
-    // "Optimizer decides" pill state
-    const optDecidesSt: PillState = tab === 'optimize'
-      ? (tabFreshEntry === 'optimize' ? 'idle' : (pendingConv !== null
-        ? (pendingConv.optimize === true ? 'pending' : 'idle')
-        : (optimizeOn && convStale ? 'pending' : optimizeOn ? 'active' : 'idle')))
-      : 'idle';
-
-    return (
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-        {tab === 'optimize' && col('auto',
-          <button
-            // mode:'off' is written alongside optimize:true so a previously-chosen mode cannot
-            // linger. The optimizer's search space starts at retirementAge, so a stale
-            // mode:'manual' schedule would keep firing in accumulation years — conversions the
-            // optimizer never chose, while this pill reads "Optimizer decides".
-            onClick={() => {
-              setTabFreshEntry('none');
-              // Revert (clear pending) only when there's an active optimizer result that already
-              // has optimize:true — the user is un-doing a drift back to the committed state.
-              // On a fresh plan (no optimizer run yet), always stage as pending.
-              if (optimizerDriven && plan.conversion.optimize === true) {
-                setPendingConv(null);
-              } else {
-                setPendingConv({ optimize: true, mode: 'off' });
-              }
-            }}
-            title="The optimizer searches conversion amounts for you"
-            style={pillStyle(optDecidesSt)}
-          >
-            {optDecidesSt === 'active' && <Chk />}🎯 Optimizer decides
-          </button>
-        )}
-        {col('off', modePill('off'))}
-        {col('bracket-fill',
-          <select
-            value={isSel('bracket-fill') ? effCeiling : ''}
-            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) selectMode('bracket-fill', { bracketCeiling: v }); }}
-            style={selectPillStyle(stateFor('bracket-fill'))}
-            aria-label="Bracket-Fill conversion ceiling"
-          >
-            <option value="">Bracket-Fill</option>
-            {(tab === 'optimize' ? convBracketOptionsAll : convBracketOptionsManual).map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-          </select>,
-          isSel('bracket-fill') ? editLink('Edit age window') : undefined
-        )}
-        {col('auto-window', modePill('auto-window'), isSel('auto-window') ? editLink('Edit details') : undefined)}
-        {col('manual', modePill('manual'), isSel('manual') ? editLink('Edit details') : undefined)}
-      </div>
+    return tab === 'optimize' ? (
+      <ConversionPills variant="optimizer" pending={status !== 'fresh'} ceilingOptions={bracketOptions}
+        onBeforeChoose={dropPending} onEdit={() => setSheetMode('conversion')} />
+    ) : (
+      <ConversionPills variant="manual" ceilingOptions={convBracketOptionsManual}
+        onBeforeChoose={() => { if (hasCustom) clearCustomPolicy(); dropPending(); }}
+        onEdit={() => setSheetMode('conversion')} />
     );
   };
 
@@ -314,7 +112,7 @@ export default function StrategyChooser() {
             {(['optimize', 'manual'] as const).map((tab) => {
               const active = approach === tab;
               return (
-                <button key={tab} onClick={() => switchApproach(tab)} style={{
+                <button key={tab} onClick={() => setApproach(tab)} style={{
                   flex: 1, display: 'flex', alignItems: 'center',
                   padding: '0 18px', textAlign: 'left', border: 'none', whiteSpace: 'nowrap',
                   borderLeft: `4px solid ${active ? 'var(--gold)' : 'transparent'}`,
@@ -348,12 +146,12 @@ export default function StrategyChooser() {
                 paddingBottom: selectedGoal === 'max-sustainable-spending' ? 38 : 0,
               }}>
                 {(Object.keys(USER_GOALS) as UserGoal[]).map((key) => {
-                  const selected = tabFreshEntry !== 'optimize' && key === selectedGoal;
+                  const selected = key === selectedGoal;
                   const applied = optimizerDriven && key === activeGoal;
                   if (key === 'max-sustainable-spending') {
                     return (
                       <div key={key} style={{ position: 'relative' }}>
-                        <button onClick={() => { setTabFreshEntry('none'); setSelectedGoal(key); }} title={USER_GOALS[key].description}
+                        <button onClick={() => setSelectedGoal(key)} title={USER_GOALS[key].description}
                           style={pillStyle(selected ? 'active' : 'idle')}>
                           {applied && <Chk />}{GOAL_SHORT_LABELS[key]}
                         </button>
@@ -366,7 +164,7 @@ export default function StrategyChooser() {
                     );
                   }
                   return (
-                    <button key={key} onClick={() => { setTabFreshEntry('none'); setSelectedGoal(key); }} title={USER_GOALS[key].description}
+                    <button key={key} onClick={() => setSelectedGoal(key)} title={USER_GOALS[key].description}
                       style={pillStyle(selected ? 'active' : 'idle')}>
                       {applied && <Chk />}{GOAL_SHORT_LABELS[key]}
                     </button>
@@ -375,20 +173,20 @@ export default function StrategyChooser() {
               </div>
               {/* Re-optimize button */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                <button onClick={runReOptimize} disabled={!canReOptimize}
+                <button onClick={runReOptimize} disabled={!reOptimizeEnabled}
                   style={{
                     height: 34, boxSizing: 'border-box', fontSize: 13, fontWeight: 600,
                     padding: '0 14px', borderRadius: 8, border: 'none',
-                    background: canReOptimize ? 'var(--gold)' : 'rgba(13,27,46,0.06)',
-                    color: canReOptimize ? 'var(--navy)' : 'var(--text-muted)',
-                    cursor: canReOptimize ? 'pointer' : 'default', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    background: reOptimizeEnabled ? 'var(--gold)' : 'rgba(13,27,46,0.06)',
+                    color: reOptimizeEnabled ? 'var(--navy)' : 'var(--text-muted)',
+                    cursor: reOptimizeEnabled ? 'pointer' : 'default', fontFamily: 'inherit', whiteSpace: 'nowrap',
                     display: 'inline-flex', alignItems: 'center', gap: 7,
                   }}>
-                  {(convStale || planInputsChanged) && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }} />}
-                  {optimizing ? 'Optimizing…' : (convStale || planInputsChanged) ? '↗ Re-optimize · Apply' : '↗ Re-optimize'}
+                  {stale && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }} />}
+                  {optimizing ? 'Optimizing…' : '↗ Re-optimize'}
                 </button>
-                {planInputsChanged && !convStale && (
-                  <div style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 600 }}>Plan inputs changed — re-optimize recommended.</div>
+                {stale && (
+                  <div style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 600 }}>Your plan changed. Re-optimize to update the strategy.</div>
                 )}
               </div>
 
@@ -396,7 +194,7 @@ export default function StrategyChooser() {
               <div style={{ ...inlineLabelStyle, paddingTop: 9 }}>Roth conversions</div>
               <div>
                 {conversionRow('optimize')}
-                {(canReOptimize && otherPending && !planInputsChanged) && <div style={{ fontSize: 11.5, color: 'var(--warning)', fontWeight: 600, marginTop: 8 }}>Takes effect when you re-optimize.</div>}
+                {optimizerDriven && stale && <div style={{ fontSize: 11.5, color: 'var(--warning)', fontWeight: 600, marginTop: 8 }}>Saved. Takes effect when you re-optimize.</div>}
               </div>
               <div style={{ paddingTop: 9, display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={() => setSheetMode('chart')} style={{ ...editLinkStyle, fontSize: 12 }}>📊 Conversions vs RMDs →</button>
@@ -408,7 +206,7 @@ export default function StrategyChooser() {
               <div style={{ ...inlineLabelStyle, paddingTop: 9 }}>Withdrawal order</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {STRATEGIES.map((s) => {
-                  const isActive = tabFreshEntry !== 'manual' && s.key === activeKey && !hasCustom;
+                  const isActive = s.key === plan.withdrawalStrategy && !hasCustom;
                   if (s.key === 'bracketfill') {
                     return (
                       <select key={s.key} title={s.description}
@@ -417,15 +215,13 @@ export default function StrategyChooser() {
                           const val = parseInt(e.target.value, 10);
                           if (isNaN(val)) return;
                           if (hasCustom) clearCustomPolicy();
-                          setPendingPlan(null);
-                          setPendingGoal(null);
-                          setTabFreshEntry('none');
+                          dropPending();
                           setStrategy('bracketfill');
                           setWithdrawalBracketCeiling(val);
                         }}
                         style={selectPillStyle(isActive ? 'active' : 'idle')}>
                         <option value="">Bracket-Fill</option>
-                        {wdBracketOptions.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+                        {bracketOptions.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
                       </select>
                     );
                   }
@@ -454,36 +250,20 @@ export default function StrategyChooser() {
               <div />
             </>)}
 
-            {/* Tax sourcing row — shared across both tabs, always at the bottom */}
-            {(() => {
-              const isOptimizeTab = approach === 'optimize';
-              const checked = isOptimizeTab && pendingPayTaxFromBrok !== null
-                ? pendingPayTaxFromBrok
-                : (plan.payTaxFromBrokerage ?? false);
-              const isPending = isOptimizeTab && pendingPayTaxFromBrok !== null;
-              return (<>
-                <div style={{ ...inlineLabelStyle, borderTop: '1px solid var(--border-light)', paddingTop: 10, marginTop: 2 }}>Tax payments</div>
-                <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 2 }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, color: isPending ? 'var(--warning)' : 'var(--text-primary)', fontWeight: isPending ? 600 : 400, userSelect: 'none' }}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        if (isOptimizeTab) {
-                          setPendingPayTaxFromBrok(e.target.checked);
-                        } else {
-                          setPayTaxFromBrokerage(e.target.checked);
-                        }
-                      }}
-                      style={{ accentColor: 'var(--gold)', width: 13, height: 13 }}
-                    />
-                    Pay IRA withdrawal taxes from brokerage
-                    {isPending && <span style={{ fontSize: 10, fontWeight: 600 }}> · takes effect on re-optimize</span>}
-                  </label>
-                </div>
-                <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 2 }} />
-              </>);
-            })()}
+            {/* Tax sourcing row: shared across both tabs, always at the bottom */}
+            <div style={{ ...inlineLabelStyle, borderTop: '1px solid var(--border-light)', paddingTop: 10, marginTop: 2 }}>Tax payments</div>
+            <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 2 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={plan.payTaxFromBrokerage ?? false}
+                  onChange={(e) => { dropPending(); setPayTaxFromBrokerage(e.target.checked); }}
+                  style={{ accentColor: 'var(--gold)', width: 13, height: 13 }}
+                />
+                Pay IRA withdrawal taxes from brokerage
+              </label>
+            </div>
+            <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 2 }} />
 
           </div>
         </div>
@@ -493,12 +273,7 @@ export default function StrategyChooser() {
         open={sheetMode !== null}
         mode={sheetMode ?? 'blend'}
         onClose={() => setSheetMode(null)}
-        convOverride={sheetMode === 'conversion' && sheetConvOverride !== null ? sheetConvOverride : undefined}
         unrestrictedCeiling={approach === 'optimize'}
-        onUpdate={sheetMode === 'conversion' && sheetConvOverride !== null ? (updates) => {
-          setPendingConv((prev) => ({ ...(prev ?? {}), ...updates }));
-          setSheetConvOverride((prev) => ({ ...(prev ?? {}), ...updates }));
-        } : undefined}
       />
     </>
   );

@@ -147,8 +147,8 @@ export const usePlanStore = create<PlanState>()(
       migrate: (persistedState: unknown, fromVersion: number) => {
         if (!persistedState || typeof persistedState !== 'object') return persistedState as PlanState;
         const ps = persistedState as Record<string, unknown> & { plan?: Record<string, unknown> };
-        // v34 (runs last, below): single optimizerKey replaces planInputKey + manualScheduleKey.
-        // v33: stamped manualScheduleKey; superseded by v34, which treats a missing one as current.
+        // v34 (runs last, below): single optimizerKey replaces the two pre-v34 keys.
+        // v33: stamped a manual-schedule key; superseded by v34, which treats a missing one as current.
         // v32: add optional lumpSumEvents[].ownerStartedRmds (annual RMDs on inherited pre-tax IRAs).
         // Absent === false === pre-v32 behavior, so no data rewrite is needed.
         // v31: add plan.optimizedBy + plan.mcTuning (strategy provenance: the goal optimizer vs a

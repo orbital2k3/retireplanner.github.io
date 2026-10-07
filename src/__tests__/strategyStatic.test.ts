@@ -30,4 +30,10 @@ describe('§3.3 one optimizer runner', () => {
       .map(rel);
     expect(offenders).toEqual([]);
   });
+
+  it('results pages never send the user back to Inputs', () => {
+    const RESULTS = ['pages/Dashboard.tsx', 'pages/Projections.tsx', 'pages/TaxPlanning.tsx', 'pages/MonteCarlo.tsx', 'components/StalePlanBanner.tsx'];
+    const offenders = RESULTS.filter((f) => /navigate\(\s*['"`]\/(personal|inputs)/.test(readFileSync(join(SRC, f), 'utf8')) || /<Navigate\b/.test(readFileSync(join(SRC, f), 'utf8')));
+    expect(offenders).toEqual([]);
+  });
 });
