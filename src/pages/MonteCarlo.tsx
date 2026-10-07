@@ -1,11 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
-import * as Comlink from 'comlink';
 import { usePlanStore, useProjection } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { useWhatIfStore, applyWhatIf } from '../store/useWhatIfStore';
 import type { Plan } from '../schemas/plan';
 import { getEngineWorker } from '../engine/workerClient';
-import { applyResultToPlan } from '../engine/applyOptimizerResult';
 import MonteCarloFan from '../components/charts/MonteCarloFan';
 import HistoricalCohortChart from '../components/charts/HistoricalCohortChart';
 import StressScenarioModal from '../components/StressScenarioModal';
@@ -13,9 +11,9 @@ import { fmtM, fmtK, fmtPct, fmtPtsWithSign } from '../lib/format';
 
 import { generateInsights, insightsForSurface } from '../engine/explain';
 import InsightCard from '../components/InsightCard';
-import { useApplyOptimizerPlan } from '../hooks/useApplyOptimizerPlan';
 import OptimizerBadge from '../components/OptimizerBadge';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
+import { runOptimizer, commitOptimizerPlan } from '../store/strategyActions';
 import LearnMoreModal from '../components/LearnMoreModal';
 import { MC_SIMULATE_HELP, MC_OPTIMIZE_HELP, type HelpTopic } from '../components/learnMoreTopics';
 import { planInputKey } from '../engine/planInputKey';
@@ -93,7 +91,6 @@ export default function MonteCarlo() {
   const mcPlanKey = useOptimizerStore((s) => s.mcPlanKey);
   const setMcPlanKey = useOptimizerStore((s) => s.setMcPlanKey);
   const displayMode = usePlanStore((s) => s.displayMode);
-  const applyOptimizerPlan = useApplyOptimizerPlan();
   const optimizerAppliedState = useOptimizerApplied();
 
   // Unified analysed plan: what-if overrides applied on top of any pending optimizer plan.
@@ -186,17 +183,15 @@ export default function MonteCarlo() {
     setApplySuccess(null);
     try {
       const worker = getEngineWorker();
-      const onProgress = Comlink.proxy((frac: number, msg?: string) => setRobustProgress({ frac, msg }));
       // Use mcBase as the base — never a previous preview, to avoid compounding.
       const goal = mcBase.optimizedForGoal ?? 'max-end-balance';
       const mcOpts = { trials, model: 'historical' as const, equityPct: equityPct / 100, seed };
       const before = await worker.monteCarlo(mcBase, mcOpts);
-      const optResult = await worker.optimize(
-        mcBase, goal,
-        { useNelderMead: true, thorough: true, mcAware: true, equityPct: equityPct / 100, mcPosture: ROBUSTNESS_POSTURE, mcSeed: seed },
-        onProgress,
-      );
-      const basePlan = applyResultToPlan(mcBase, optResult);
+      const { result: optResult, plan: basePlan } = await runOptimizer({
+        plan: mcBase, goal,
+        mc: { equityPct: equityPct / 100, mcPosture: ROBUSTNESS_POSTURE, mcSeed: seed },
+        onProgress: (frac, msg) => setRobustProgress({ frac, msg }),
+      });
       // Out-of-sample score: the search used 32 bootstrap paths, so its own numbers are optimistic.
       const after = await worker.monteCarlo(basePlan, mcOpts);
       const gainPts = (after.successRate - before.successRate) * 100;
@@ -235,7 +230,7 @@ export default function MonteCarlo() {
 
   const handleApply = () => {
     if (!robustnessPlan) return;
-    applyOptimizerPlan(robustnessPlan);
+    commitOptimizerPlan(robustnessPlan);
     setRobustnessPlan(null);
     setRobustnessComparison(null);
     setApplySuccess(robustnessPlan.mcTuning?.posture ?? ROBUSTNESS_POSTURE);

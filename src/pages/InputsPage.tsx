@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as Comlink from 'comlink';
+import { runOptimizer } from '../store/strategyActions';
 import { useNavigate } from 'react-router-dom';
 import { usePlanStore } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
-import { useWhatIfStore } from '../store/useWhatIfStore';
 import { householdTotals, resolveGrowthRate } from '../schemas/plan';
 import type { IncomeStream, ExpenseStream, LumpSumEvent, PersonPortfolio, GrowthRate, EndRule } from '../schemas/plan';
 import { computePlanWarnings } from '../engine/planWarnings';
@@ -14,8 +13,6 @@ import { fmtM, fmtK, fmtPct, fmtFull } from '../lib/format';
 import { ageChipLabel, exactAgeFromDob, calendarYearAge } from '../lib/ageUtils';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { INCOME_TEMPLATES, EXPENSE_TEMPLATES } from '../engine/streamTemplates';
-import { getEngineWorker } from '../engine/workerClient';
-import { applyResultToPlan } from '../engine/applyOptimizerResult';
 import { USER_GOALS, type UserGoal } from '../engine/recommender';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS } from '../engine/taxConstants';
 import StrategyCustomizeSheet from '../components/strategy/StrategyCustomizeSheet';
@@ -220,13 +217,6 @@ export default function InputsPage() {
   const removeExpenseStream = usePlanStore((s) => s.removeExpenseStream);
   const setConversion = usePlanStore((s) => s.setConversion);
   const setPayTaxFromBrokerage = usePlanStore((s) => s.setPayTaxFromBrokerage);
-  const applyOptimizerResult = usePlanStore((s) => s.applyOptimizerResult);
-  const resetWhatIf = useWhatIfStore((s) => s.reset);
-  const setOptimizerResult = useOptimizerStore((s) => s.setResult);
-  const setPendingPlan = useOptimizerStore((s) => s.setPendingPlan);
-  const setPendingGoal = useOptimizerStore((s) => s.setPendingGoal);
-  const setRobustnessPlan = useOptimizerStore((s) => s.setRobustnessPlan);
-  const setRobustnessComparison = useOptimizerStore((s) => s.setRobustnessComparison);
   const pendingGoal = useOptimizerStore((s) => s.pendingGoal);
 
   const planGoal: UserGoal = pendingGoal ?? (plan.optimizedForGoal as UserGoal | undefined) ?? 'max-end-balance';
@@ -335,24 +325,8 @@ export default function InputsPage() {
     setBuilding(true);
     setBuildProgress(0);
     setBuildError(null);
-    setRobustnessPlan(null);
-    setRobustnessComparison(null);
     try {
-      const worker = getEngineWorker();
-      const onProgress = Comlink.proxy((frac: number) => setBuildProgress(frac));
-      const result = await worker.optimize(plan, selectedGoal, { useNelderMead: true, thorough: true }, onProgress);
-      const appliedPlan = applyResultToPlan(plan, result);
-      const mutatesInputs = selectedGoal === 'max-sustainable-spending' || selectedGoal === 'min-retirement-age';
-      setOptimizerResult(result);
-      if (mutatesInputs) {
-        setPendingPlan(appliedPlan);
-        setPendingGoal(selectedGoal);
-      } else {
-        applyOptimizerResult(appliedPlan);
-        setPendingPlan(null);
-        setPendingGoal(null);
-      }
-      resetWhatIf();
+      await runOptimizer({ plan, goal: selectedGoal, onProgress: (frac) => setBuildProgress(frac) });
       window.scrollTo(0, 0);
       navigate('/dashboard');
     } catch (err) {

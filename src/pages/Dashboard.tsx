@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { usePlanStore, useProjection } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { fmtM, fmtCompactWithSign, fmtPct, fmtPtsWithSign } from '../lib/format';
-import { useApplyOptimizerPlan } from '../hooks/useApplyOptimizerPlan';
 import WhatIfBar from '../components/WhatIfBar';
 import ScenarioCompare from '../components/ScenarioCompare';
 import StrategyChooser from '../components/StrategyChooser';
@@ -19,19 +18,16 @@ import { explainPolicy, type PolicyRationale } from '../engine/explain/optimizer
 import { buildDecisionTrace, type DecisionTrace } from '../engine/explain/decisionTrace';
 import TaxAdjustedBreakdown from '../components/TaxAdjustedBreakdown';
 import OptimizerRationaleModal from '../components/OptimizerRationaleModal';
-import { getEngineWorker } from '../engine/workerClient';
-import { applyResultToPlan } from '../engine/applyOptimizerResult';
-import { useToastStore } from '../store/useToastStore';
 import type { Plan } from '../schemas/plan';
 import OptimizerBadge from '../components/OptimizerBadge';
 import { GOAL_LABELS } from '../engine/goalLabels';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
+import { runOptimizer, commitOptimizerPlan } from '../store/strategyActions';
 import StalePlanBanner from '../components/StalePlanBanner';
 
 export default function Dashboard() {
   const plan = usePlanStore((s) => s.plan);
   const displayMode = usePlanStore((s) => s.displayMode);
-  const applyOptimizerPlan = useApplyOptimizerPlan();
   const navigate = useNavigate();
   const real = displayMode === 'real';
   const addScenario = usePlanStore((s) => s.addScenario);
@@ -118,7 +114,7 @@ export default function Dashboard() {
 
   const handleApply = () => {
     if (!pendingPlan) return;
-    applyOptimizerPlan(pendingPlan);
+    commitOptimizerPlan(pendingPlan);
   };
 
   const handleDiscard = () => {
@@ -127,30 +123,20 @@ export default function Dashboard() {
     setResult(null);
   };
 
-  // Re-optimize with a settings patch from the rationale modal (Class B rows).
-  // Applies the patch to effectivePlan and dispatches the worker flow, landing as a
-  // normal pending result via useOptimizerStore (same banner as a fresh optimize run).
+  // Re-optimize with a settings patch from the rationale modal (Class B rows). Runs on the
+  // saved plan (never the pending one) and follows the same apply rule as every other caller.
   const handleReoptimize = useCallback(async (patch: Partial<Plan>) => {
     if (!optimizerResult || reoptimizing) return;
-    const patchedPlan = { ...effectivePlan, ...patch };
     setRationaleOpen(false);
     setReoptimizing(true);
     try {
-      const worker = getEngineWorker();
-      const result = await worker.optimize(patchedPlan, optimizerResult.goal, { useNelderMead: true, thorough: true });
-      if (result.conversionsDisabled) {
-        useToastStore.getState().show('info', 'Conversions turned off — the optimizer found a higher balance without Roth conversions. Re-run any time to re-evaluate.');
-      }
-      const appliedPlan = applyResultToPlan(patchedPlan, result);
-      setResult(result);
-      setPendingPlan(appliedPlan);
-      setPendingGoal(optimizerResult.goal);
+      await runOptimizer({ plan, goal: optimizerResult.goal, patch });
     } catch (err) {
       console.error('[Dashboard] re-optimize failed:', err);
     } finally {
       setReoptimizing(false);
     }
-  }, [optimizerResult, reoptimizing, effectivePlan, setResult, setPendingPlan, setPendingGoal]);
+  }, [optimizerResult, reoptimizing, plan]);
 
   return (
     <div className="page">

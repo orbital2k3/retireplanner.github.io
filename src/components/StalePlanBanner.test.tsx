@@ -11,20 +11,14 @@ import type { Plan } from '../schemas/plan';
 const mockPlan = vi.fn<[], Plan>(() => samplePlan());
 const mockPendingPlan = vi.fn<[], Plan | null>(() => null);
 
-const applyOptimizerResult = vi.fn();
-const optimize = vi.fn(async () => ({ goal: 'max-end-balance' }));
+const runOptimizer = vi.fn(async () => ({ kind: 'applied' }));
 vi.mock('../store/usePlanStore', () => ({
-  usePlanStore: (selector: (s: object) => unknown) => selector({ plan: mockPlan(), applyOptimizerResult }),
+  usePlanStore: (selector: (s: object) => unknown) => selector({ plan: mockPlan() }),
 }));
 vi.mock('../store/useOptimizerStore', () => ({
-  useOptimizerStore: (selector: (s: object) => unknown) => selector({
-    pendingPlan: mockPendingPlan(), setResult: vi.fn(), setPendingPlan: vi.fn(), setPendingGoal: vi.fn(),
-    setRobustnessPlan: vi.fn(), setRobustnessComparison: vi.fn(),
-  }),
+  useOptimizerStore: (selector: (s: object) => unknown) => selector({ pendingPlan: mockPendingPlan() }),
 }));
-vi.mock('../engine/workerClient', () => ({ getEngineWorker: () => ({ optimize }) }));
-vi.mock('../engine/applyOptimizerResult', () => ({ applyResultToPlan: (p: Plan) => ({ ...p, applied: true }) }));
-vi.mock('comlink', () => ({ proxy: (f: unknown) => f }));
+vi.mock('../store/strategyActions', () => ({ runOptimizer }));
 
 // Import after mocks are set up
 const { default: StalePlanBanner } = await import('./StalePlanBanner');
@@ -75,8 +69,7 @@ describe('StalePlanBanner', () => {
     expect(screen.getByText(/inputs changed after the optimizer ran/i)).toBeTruthy();
     expect(screen.queryByText(/Back to Inputs/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Re-optimize/ }));
-    await waitFor(() => expect(applyOptimizerResult).toHaveBeenCalled());
-    expect(optimize).toHaveBeenCalledWith(expect.anything(), 'max-end-balance', expect.anything(), expect.anything());
+    await waitFor(() => expect(runOptimizer).toHaveBeenCalledWith(expect.objectContaining({ goal: 'max-end-balance' })));
   });
 
   it('renders nothing when pending even if stale key', () => {

@@ -1,17 +1,14 @@
 import { useState } from 'react';
 import { usePlanStore } from '../store/usePlanStore';
-import { useToastStore } from '../store/useToastStore';
 import { LegacyTargetInput } from './inputs/LegacyTargetInput';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import { STRATEGIES } from '../engine/strategyPresets';
 import { USER_GOALS, type UserGoal } from '../engine/recommender';
-import type { ConversionParams } from '../schemas/plan';
-import { applyResultToPlan } from '../engine/applyOptimizerResult';
-import { getEngineWorker } from '../engine/workerClient';
+import type { ConversionParams, Plan } from '../schemas/plan';
+import { runOptimizer } from '../store/strategyActions';
 import StrategyCustomizeSheet from './strategy/StrategyCustomizeSheet';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE } from '../engine/taxConstants';
 import { policyStatus } from '../engine/policyStatus';
-import { useApplyOptimizerPlan } from '../hooks/useApplyOptimizerPlan';
 import { GOAL_LABELS as GOAL_SHORT_LABELS } from '../engine/goalLabels';
 
 type ConvMode = ConversionParams['mode'];
@@ -67,13 +64,9 @@ export default function StrategyChooser() {
   const clearCustomPolicy = usePlanStore((s) => s.clearCustomPolicy);
   const setConversion = usePlanStore((s) => s.setConversion);
   const setPayTaxFromBrokerage = usePlanStore((s) => s.setPayTaxFromBrokerage);
-  const setOptimizerResult = useOptimizerStore((s) => s.setResult);
-  const setRobustnessPlan = useOptimizerStore((s) => s.setRobustnessPlan);
-  const setRobustnessComparison = useOptimizerStore((s) => s.setRobustnessComparison);
   const setPendingPlan = useOptimizerStore((s) => s.setPendingPlan);
   const setPendingGoal = useOptimizerStore((s) => s.setPendingGoal);
   const pendingPlan = useOptimizerStore((s) => s.pendingPlan);
-  const applyOptimizerPlan = useApplyOptimizerPlan();
 
   const [sheetMode, setSheetMode] = useState<null | 'blend' | 'conversion' | 'chart'>(null);
   const [sheetConvOverride, setSheetConvOverride] = useState<Partial<ConversionParams> | null>(null);
@@ -143,39 +136,20 @@ export default function StrategyChooser() {
 
   const runReOptimize = async () => {
     setOptimizing(true);
-    setRobustnessPlan(null);
-    setRobustnessComparison(null);
     try {
-      const worker = getEngineWorker();
-      // Plan store is always the clean baseline — no base* restoration needed.
-      let planForOptimize = plan;
-      // Bake pending conv selection into the plan before sending to optimizer.
-      if (pendingConv) planForOptimize = { ...planForOptimize, conversion: { ...planForOptimize.conversion, ...pendingConv } };
-      if (pendingPayTaxFromBrok !== null) planForOptimize = { ...planForOptimize, payTaxFromBrokerage: pendingPayTaxFromBrok };
+      // Staged selections ride along as a patch and are saved with the result.
+      const patch: Partial<Plan> = {
+        ...(pendingConv ? { conversion: { ...plan.conversion, ...pendingConv } } : {}),
+        ...(pendingPayTaxFromBrok !== null ? { payTaxFromBrokerage: pendingPayTaxFromBrok } : {}),
+      };
       const goalToUse = (selectedGoal ?? activeGoal ?? 'max-end-balance') as UserGoal;
-      const r = await worker.optimize(planForOptimize, goalToUse, { useNelderMead: true, thorough: true });
-      if (r.conversionsDisabled) {
-        useToastStore.getState().show('info', 'Conversions turned off — the optimizer found a higher balance without Roth conversions. Re-run any time to re-evaluate.');
-      }
-      const appliedPlan = applyResultToPlan(planForOptimize, r);
+      await runOptimizer({ plan, goal: goalToUse, patch });
       setTabFreshEntry('none');
-      setOptimizerResult(r);
-      // Commit pending selections to the plan store — they're user preferences, not optimizer outputs.
+      // Commit staged selections to the plan store: they're user preferences, not optimizer outputs.
       if (pendingConv) { setConversion(pendingConv); setPendingConv(null); }
       if (pendingPayTaxFromBrok !== null) { setPayTaxFromBrokerage(pendingPayTaxFromBrok); setPendingPayTaxFromBrok(null); }
-      const c = planForOptimize.conversion;
+      const c = { ...plan.conversion, ...pendingConv };
       setConvSnapshot({ optimize: c.optimize, mode: c.mode, bracketCeiling: c.bracketCeiling, autoAmount: c.autoAmount, startAge: c.startAge, endAge: c.endAge });
-      // Only show the pending banner when the optimizer mutates input-visible fields.
-      // max-end-balance: only updates customPolicy/optimizedForGoal — safe to auto-apply, no circularity.
-      // max-sustainable-spending / min-retirement-age: scales expenses or changes retirementAge —
-      // user must explicitly Apply so those mutations don't silently corrupt the baseline for other goals.
-      const mutatesInputs = goalToUse === 'max-sustainable-spending' || goalToUse === 'min-retirement-age';
-      if (mutatesInputs) {
-        setPendingPlan(appliedPlan);
-        setPendingGoal(goalToUse);
-      } else {
-        applyOptimizerPlan(appliedPlan);
-      }
     } catch (err) {
       console.error('[StrategyChooser] Re-optimize failed:', err);
     } finally {

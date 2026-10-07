@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import * as Comlink from 'comlink';
 import { usePlanStore } from '../store/usePlanStore';
 import { useOptimizerStore } from '../store/useOptimizerStore';
+import { runOptimizer } from '../store/strategyActions';
 import { policyStatus } from '../engine/policyStatus';
-import { getEngineWorker } from '../engine/workerClient';
-import { applyResultToPlan } from '../engine/applyOptimizerResult';
 import type { UserGoal } from '../engine/recommender';
 
 /**
@@ -13,13 +11,7 @@ import type { UserGoal } from '../engine/recommender';
  */
 export default function StalePlanBanner() {
   const plan = usePlanStore((s) => s.plan);
-  const applyOptimizerResult = usePlanStore((s) => s.applyOptimizerResult);
   const pendingPlan = useOptimizerStore((s) => s.pendingPlan);
-  const setOptimizerResult = useOptimizerStore((s) => s.setResult);
-  const setPendingPlan = useOptimizerStore((s) => s.setPendingPlan);
-  const setPendingGoal = useOptimizerStore((s) => s.setPendingGoal);
-  const setRobustnessPlan = useOptimizerStore((s) => s.setRobustnessPlan);
-  const setRobustnessComparison = useOptimizerStore((s) => s.setRobustnessComparison);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,19 +21,8 @@ export default function StalePlanBanner() {
   const reoptimize = async () => {
     setProgress(0);
     setError(null);
-    setRobustnessPlan(null);
-    setRobustnessComparison(null);
     try {
-      const onProgress = Comlink.proxy((frac: number) => setProgress(frac));
-      const result = await getEngineWorker().optimize(plan, goal, { useNelderMead: true, thorough: true }, onProgress);
-      const appliedPlan = applyResultToPlan(plan, result);
-      setOptimizerResult(result);
-      if (goal === 'max-sustainable-spending' || goal === 'min-retirement-age') {
-        setPendingPlan(appliedPlan);
-        setPendingGoal(goal);
-      } else {
-        applyOptimizerResult(appliedPlan);
-      }
+      await runOptimizer({ plan, goal, onProgress: (frac) => setProgress(frac) });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
