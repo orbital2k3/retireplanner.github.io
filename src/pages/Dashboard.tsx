@@ -24,7 +24,6 @@ import { GOAL_LABELS } from '../engine/goalLabels';
 import { useOptimizerApplied } from '../hooks/useOptimizerApplied';
 import { runOptimizer, commitOptimizerPlan, discardPending, optimizerPatchFromFlat } from '../store/strategyActions';
 import { enginePlan } from '../engine/strategy/savedPlan';
-import StalePlanBanner from '../components/StalePlanBanner';
 
 export default function Dashboard() {
   const plan = usePlanStore((s) => s.plan);
@@ -134,7 +133,6 @@ export default function Dashboard() {
 
   return (
     <div className="page">
-      <StalePlanBanner />
       <div className="page-body">
 
         {/* ── Pending optimizer result banner ── */}

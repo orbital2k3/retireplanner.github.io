@@ -94,7 +94,7 @@ const cmd: fc.Arbitrary<Cmd> = fc.oneof(
 );
 
 /** Independent record of the current saved result: the key it was built for and its projection. */
-interface Model { resultKey: string | null; resultEnd: number | null }
+interface Model { resultKey: string | null; resultGoal: UserGoal | null; resultEnd: number | null }
 
 const saved = () => usePlanStore.getState().plan;
 const opt = () => useOptimizerStore.getState();
@@ -106,6 +106,7 @@ const resultEnd = (p: SavedPlan) => end(withActive(p, 'optimizer'));
 function recordSaved(m: Model) {
   const p = saved();
   m.resultKey = p.strategy.result ? savedOptimizerKey(p) : null;
+  m.resultGoal = p.strategy.result?.goal ?? null;
   m.resultEnd = p.strategy.result ? resultEnd(p) : null;
 }
 
@@ -206,8 +207,9 @@ async function step(m: Model, c: Cmd): Promise<void> {
   // The saved result changes only when one is committed or the plan is reset.
   if (after.strategy.result !== before.strategy.result && c.t !== 'ExportImport' && c.t !== 'Reload') recordSaved(m);
 
-  // I2: the result is fresh exactly when it was built for the current key.
-  const modelFresh = m.resultKey !== null && savedOptimizerKey(after) === m.resultKey;
+  // I2: the result is fresh exactly when it was built for the current key and goal.
+  const modelFresh = m.resultKey !== null && savedOptimizerKey(after) === m.resultKey
+    && m.resultGoal === after.strategy.optimizer.goal;
   expect(resultStatus(after) === 'fresh').toBe(modelFresh);
 
   // I3: while fresh, the optimizer tab projects what the result produced.
@@ -246,7 +248,7 @@ describe('§6.4 strategy state machine', () => {
         usePlanStore.setState({ plan: sampleSaved() });
         useOptimizerStore.setState({ pendingPlan: null, pendingGoal: null, robustnessPlan: null, robustnessComparison: null, result: null });
         useWhatIfStore.getState().reset();
-        const m: Model = { resultKey: null, resultEnd: null };
+        const m: Model = { resultKey: null, resultGoal: null, resultEnd: null };
         for (const c of cmds) await step(m, c);
       }),
       { numRuns: RUNS },

@@ -95,11 +95,11 @@ describe('Phase 2 slots: optimizer settings and the result', () => {
     expect(resultStatus(e)).toBe('fresh');
   });
 
-  it('a goal change offers Re-optimize without making the result stale', () => {
+  it('a goal change makes the result stale and offers Re-optimize', () => {
     const p = optimizedSaved();
     expect(canReOptimize(p)).toBe(false);
     const e = withOptimizer(p, { goal: 'min-retirement-age' });
-    expect(resultStatus(e)).toBe('fresh');
+    expect(resultStatus(e)).toBe('stale');
     expect(canReOptimize(e)).toBe(true);
   });
 

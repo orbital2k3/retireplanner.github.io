@@ -86,11 +86,14 @@ export function savedOptimizerKey(saved: SavedPlan): string {
 
 export type ResultStatus = 'none' | 'fresh' | 'stale';
 
-/** Whether the stored optimizer result matches the current facts and optimizer settings. */
+/** Whether the stored optimizer result matches the current facts, optimizer settings, and
+ *  selected goal. A goal switch makes the result stale even though the facts fingerprint
+ *  (inputKey) is unaffected, since the stored policy was optimized for the old goal. */
 export function resultStatus(saved: SavedPlan): ResultStatus {
   const r = saved.strategy.result;
   if (!r) return 'none';
-  return r.inputKey === savedOptimizerKey(saved) ? 'fresh' : 'stale';
+  if (r.inputKey !== savedOptimizerKey(saved)) return 'stale';
+  return r.goal === saved.strategy.optimizer.goal ? 'fresh' : 'stale';
 }
 
 /** Status of what the charts show: the manual slot, or the optimizer result. */
@@ -102,8 +105,7 @@ export function planStatus(saved: SavedPlan): PolicyStatus {
 
 /** Re-optimize is offered exactly when there is no current result for the selected goal. */
 export function canReOptimize(saved: SavedPlan): boolean {
-  const r = saved.strategy.result;
-  return resultStatus(saved) !== 'fresh' || r?.goal !== saved.strategy.optimizer.goal;
+  return resultStatus(saved) !== 'fresh';
 }
 
 /** Facts of a flat plan (strategy fields and the legacy target dropped). */

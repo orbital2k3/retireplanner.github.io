@@ -22,6 +22,8 @@ const withGoal = (p: SavedPlan, goal: SavedPlan['strategy']['optimizer']['goal']
 const goalBadge = (page: Page, label: string) => page.locator('.badge', { hasText: `✓ ${label}` });
 const pendingBanner = (page: Page) => page.getByText(/result ready/);
 const staleBanner = (page: Page) => page.getByText('Your plan changed after the optimizer ran.');
+// On the Dashboard, StrategyChooser's own inline message covers staleness; StalePlanBanner isn't rendered there.
+const dashboardStale = (page: Page) => page.getByText('Your plan changed. Re-optimize to update the strategy.');
 
 async function reoptimizeFor(page: Page, goal: string) {
   await page.getByRole('button', { name: goal, exact: true }).click();
@@ -132,7 +134,7 @@ test('editing an input after optimizing keeps the results pages open with an out
   await addIncomeStream(page, 60_000);
   await page.getByRole('link', { name: 'Dashboard' }).click();
 
-  await expect(staleBanner(page)).toBeVisible();
+  await expect(dashboardStale(page)).toBeVisible();
   await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Projections' }).click();
   await expect(staleBanner(page)).toBeVisible();
@@ -155,10 +157,10 @@ test('P5 editing the age window on the Dashboard stays on the page, keeps the ch
 
   await expect(page).toHaveURL(/#\/dashboard/);
   expect((await storedPlan(page)).strategy.optimizer.conversion.startAge).toBe(66);
-  await expect(staleBanner(page)).toBeVisible();
+  await expect(dashboardStale(page)).toBeVisible();
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(endBalance);
   await page.getByRole('button', { name: /^↗ Re-optimize/ }).click();
-  await expect(staleBanner(page)).toHaveCount(0, { timeout: OPTIMIZE_TIMEOUT });
+  await expect(dashboardStale(page)).toHaveCount(0, { timeout: OPTIMIZE_TIMEOUT });
 });
 
 test('P9 Set it myself changes the charts at once; switching back restores the optimizer result', async ({ page }) => {
@@ -178,7 +180,7 @@ test('P9 Set it myself changes the charts at once; switching back restores the o
   await page.getByRole('button', { name: /Optimize for me/ }).click();
   await expect(heroStat(page, 'Gross End Balance')).toHaveText(optimizedEnd);
   await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
-  await expect(staleBanner(page)).toHaveCount(0);
+  await expect(dashboardStale(page)).toHaveCount(0);
 });
 
 test('P11 an input change shows the banner on every results page; Re-optimize from one clears it everywhere', async ({ page }) => {
@@ -186,12 +188,12 @@ test('P11 an input change shows the banner on every results page; Re-optimize fr
   await addIncomeStream(page, 60_000);
   for (const name of ['Dashboard', 'Projections', 'Taxes', 'Monte Carlo']) {
     await page.getByRole('link', { name }).click();
-    await expect(staleBanner(page), name).toBeVisible();
+    await expect(name === 'Dashboard' ? dashboardStale(page) : staleBanner(page), name).toBeVisible();
   }
   await page.getByRole('button', { name: 'Re-optimize', exact: true }).click();
   await expect(staleBanner(page)).toHaveCount(0, { timeout: OPTIMIZE_TIMEOUT });
   await page.getByRole('link', { name: 'Dashboard' }).click();
-  await expect(staleBanner(page)).toHaveCount(0);
+  await expect(dashboardStale(page)).toHaveCount(0);
 });
 
 test('P12 a pending Max Spending result does not survive a reload', async ({ page }) => {
@@ -213,7 +215,7 @@ test('P16 importing a fresh export shows no out-of-date banner', async ({ page }
     name: 'plan.json', mimeType: 'application/json', buffer: Buffer.from(exportPlanToJSON(optimizedPlanA())),
   });
   await expect(goalBadge(page, 'Max End Balance')).toBeVisible();
-  await expect(staleBanner(page)).toHaveCount(0);
+  await expect(dashboardStale(page)).toHaveCount(0);
 });
 
 for (const [label, goal] of [['Max Spending', 'max-sustainable-spending'], ['Earliest Retire', 'min-retirement-age']] as const) {
@@ -233,7 +235,7 @@ for (const [label, goal] of [['Max Spending', 'max-sustainable-spending'], ['Ear
     await page.getByRole('button', { name: 'Apply to Plan' }).click();
     await expect(pendingBanner(page)).toHaveCount(0);
     await expect(goalBadge(page, label)).toBeVisible();
-    await expect(staleBanner(page)).toHaveCount(0);
+    await expect(dashboardStale(page)).toHaveCount(0);
     expect((await storedPlan(page)).strategy).toMatchObject({ active: 'optimizer', result: { goal } });
   });
 }
@@ -252,5 +254,5 @@ test('P18 Reset after a pending result leaves no result, no pending result and n
   await page.getByRole('link', { name: 'Dashboard' }).click();
   await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
   await expect(pendingBanner(page)).toHaveCount(0);
-  await expect(staleBanner(page)).toHaveCount(0);
+  await expect(dashboardStale(page)).toHaveCount(0);
 });
