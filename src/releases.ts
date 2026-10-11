@@ -16,26 +16,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
-    version: '2.2.3',
-    date: '2026-10-07',
-    summary: 'Optimizer now defaults to the simpler no-conversion plan when conversions do not provide a clear benefit.',
-    changes: [
-      {
-        kind: 'fix',
-        title: 'Roth conversions must earn their place',
-        text: 'The optimizer now recommends Roth conversions only when they improve your after-tax ending balance by at least 0.1% over doing no conversions. Before this change, near-ties defaulted to the conversion plan, leading to unnecessary early tax payments with little or no benefit. You can still choose any conversion strategy yourself under "Set it myself."',
-      },
-    ],
-  },
-  {
     version: '2.2.2',
     date: '2026-10-07',
-    summary: 'A refreshed approach to how your strategy settings, optimizer results and Re-optimize work together.',
+    summary: 'A refreshed approach to how your strategy settings, optimizer results and Re-optimize work together, plus a stricter bar for recommending Roth conversions.',
     changes: [
       {
         kind: 'fix',
         title: 'Refreshed approach to strategy and optimizer results',
-        text: 'Your strategy choices now save right away and behave the same on every page. "Set it myself" and "Optimize for me" each keep their own settings, so switching tabs never loses your optimized strategy. Re-optimize turns on whenever your plan changed since the last run. Older plan files import again.',
+        text: 'Your strategy choices now save right away and behave the same on every page. "Set it myself" and "Optimize for me" each keep their own settings, so switching tabs never loses your optimized strategy. Re-optimize turns on whenever your plan changed since the last run. Changing your goal now marks results as out of date, and the Dashboard no longer shows a duplicate out-of-date banner. Discard restores your previous goal. Older plan files import again.',
+      },
+      {
+        kind: 'fix',
+        title: 'Roth conversions must earn their place',
+        text: 'The optimizer now recommends Roth conversions only when they improve your after-tax ending balance by at least 0.1% over doing no conversions. Before this change, near-ties defaulted to the conversion plan, leading to unnecessary early tax payments with little or no benefit. The bracket-fill comparison now also tries the 12% and 22% brackets. You can still choose any conversion strategy yourself under "Set it myself."',
       },
     ],
   },
