@@ -2,7 +2,7 @@ import type { Plan, ConversionParams } from '../schemas/plan';
 import type { BlendPolicy, BlendWindow } from './blendPolicy';
 import { runProjection, type ProjectionResult } from './projection';
 import { householdPlanThroughAgeA } from './planInputKey';
-import { optimizerInput } from './strategy/optimizerInput';
+import { optimizerInput, optimizerOwnsConversions } from './strategy/optimizerInput';
 import { REC_GOALS, USER_GOALS, type RecGoal, type UserGoal } from './recommender';
 import { calendarYearAge } from '../lib/ageUtils';
 import { nelderMead2D, nelderMead3D } from './nelderMead';
@@ -1364,13 +1364,16 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
     // so the deterministic metric is the reference point for the adoption guard.
     const conversionBaseline = computeConversionBaseline(plan, opts, evalCounter, finalInner);
 
-    // Adoption guard: ship the no-conversion baseline unless conversions clearly beat it.
+    // Adoption guard: when the optimizer owns conversions, ship the no-conversion baseline unless
+    // they clearly beat it. A conversion mode the user chose (manual, bracket-fill, auto-window)
+    // is never overridden; the baseline then only feeds the benefit metric.
+    const guardConversions = optimizerOwnsConversions(plan.conversion);
     let shippedInner = finalInner;
     let conversionsDisabled: boolean | undefined;
     let conversionBaselinePolicy: BlendPolicy | undefined;
     const conversionBaselineMetric = conversionBaseline?.eval.score;
     if (conversionBaseline != null) {
-      if (!conversionsEarnTheirPlace(finalInner, conversionBaseline.eval)) {
+      if (guardConversions && !conversionsEarnTheirPlace(finalInner, conversionBaseline.eval)) {
         shippedInner = conversionBaseline.eval;
         conversionsDisabled = true;
         // conversionBaselinePolicy stays undefined: benefit is definitionally 0 when adopted.
@@ -1454,7 +1457,7 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
 
       // The rewrite is value-neutral to within rounding, but the adoption guard above ran on the
       // pre-rewrite score. Re-check so rounding drift can never ship conversions below the bar.
-      if (conversionBaseline != null) {
+      if (guardConversions && conversionBaseline != null) {
         if (!conversionsEarnTheirPlace(shippedInner, conversionBaseline.eval)) {
           shippedInner = conversionBaseline.eval;
           conversionsDisabled = true;

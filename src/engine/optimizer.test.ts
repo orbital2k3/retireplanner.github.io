@@ -157,7 +157,8 @@ describe('Optimizer ↔ Projection coordination', () => {
     // Asserted on the applied plan too, since that is what the user actually sees.
     for (const [label, mk] of [
       ['samplePlan', () => { const p = defaultPlan(); p.conversion.mode = 'off'; return p; }],
-      ['planG', planG_californiaCouple],
+      // planG is excluded: its fixed bracket-fill mode ships as the user chose it, and the collapse
+      // only rewrites optimizer-authored convAmt, not mode-driven conversions.
       ['planP', planP_tightPlan],
     ] as const) {
       const plan = mk();
@@ -174,11 +175,11 @@ describe('Optimizer ↔ Projection coordination', () => {
   it('conversions ship only when they beat the no-conversion baseline by CONVERSION_MIN_GAIN', () => {
     // Durable invariant: near-ties go to the simpler no-conversion plan. If this fires, a new code
     // path bypasses the adoption guard. Does NOT pin absolute dollar figures.
+    // Optimizer-owned conversions only: a user-chosen mode is never judged by the guard.
     const goldenPlans = [
       defaultPlan(),
-      planG_californiaCouple(),
       planP_tightPlan(),
-    ];
+    ].filter((p) => p.conversion.optimize ?? true);
     for (const plan of goldenPlans) {
       const r = optimizeCached(plan, 'max-end-balance', { thorough: false });
       if (r.conversionBaselineMetric !== undefined && !r.conversionsDisabled && !r.projection.ranOut) {
@@ -191,16 +192,21 @@ describe('Optimizer ↔ Projection coordination', () => {
     }
   }, 300_000);
 
-  it('planG (bracket-fill optimize:false): conversionsDisabled=true and lifetimeConversion<1000 after fix', () => {
-    // Before Part 1+2: plan G had 100% round-tripped conversions ($1.2M gross) and the optimizer
-    // shipped a result $64,885 worse than its own no-conversion baseline.
-    // After the fix: the adoption guard must fire and conversions must be disabled.
+  it('planG (bracket-fill optimize:false): the user-chosen mode is never overridden by the adoption guard', () => {
+    // The guard only judges conversions the optimizer itself searched. A mode the user picked
+    // (bracket-fill here) ships as chosen; the baseline only feeds the benefit metric.
     const plan = planG_californiaCouple();
     const r = optimizeCached(plan, 'max-end-balance', { thorough: false });
-    expect(r.conversionsDisabled, 'adoption guard must fire for planG').toBe(true);
-    expect(r.projection.lifetimeConversion, 'no conversions should survive after adoption').toBeLessThan(1000);
-    // Don't pin the absolute metric: any improvement above the old $6,134,672 is acceptable.
-    expect(r.metric, 'planG metric should improve above the old result').toBeGreaterThan(6_000_000);
+    expect(r.conversionsDisabled, 'fixed mode must not be disabled').toBeFalsy();
+    expect(r.projection.lifetimeConversion, 'mode-driven conversions must survive').toBeGreaterThan(1000);
+  }, 180_000);
+
+  it('manual conversion schedule (optimize:false) survives the optimizer', () => {
+    const plan = planG_californiaCouple();
+    plan.conversion = { ...plan.conversion, mode: 'manual', manualSchedule: { '66': 40000, '67': 40000 }, optimize: false };
+    const r = optimizeCached(plan, 'max-end-balance', { thorough: false });
+    expect(r.conversionsDisabled, 'manual schedule must not be disabled').toBeFalsy();
+    expect(r.projection.lifetimeConversion).toBeGreaterThan(1000);
   }, 180_000);
 });
 
@@ -345,11 +351,10 @@ describe('conversion.optimize gate', () => {
     expect(r.projection.lifetimeConversion).toBe(0);
   }, 60_000);
 
-  it('optimizeConversions=false, mode=bracket-fill → conversions follow the mode unless adoption fires', () => {
+  it('optimizeConversions=false, mode=bracket-fill → conversions follow the mode', () => {
     // When optimize=false, the optimizer must NOT set explicit convAmt on any window
     // (doing so would override bracket-fill and break the user's Pick-tab intent).
-    // Conversions come from the mode; if the adoption guard finds no-conv is better, it ships
-    // the baseline (conversionsDisabled=true) and r.projection has zero conversions — correct.
+    // Conversions come from the mode and are never disabled by the adoption guard.
     const plan = defaultPlan();
     plan.conversion.mode = 'bracket-fill';
     plan.conversion.optimize = false;
@@ -357,10 +362,8 @@ describe('conversion.optimize gate', () => {
     for (const w of r.perYearPolicy.windows) {
       expect(w.convAmt, `window ${w.fromAge}-${w.toAge} convAmt must be undefined`).toBeUndefined();
     }
-    if (!r.conversionsDisabled) {
-      // Adoption did not fire: mode-driven conversions survived.
-      expect(r.projection.lifetimeConversion).toBeGreaterThan(0);
-    }
+    expect(r.conversionsDisabled).toBeFalsy();
+    expect(r.projection.lifetimeConversion).toBeGreaterThan(0);
     // Withdrawals still optimized: end balance beats the all-taxable, mode-driven baseline.
     const baseline = runProjection(plan); // no policy → all-taxable withdrawals + same mode conversions
     expect(r.projection.endTotalReal).toBeGreaterThanOrEqual(baseline.endTotalReal - 1);

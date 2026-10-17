@@ -16,6 +16,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.2.3',
+    date: '2026-10-17',
+    summary: 'Roth conversion strategies you choose are no longer switched off when you re-optimize.',
+    changes: [
+      {
+        kind: 'fix',
+        title: 'Chosen Roth conversion strategy is kept on Re-optimize',
+        text: 'Re-optimizing no longer resets your Roth conversions to "None" when you picked a manual schedule, bracket-fill or auto-window under "Optimize for me". The optimizer still tunes your withdrawals around the conversions you chose. The "must beat no conversions by 0.1%" check now applies only when you let the optimizer decide conversions.',
+      },
+    ],
+  },
+  {
     version: '2.2.2',
     date: '2026-10-07',
     summary: 'A refreshed approach to how your strategy settings, optimizer results and Re-optimize work together, plus a stricter bar for recommending Roth conversions.',
