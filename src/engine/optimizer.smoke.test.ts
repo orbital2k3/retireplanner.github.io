@@ -3,6 +3,7 @@ import { runProjection } from './projection';
 import { samplePlan as defaultPlan } from '../schemas/plan';
 import type { Plan } from '../schemas/plan';
 import { optimizeCached } from './__testutil__/optimizeCached';
+import { planP_tightPlan } from './__golden/plans';
 
 // Calls go through optimizeCached: the thorough test reuses the max-end-balance run above.
 // Related smoke tests live elsewhere so they share cached runs or run in parallel: samplePlan
@@ -56,7 +57,8 @@ describe('optimizeStrategy (smoke)', () => {
   }, 120_000);
 
   it('thorough mode is at least as good as non-thorough on the same plan', () => {
-    const plan = defaultPlan();
+    // Cheap fixture: samplePlan took ~106s of the 120s limit and timed out on CI.
+    const plan = planP_tightPlan();
     const fast = optimizeCached(plan, 'max-end-balance', { useNelderMead: false, thorough: false });
     const thorough = optimizeCached(plan, 'max-end-balance', { useNelderMead: false, thorough: true });
     // Thorough produces a result in the same ballpark as fast. Allow ≤1% gap: both modes run

@@ -435,7 +435,8 @@ describe('Tax-adjusted balance objective', () => {
   });
 
   it('optimizer with zero rates reports same metric as gross endTotalReal', () => {
-    const plan = defaultPlan();
+    // Cheap fixture: the property doesn't depend on the plan, and samplePlan is ~27-50s here.
+    const plan = planP_tightPlan();
     plan.assumptions.taxAdjOrdRate = 0;
     plan.assumptions.taxAdjLtcgRate = 0;
     const r = optimizeCached(plan, 'max-end-balance', { thorough: false });
