@@ -30,7 +30,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 20 | ◐ |
+| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 21 | ☑ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
@@ -64,8 +64,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | QU-4 | [M4-C] QCD warnings | ☑ | 2026-10-17 | 69d2bd8 | Two warnings in planWarnings.ts: qcd-no-ira (warn: every owner who would pay the gifts has no IRA and none building) and qcd-optout (new 'info' severity for qcd:false rows, with .plan-warning.info style and an ⓘ icon in the strip). 6 tests. Copy deviates from the mockup to stay accurate: the age isn't quoted ('Charitable giving "X" can't be paid as QCDs because Y's IRA is empty…') since giving can start years before 70½. Not browser-checked (strip markup unchanged apart from the icon). |
 | QU-5 | QCD explain notes + insight rule | ☑ | 2026-10-17 | 4172d5e | yearDecisions: rmdAmt renamed rmdTaxable (+ optional rmdGross/qcd/qcdBeyondRmd) and a non-binding 'qcd-rmd' note; headroom display already uses stdDEff (Q-3). bracketCliff and optimizerRationale now read the taxable (cash) RMD via rmdCashOf. New rule qcd.ts ('QCDs cut your required-withdrawal tax', taxes+strategy): only fires when QCDs satisfy RMD dollars; copy says 'fewer Roth conversions are usually needed overall', never 'before 70½' (Q-8 finding). 10 new tests. |
 | QU-6 | QCD docs, Learn More, release notes | ☑ | 2026-10-17 | 39ab128 | HowToGuide Expenses: Category table + deduction tip. learnMoreTopics: QCD_HELP, opened from an 'ⓘ Learn more' link in the Taxes card. releases.ts: 2.3.0 entry (package.json version bump deferred to Q-REL). The guide says Medical is a tag with no effect yet. RELEASE_NOTES.md is stale (stops at 2.0.2) and was left alone. Modal verified in browser. |
-| QU-7 | QCD E2E + v35 freshness | ☑ | 2026-10-17 | (hash backfilled in Q-REL) | 3 e2e tests (QCD column + Taxes card, QCD checkbox saved, v35 plan with a result opens with no stale banner and unchanged numbers); seedPlan gained a version arg and qcdGiver fixture. Includes the v36 store bump and planMigrationV36.test.ts (41 tests on 18 plans captured on the v35 code at 869e998 via a worktree: key, status and projection bit-identical), so the freshness check is real, not self-referential. |
-| Q-REL | v36 migration + release gate + PR merge | ☐ | | | |
+| QU-7 | QCD E2E + v35 freshness | ☑ | 2026-10-17 | 2eb2d33 | 3 e2e tests (QCD column + Taxes card, QCD checkbox saved, v35 plan with a result opens with no stale banner and unchanged numbers); seedPlan gained a version arg and qcdGiver fixture. Includes the v36 store bump and planMigrationV36.test.ts (41 tests on 18 plans captured on the v35 code at 869e998 via a worktree: key, status and projection bit-identical), so the freshness check is real, not self-referential. |
+| Q-REL | v36 migration + release gate + PR merge | ☑ | 2026-10-17 | (local main; hash is the commit that adds this row) | 2.3.0 / store v36, no-op migration. Gate: cold tsc and eslint clean; test:fast 698 pass; test:opt 72 pass (10 files, 3:41 wall); e2e 18/18; golden CSVs: only planQ_qcdGiver added vs 869e998; bit-exact + optimizer snapshots unchanged; legacy exports import with identical status, key and numbers (new v35-legacy-imports.json). Optimizer timing: first re-time read ~11% over the P0-3 baseline on samplePlan, but a same-session A/B against the Phase 0 end (cdfa26e) shows no slowdown (26.7s vs 25.5s mean, machine noise ~10%). Not done: PR/merge (work is on local main, nothing pushed, so nothing deployed); side-by-side mockup pass was done piece by piece in the browser while building, not as a final pass; legacy-export UI import is covered by exact unit tests, not a browser run. |
 | H-1 | HSA schema (+ `hsaReturn` registry) | ☐ | | | |
 | H-2 | `hsa.ts` limits, eligibility + tests | ☐ | | | |
 | H-3 | HSA projection core | ☐ | | | |
@@ -262,7 +262,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - new insight rule in `explain/rules/` ("QCDs cut future RMD tax, so fewer conversions are needed overall"; Q-8 found pre-70½ conversions are not lower, so don't claim that)
 - [x] **QU-6** Docs: HowToGuide Expenses (~L453), a `learnMoreTopics.ts` QCD topic, and the `releases.ts` 2.3.0 entry.
 - [x] **QU-7** E2E (`e2e/smoke.spec.ts`): a seeded 72-year-old with charity sees a non-zero QCD column and the Taxes card. Seed a v35 plan with a result: no stale banner.
-- [ ] **Q-REL** No-op migration v36 plus `planMigrationV36.test.ts` (upgrade freshness). Run the **release gate**.
+- [x] **Q-REL** No-op migration v36 plus `planMigrationV36.test.ts` (upgrade freshness). Run the **release gate**.
 
 ## Phase 2: HSA → 2.4.0 / store v37 / branch `feat/hsa`
 ### 2A Schema and core engine (2 sessions)
@@ -459,6 +459,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | QU-5 | Explain layer: QCD year note, taxable-RMD readers, new insight rule. |
 | 2026-10-17 | QU-6 | QCD docs, Learn More topic and the 2.3.0 release entry written. |
 | 2026-10-17 | QU-7 | E2E added and passing; store bumped to v36 (no-op migration) with a captured-baseline freshness test. Release gate next. |
+| 2026-10-17 | Q-REL / Gate | v2.3.0 gate run: see Q-REL Notes. Phase 1 (Foundation + QCD) complete on local `main`; not pushed. |
 
 ---
 

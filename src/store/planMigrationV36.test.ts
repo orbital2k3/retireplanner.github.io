@@ -22,6 +22,10 @@ interface Baseline {
 }
 const baselines = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures__/exports/v35-baselines.json'), 'utf8')) as Baseline[];
 
+/** The three legacy export files, imported by the v35 code (869e998): status, key and headline numbers. */
+interface LegacyBaseline { n: string; status: string; key: string; endTotalReal: number; lifetimeFedTax: number; lifetimeConversion: number }
+const legacy = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures__/exports/v35-legacy-imports.json'), 'utf8')) as LegacyBaseline[];
+
 const migrateStore = (plan: unknown, from: number) =>
   (usePlanStore.persist.getOptions().migrate!({ plan, scenarios: [] }, from) as { plan: SavedPlan }).plan;
 
@@ -71,6 +75,21 @@ describe('v35 → v36 on captured plans', () => {
       }
     }
   });
+});
+
+describe('legacy export files import exactly as they did on v35', () => {
+  for (const b of legacy) {
+    it(`${b.n}.json: same status, optimizer key and headline numbers`, () => {
+      const r = importPlanFromJSON(readFileSync(join(__dirname, `../engine/__fixtures__/exports/${b.n}.json`), 'utf8'));
+      expect(r.ok).toBe(true);
+      expect(planStatus(r.plan!)).toBe(b.status);
+      expect(savedOptimizerKey(r.plan!)).toBe(b.key);
+      const proj = runProjection(enginePlan(r.plan!));
+      expect(proj.endTotalReal).toBe(b.endTotalReal);
+      expect(proj.lifetimeFedTax).toBe(b.lifetimeFedTax);
+      expect(proj.lifetimeConversion).toBe(b.lifetimeConversion);
+    });
+  }
 });
 
 describe('plans written by v36', () => {
