@@ -23,6 +23,7 @@ const OPT_FILES = [
   'src/engine/strategy/savedRoundTrip.test.ts',
   'src/engine/__regression__/optimizerSnapshot.test.ts',
   'src/engine/qcd.optimizer.test.ts',
+  'src/engine/hsa.optimizer.test.ts',
 ];
 
 const HEAVY_EXCLUDE = HEAVY ? [] : ['src/engine/__study__/**'];
