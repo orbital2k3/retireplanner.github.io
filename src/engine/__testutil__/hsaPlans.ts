@@ -62,3 +62,33 @@ export function hsaOnlyPlan(receipts = 0, medical = 10_000): Plan {
     medicalRow({ id: 'med', startAge: 55, annualAmount: medical, inflationPct: { mode: 'fixed', rate: 0.025 } }),
   ]);
 }
+
+/** A single early retiree on an ACA plan: Roth funds spending (so draws add no taxable income), a pension
+ *  sets the ACA income, and an HSA contribution in retirement is the only lever. `pension` tunes MAGI. */
+export function acaRetireePlan(opts: { state?: Plan['state']; pension?: number; contribute?: boolean } = {}): Plan {
+  const p = planA_simple();
+  const zero = { taxable: 0, taxableBasis: 0, traditional: 0, annualContribution: 0 };
+  return {
+    ...p,
+    state: opts.state ?? 'IL',
+    personA: { ...p.personA, dob: '1971-01-01', retirementAge: 55, planThroughAge: 90, ssPIA: 30_000, ssClaimAge: 67 },
+    personB: undefined,
+    assumptions: { ...p.assumptions, modelACA: true, acaHouseholdSize: 1, acaBenchmarkPremium: 9_000, acaNoSubsidy: false },
+    portfolio: {
+      personA: {
+        ...p.portfolio.personA, ...zero, roth: 900_000,
+        hsa: 60_000, hsaContribution: 4_400, hsaCoverage: 'self', hsaContribInRetirement: opts.contribute ?? true,
+      },
+    },
+    incomeStreams: [
+      { id: 'pension', description: 'Pension', whose: 'A', type: 'Pension', startAge: 55, end: { mode: 'life' }, survivorPct: 0,
+        annualAmount: opts.pension ?? 32_000, growthPct: { mode: 'fixed', rate: 0.025 }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core', whose: 'A', startAge: 55, end: { mode: 'life' }, survivorPct: 1, annualAmount: 48_000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+    ],
+    withdrawalStrategy: 'rothfirst',
+    conversion: { ...p.conversion, mode: 'off', optimize: false },
+    lumpSumEvents: [],
+  } as Plan;
+}

@@ -108,6 +108,15 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
     out.push(`HSA penalty charged when every owner is 65+: ${hsaPenalty}`);
   }
 
+  // 2c. A retiree's contribution is part of the total, only before Medicare, and never negative.
+  const hsaRet = r.hsaContribRet ?? 0;
+  if (hsaRet < -tol || hsaRet > hsaIn + tol) {
+    out.push(`HSA retiree contribution out of range: ret=${hsaRet}, total=${hsaIn}`);
+  }
+  if (hsaRet > tol && r.ageA >= 65 && (r.ageB === undefined || r.ageB >= 65)) {
+    out.push(`HSA retiree contribution after Medicare: ${hsaRet} at ageA=${r.ageA}`);
+  }
+
   // 3. endTotal consistency
   const expectedEndTotal = r.endTaxable + r.endTraditional + r.endRoth + hsaEnd;
   if (Math.abs(r.endTotal - expectedEndTotal) > tol) {
@@ -147,7 +156,8 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   //    check still holds. Allow 5% slack for gross-up convergence drift.
   if (semiRetired && r.endTotal > 1 && !opts.skipSpendingCoverage) {
     const cashIn = r.wdTax + r.wdTrd + r.wdRth + r.totalSS + r.otherIncome + (r.distributedCash ?? 0) + r.rmd + (r.qcdBeyondRmd ?? 0) + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0) + hsaDraws;
-    const cashOut = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa + hsaPenalty;
+    // A retiree's HSA contribution is paid from the portfolio like spending.
+    const cashOut = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa + hsaPenalty + (r.hsaContribRet ?? 0);
     // 5% slack: pathological first-retirement-year scenarios (high marginal-bracket
     // crossings combined with low starting balance) can have gross-up convergence
     // drift up to a few percent of cashOut. A missing tax category (e.g., forgetting
