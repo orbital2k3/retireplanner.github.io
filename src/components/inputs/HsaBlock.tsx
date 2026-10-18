@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import LearnMoreModal from '../LearnMoreModal';
+import { HSA_HELP } from '../learnMoreTopics';
 import type { PersonPortfolio } from '../../schemas/plan';
 import { NumberInput } from './NumberInput';
 import { fmtFull } from '../../lib/format';
@@ -20,6 +22,7 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
   sharedWith?: string;
 }) {
   const [open, setOpen] = useState((data.hsa ?? 0) > 0 || (data.hsaContribution ?? 0) > 0);
+  const [helpOpen, setHelpOpen] = useState(false);
   const coverage = data.hsaCoverage ?? 'self';
   const max = hsaLimit(coverage, age ?? 0, 1);
   const contribution = data.hsaContribution ?? 0;
@@ -80,6 +83,15 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
             </div>
             <div className="helper-text">Past medical bills you paid out of pocket and can still claim tax-free</div>
           </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+            >
+              ⓘ Learn more about HSAs
+            </button>
+          </div>
           {retirementAge < HSA_MEDICARE_AGE && (
             <label style={{ gridColumn: 'span 2', display: 'flex', gap: 6, alignItems: 'flex-start', paddingTop: 14, cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)' }}>
               <input
@@ -93,6 +105,7 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
           )}
         </div>
       )}
+      {helpOpen && <LearnMoreModal topic={HSA_HELP} onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

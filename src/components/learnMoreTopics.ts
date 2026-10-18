@@ -155,3 +155,51 @@ export const QCD_HELP: HelpTopic = {
     },
   ],
 };
+
+export const HSA_HELP: HelpTopic = {
+  eyebrow: 'Learn more',
+  title: 'Your health savings account (HSA)',
+  sections: [
+    {
+      heading: 'Why an HSA is special',
+      paras: [
+        'Money goes in untaxed, grows untaxed, and comes out untaxed when it pays for qualified medical costs. No other account does all three.',
+        'There is no required withdrawal, and you can reimburse yourself years later for a medical bill you paid out of pocket. That is why many people let the HSA grow and pay bills from other accounts first.',
+      ],
+    },
+    {
+      heading: 'What you can put in',
+      paras: [
+        'In 2026 the limit is $4,400 for self-only coverage and $8,750 for family coverage. The base limit rises with inflation. If you are 55 or older you can add $1,000, and that catch-up does not rise with inflation. Spouses on family coverage share one family limit, and each has their own catch-up.',
+        'You need an HSA-eligible health plan, and you cannot be on Medicare. The tool stops contributions at 65, or when you claim Social Security if that is later, because claiming enrolls you in Medicare Part A.',
+        'You do not need a job to contribute. From 2026, bronze and catastrophic marketplace plans count as HSA-eligible, so an early retiree on one can keep contributing. Tick the box in the HSA section to model that.',
+      ],
+    },
+    {
+      heading: 'How the tool pays bills from it',
+      paras: [
+        'Mark expense rows as Medical. From the age you pick (65 by default, or Always), the HSA pays those bills first, before your other accounts, plus any Medicare income surcharge (IRMAA). None of that is income.',
+        'Before that age, medical bills are paid from your other accounts and logged as receipts. Receipts are what you can still claim tax-free later. The tool reimburses them only as a last resort, when your other accounts have run out.',
+      ],
+    },
+    {
+      heading: 'What it does for your ACA subsidy',
+      paras: [
+        'If you retire before 65 and keep contributing, the contribution is deducted from your income. That lowers the income used for your marketplace subsidy, so the subsidy goes up. The Taxes page shows the effect. Be careful near the bottom of the range: under 100% of the poverty level there is no subsidy at all, and the plan warns you if a contribution pushes you there.',
+      ],
+    },
+    {
+      heading: 'If your other money runs out',
+      paras: [
+        'As a last resort the HSA can pay for anything. Money used for something other than medical costs is taxed as ordinary income, and before 65 there is also a 20% penalty. The plan shows a warning when that happens.',
+      ],
+    },
+    {
+      heading: 'What it leaves out',
+      paras: [
+        'California and New Jersey do not follow the federal HSA rules and tax the growth each year. The tool does not model that and shows a note for California plans. It also does not model your regular Medicare premiums, long-term-care premiums paid from the HSA, or the optimizer choosing how much to put in the HSA.',
+        'At the end of the plan, an HSA above your receipts is counted at the same tax rate as pre-tax money, because a non-spouse heir owes ordinary tax on it. A spouse can keep it as their own HSA.',
+      ],
+    },
+  ],
+};

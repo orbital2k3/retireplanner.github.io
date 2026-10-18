@@ -13,7 +13,7 @@ import { compareWithWithoutQCD, qcdBenefitCopy } from '../engine/qcdBenefit';
 import { computeHsaBenefit, hsaBenefitCopy } from '../engine/hsaBenefit';
 import { fmtK } from '../lib/format';
 import LearnMoreModal from '../components/LearnMoreModal';
-import { QCD_HELP } from '../components/learnMoreTopics';
+import { QCD_HELP, HSA_HELP } from '../components/learnMoreTopics';
 
 type TaxTab = 'federal' | 'state' | 'irmaa';
 
@@ -33,6 +33,7 @@ export default function TaxPlanning() {
   })();
   const [tab, setTab] = useState<TaxTab>(initialTab);
   const [qcdHelpOpen, setQcdHelpOpen] = useState(false);
+  const [hsaHelpOpen, setHsaHelpOpen] = useState(false);
   // HSA card: what the HSA pays tax-free and (when a retiree keeps contributing) the ACA effect. Null without either.
   const hsaCopy = useMemo(() => {
     const b = computeHsaBenefit(plan);
@@ -97,9 +98,16 @@ export default function TaxPlanning() {
             <div className="insight-content">
               <div className="insight-title">{hsaCopy.title}</div>
               <div className="insight-body">{hsaCopy.body}</div>
+              <button
+                onClick={() => setHsaHelpOpen(true)}
+                style={{ background: 'transparent', border: 'none', padding: 0, marginTop: 6, cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+              >
+                ⓘ Learn more
+              </button>
             </div>
           </div>
         )}
+        {hsaHelpOpen && <LearnMoreModal topic={HSA_HELP} onClose={() => setHsaHelpOpen(false)} />}
         {qcdHelpOpen && <LearnMoreModal topic={QCD_HELP} onClose={() => setQcdHelpOpen(false)} />}
 
         {tab === 'federal' && (

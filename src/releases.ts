@@ -16,6 +16,25 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.4.0',
+    date: '2026-10-18',
+    summary: 'Add your health savings account. It pays medical bills and Medicare surcharges tax-free, keeps receipts, and can lower your ACA income when you retire early.',
+    changes: [
+      {
+        kind: 'feature',
+        title: 'Health savings account (HSA)',
+        text: 'Enter an HSA for each person in Portfolio: balance, yearly contribution, self or family coverage, and unreimbursed receipts. Mark expense rows as Medical and the HSA pays them tax-free, plus any Medicare income surcharge, from the age you choose (65 by default). Bills paid from other accounts before then are kept as receipts you can claim later. If your other accounts run out, the HSA is the last resort, with tax and a 20% penalty before 65 on anything that isn\u2019t medical.',
+        bullets: [
+          'Contributions follow the 2026 limits, with the $1,000 catch-up from 55, and stop at 65 (or at your Social Security claim age if later).',
+          'Retiring before 65? Tick "Keep contributing after I retire" to model an HSA-eligible ACA plan. The contribution is deducted from your income, which lowers ACA income and can raise your subsidy.',
+          'The HSA counts in your balances, charts, Monte Carlo runs and the after-tax ending value (the part above your receipts is taxed like pre-tax money).',
+          'The Projections table has an HSA column group, the Sankey shows HSA money going to medical bills, and the Taxes page shows what the HSA does for you.',
+          'New plan notes cover contributions over the limit, contributions after Medicare, spouses sharing one family limit, early non-medical draws, and California\u2019s different HSA rules.',
+        ],
+      },
+    ],
+  },
+  {
     version: '2.3.0',
     date: '2026-10-17',
     summary: 'Give to charity straight from your IRA. Tag spending as charitable and the plan pays it as qualified charitable distributions, with the tax effect shown.',

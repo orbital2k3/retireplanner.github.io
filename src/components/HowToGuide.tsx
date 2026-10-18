@@ -478,7 +478,7 @@ export function GuideContent() {
       </P>
       <FieldTable rows={[
         ["General", "Ordinary spending. Nothing special happens.", "Food, travel, housing"],
-        ["Medical", "A tag for medical spending. It does not change your results yet.", "Healthcare"],
+        ["Medical", "Medical spending. If you have an HSA, it pays these bills tax-free from the age you choose (65 by default) and keeps receipts for bills paid earlier. See Health savings account in Portfolio.", "Healthcare"],
         ["Charitable", "Giving. From age 70½ it is paid straight from your IRA as a qualified charitable distribution (QCD), which counts toward your required withdrawal and is not taxed. Untick \"Paid directly to a public charity\" for gifts to donor-advised funds or private foundations.", "Church and charities"],
       ]} />
       <Tip>
@@ -596,6 +596,7 @@ export function GuideContent() {
         ["→ % Paid out in cash", "What fraction of the total yield (Div + Tax-Exempt) is paid out as spendable cash rather than reinvested. 0% means full dividend reinvestment, where yield compounds and adds to cost basis each year. 100% means all dividends and muni coupons are swept to your checking account and spent before any shares are sold. Tax is identical either way, since the dividend is taxable whether or not you spend it. What changes: spending from yield means you sell fewer shares, realizing less capital gain. Unspent distributions are swept back to the brokerage at full basis.", "0%"],
         ["Pre-tax Return", "Growth rate for Traditional 401(k) and IRA accounts.", "6.5%"],
         ["Roth Return", "Growth rate for Roth IRA and Roth 401(k) accounts.", "6.5%"],
+        ["HSA Return", "Growth rate for a health savings account. Appears only once you enter an HSA, and starts at the same rate as Pre-tax.", "6.5%"],
       ]} />
 
       <H3>Expected Inflation</H3>
@@ -668,6 +669,26 @@ export function GuideContent() {
         Add up all accounts of the same type across all institutions and enter the combined total.
         If you have a 401(k) at your current employer and a rollover IRA from a previous job, add
         them together and enter that sum under Pre-tax.
+      </Tip>
+
+      <H3>Health savings account (HSA)</H3>
+      <P>
+        If you have an HSA, open the <strong>Health savings account</strong> block under your balances. It is
+        collapsed until you add one. Each person has their own, and the HSA counts in your total balance and
+        in the charts.
+      </P>
+      <FieldTable rows={[
+        ["HSA balance", "What is in the account on January 1 of the current year.", "$62,000"],
+        ["Annual contribution", "What you put in each year, in today's dollars, while you work. The tool caps it at the legal limit ($4,400 self-only or $8,750 family in 2026, plus $1,000 from 55). Contributions stop at 65, or when you claim Social Security if that is later.", "$4,400"],
+        ["Coverage", "Self or Family. Spouses on family coverage share one limit.", "Family"],
+        ["Unreimbursed receipts", "Past medical bills you paid out of pocket and have not been repaid for. They can be claimed tax-free later.", "$18,000"],
+        ["Keep contributing after I retire", "Shown if you retire before 65. You keep paying in from your portfolio on an HSA-eligible plan until 65. The contribution is deducted from your income, which lowers your ACA income and can raise your subsidy.", "Ticked"],
+        ["HSA pays medical expenses from age", "One setting for the household. From that age, the HSA pays your Medical-tagged expenses and any Medicare surcharge before your other accounts. Before it, those bills are paid elsewhere and kept as receipts.", "65"],
+      ]} />
+      <Tip>
+        <strong>The HSA is used after everything else only when you run out.</strong> If your other accounts
+        are empty, the tool draws on the HSA: first for unpaid medical bills, then to reimburse receipts, then
+        for anything else, which is taxed and carries a 20% penalty before 65. The plan shows a note if that happens.
       </Tip>
 
       <H3>Annual Contributions (before retirement)</H3>

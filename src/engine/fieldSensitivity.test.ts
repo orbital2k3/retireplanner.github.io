@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { runProjection } from './projection';
 import { samplePlan as defaultPlan } from '../schemas/plan';
 import type { Plan, IncomeStream } from '../schemas/plan';
+import { acaRetireePlan, medicalRow, withExpenses, withHsa } from './__testutil__/hsaPlans';
 
 /** Sensitivity contract: every UI-editable field that the projection consumes
  *  must move at least one observable output metric (endBalance or lifetimeFedTax)
@@ -143,6 +144,55 @@ describe('Field sensitivity — UI-editable fields must affect the projection', 
       // contribSplit affects WHICH bucket gets the contribution, so end balance
       // (after taxes on withdrawal) shifts.
       expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+  });
+
+  describe('HSA fields', () => {
+    // samplePlan with an HSA and a medical bill, so the account has something to pay and to grow.
+    const withMedical = (p: Plan): Plan => withExpenses(p, [
+      ...p.expenseStreams,
+      medicalRow({ id: 'med', startAge: p.personA.retirementAge, annualAmount: 15_000, inflationPct: { mode: 'fixed', rate: 0.04 } }),
+    ]);
+    const base = () => withMedical(withHsa(defaultPlan(), { a: { hsa: 80_000, hsaContribution: 4_000, hsaReceipts: 10_000 }, policyAge: 0 }));
+
+    it('personA.hsa balance', () => {
+      const d = sensitivity(base(), (p) => withHsa(p, { a: { hsa: 280_000 } }));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('personA.hsaContribution', () => {
+      const d = sensitivity(base(), (p) => withHsa(p, { a: { hsaContribution: 8_000 } }));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('personA.hsaCoverage (family raises the limit the contribution is capped at)', () => {
+      const asks = withHsa(base(), { a: { hsaContribution: 9_000 } });
+      const d = sensitivity(asks, (p) => withHsa(p, { a: { hsaCoverage: 'family' } }));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('personA.hsaReceipts (receipts-backed HSA is worth more after tax at the end)', () => {
+      // no medical bills, so no receipts accrue by themselves; the HSA never pays (policy age 120)
+      const noReceipts = withHsa(defaultPlan(), { a: { hsa: 80_000 }, policyAge: 120 });
+      // Receipts don't move the gross balance or tax, only the after-tax end value the optimizer maximizes.
+      const a = runProjection(noReceipts), b = runProjection(withHsa(noReceipts, { a: { hsaReceipts: 250_000 } }));
+      expect(b.endTaxAdjustedReal - a.endTaxAdjustedReal).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('personA.hsaContribInRetirement (the deduction and the ACA subsidy)', () => {
+      const on = runProjection(acaRetireePlan({ contribute: true }));
+      const off = runProjection(acaRetireePlan({ contribute: false }));
+      expect(Math.abs(on.endTotalReal - off.endTotalReal) + Math.abs(on.lifetimeFedTax - off.lifetimeFedTax)).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('hsaPolicy.payMedicalFromAge (paying later keeps the HSA invested and logs receipts)', () => {
+      const d = sensitivity(base(), (p) => withHsa(p, { policyAge: 75 }));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('assumptions.hsaReturn', () => {
+      const d = sensitivity(base(), (p) => withHsa(p, { hsaReturn: p.assumptions.tradReturn + 0.03 }));
+      expect(d.endDelta).toBeGreaterThan(DELTA_THRESHOLD);
     });
   });
 
