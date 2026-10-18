@@ -446,6 +446,12 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       else inheritedInTradA += s.remainingBal;
     }
 
+    // Per-year growth rates. Hoisted above the RMD block so the QCD/HSA/TIPS steps can read them.
+    const override = opts?.returnOverrides?.[i];
+    const gRateTaxYear  = override ?? plan.assumptions.taxableReturn;
+    const gRateTradYear = override ?? plan.assumptions.tradReturn;
+    const gRateRothYear = override ?? plan.assumptions.rothReturn;
+
     // Per-person RMD — each governed by their own age and SECURE 2.0 start age.
     const rmdA = (aliveA && ageA >= rmdStartAgeA) ? Math.max(0, tradA - inheritedInTradA) / rmdDivisor(ageA) : 0;
     const rmdB = (aliveB && ageB !== undefined && ageB >= rmdStartAgeB)
@@ -564,10 +570,6 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // and AFTER RMD has been satisfied. Capping at the bare begin-of-year balance
     // (`trad`) let the optimizer pick conv values that, combined with rmd, exceeded
     // post-growth available — surfacing as a Trad OVERDRAW invariant violation.
-    const override = opts?.returnOverrides?.[i];
-    const gRateTaxYear  = override ?? plan.assumptions.taxableReturn;
-    const gRateTradYear = override ?? plan.assumptions.tradReturn;
-    const gRateRothYear = override ?? plan.assumptions.rothReturn;
     const maxConv = Math.max(0, (trad - inheritedTradBal) * (1 + gRateTradYear) + contribToTrad - rmdAmt);
     let conv: number;
     const eitherRetired = retiredA || retiredB;
