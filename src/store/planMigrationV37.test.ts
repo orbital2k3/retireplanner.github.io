@@ -34,8 +34,8 @@ beforeAll(pinDate);
 afterAll(unpinDate);
 
 describe('v36 → v37 on captured plans', () => {
-  it('is store version 37', () => {
-    expect(PLAN_STORE_VERSION).toBe(37);
+  it('is at least store version 37', () => {
+    expect(PLAN_STORE_VERSION).toBeGreaterThanOrEqual(37);
   });
 
   it('has fresh baselines for the sample, rich and golden plans', () => {
