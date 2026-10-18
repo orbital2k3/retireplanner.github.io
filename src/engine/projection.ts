@@ -14,7 +14,7 @@ import { rmdDivisor, rmdStartAgeForDob, inheritedRmdDivisor } from './rmd';
 import { allocateQcd, qcdAvailable, qcdEligible, qcdLimit } from './qcd';
 import { householdSS } from './socialSecurity';
 import { yearFederalTax, standardDeduction, taxableSocialSecurity, seniorBonusDeduction } from './tax';
-import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS } from './taxConstants';
+import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS, OBBBA_NONITEMIZER_CHARITY, OBBBA_NONITEMIZER_CHARITY_FIRST_YEAR } from './taxConstants';
 import { rothConversion } from './conversion';
 import { applyWithdrawalOrder, applyBlendPolicy, type SpillKind, type WithdrawalOutputs } from './withdrawal';
 import { resolveStrategy } from './strategy/resultSettings';
@@ -114,6 +114,7 @@ export interface ProjectionRow {
   // it (and of any excess) sent to charity untaxed, and `qcdBeyondRmd` is the excess over the RMD.
   qcd: number;
   qcdBeyondRmd: number;
+  charityDeduction: number;   // OBBBA non-itemizer deduction included in stdDeduction
 }
 
 export interface ProjectionResult {
@@ -349,7 +350,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
   const rIncome = resolveIncomeStreams(plan.incomeStreams, frame, planInflation);
   const rExpense = resolveExpenseStreams(plan.expenseStreams, frame, planInflation);
   // True when any charitable row can be paid as a QCD. Hoisted so plans without one skip the QCD step.
-  const qcdOn = !opts?.disableQCD && rExpense.some(({ e }) => e.category === 'charitable' && e.qcd !== false);
+  const charitableOn = rExpense.some(({ e }) => e.category === 'charitable' && e.qcd !== false);
+  const qcdOn = !opts?.disableQCD && charitableOn;
   const taxableDivYield    = plan.assumptions.taxableDivYield    ?? 0;
   const taxableQualifiedPct = plan.assumptions.taxableQualifiedPct ?? 0.80;
   const taxableExemptYield  = plan.assumptions.taxableExemptYield  ?? 0;
@@ -512,6 +514,14 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const filerAge = (filingStatus === 'Single' && !aliveA && aliveB && ageB !== undefined) ? ageB : ageA;
     const stdD = standardDeduction(filingStatus, filerAge, ageB, inflationFactor);
     const calYear = startYear + i;
+    // OBBBA non-itemizer charitable deduction (IRC §170(p), tax years 2026+): cash gifts to public
+    // charities that a QCD did not cover, up to $1,000 ($2,000 joint). Below the line, so it never
+    // enters MAGI or the senior-bonus phase-out. Donor-advised-fund gifts (qcd:false) don't qualify.
+    // Computed even when disableQCD is set, so the no-QCD counterfactual gets the deduction it would.
+    const charDed = charitableOn && calYear >= OBBBA_NONITEMIZER_CHARITY_FIRST_YEAR
+      ? Math.min(Math.max(0, spend.charitableQcd - qcdTotal), filingStatus === 'MFJ' ? OBBBA_NONITEMIZER_CHARITY.mfj : OBBBA_NONITEMIZER_CHARITY.single)
+      : 0;
+    const stdDEff = charDed > 0 ? stdD + charDed : stdD;
     let seniorBonus = 0;
 
     // Roth conversion (BEFORE withdrawals — increases ord income for the year).
@@ -588,13 +598,13 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // model the OBBBA phase-out. Using pre-conversion ordinary income alone massively underestimates
     // MAGI (e.g. $38k vs $260k in taxfirst), causing the conversion to be oversized by ~the full
     // senior bonus. Two-pass: size conversion with no bonus to estimate post-conv MAGI, then resolve.
-    const convEstNoSB = Math.min(maxConvEst, Math.max(0, ceilForConv - (baseOrdEst1 - stdD)));
+    const convEstNoSB = Math.min(maxConvEst, Math.max(0, ceilForConv - (baseOrdEst1 - stdDEff)));
     const qualDivEst = annualDivEst * taxableQualifiedPct;
     const gainFractionEst = taxAvailEst > 0 ? Math.max(0, Math.min(1, 1 - taxableBasis / taxAvailEst)) : 0;
     const ltcgEst = spendingGapEst * gainFractionEst + qualDivEst;
     const magiEstPostConv = baseOrdEst1 + convEstNoSB + ltcgEst;
     const seniorBonusEst = seniorBonusDeduction(filingStatus, filerAge, ageB, magiEstPostConv, calYear);
-    const convEst    = Math.min(maxConvEst, Math.max(0, ceilForConv - (baseOrdEst1 - stdD - seniorBonusEst)));
+    const convEst    = Math.min(maxConvEst, Math.max(0, ceilForConv - (baseOrdEst1 - stdDEff - seniorBonusEst)));
     // Pass 2 — taxes on convEst also draw from taxable (payTaxFromBrokerage), leaving less for spending
     const convBracketRate = rateAtBracketCeiling(plan.conversion.bracketCeiling, filingStatus);
     const convTaxFromBrok = (plan.payTaxFromBrokerage ?? false)
@@ -608,7 +618,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Pass 3 — SS taxability feedback: if the conversion itself pushes PI above the 85% tier,
     // SS becomes more taxable, adding to ordIncome. Compute SS gain at full headroom and absorb
     // it into the base so rothConversion sizes conv to stay within the ceiling after the flip.
-    const headroomNominal = Math.max(0, ceilForConv - (baseOrdIncForConv0 - stdD - seniorBonusEst));
+    const headroomNominal = Math.max(0, ceilForConv - (baseOrdIncForConv0 - stdDEff - seniorBonusEst));
     const piWithFullConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + headroomNominal + annualDivEst + 0.5 * ss.total;
     const taxableSSWithFullConv = taxableSocialSecurity(piWithFullConv, ss.total, filingStatus);
     const ssGain = Math.max(0, taxableSSWithFullConv - taxableSSForConv);
@@ -646,7 +656,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
         inflationFactor,
         traditionalBalance: maxConv,
         baseOrdinaryIncome: baseOrdIncForConv,
-        stdDeduction: stdD + seniorBonusEst,
+        stdDeduction: stdDEff + seniorBonusEst,
       });
     }
     lifetimeConversion += conv;
@@ -771,7 +781,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
             gap, taxable: taxAvail - taxFromBrok, traditional: tradAvail, roth: rothAvail,
             rmd: rmdAmt, baseOrdinaryIncome: baseOrdIncForWd,
             bracketCeiling: effectiveBracketCeiling(plan.withdrawalBracketCeiling, filingStatus),
-            stdD: stdD + seniorBonus, inflationFactor,
+            stdD: stdDEff + seniorBonus, inflationFactor,
           });
       wdTax = w.wdTax + taxFromBrok; wdTrd = w.wdTrd; wdRth = w.wdRth;
       lastSpill = w.spill;
@@ -792,7 +802,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
         inflationFactor,
         ordinaryIncome: ordIncome,
         ltcgIncome: ltcg,
-        standardDeduction: stdD + seniorBonus,
+        standardDeduction: stdDEff + seniorBonus,
       });
       fedTax = t.fedTax; ordIncomeFinal = ordIncome; ltcgFinal = ltcg; effRate = t.effRate; marginalRate = t.marginalRate;
       taxableSSFinal = taxableSS;
@@ -856,7 +866,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       const wdBracketCeilNominal = effectiveBracketCeiling(plan.withdrawalBracketCeiling, filingStatus) * inflationFactor;
       // Mirror roomInBracket from withdrawal.ts:58 — uses the withdrawal ceiling, not ceilForConv.
       const bracketfillRoom = isActiveBracketfill
-        ? Math.max(0, wdBracketCeilNominal + (stdD + seniorBonus) - baseOrdIncForWd - wdTrd)
+        ? Math.max(0, wdBracketCeilNominal + (stdDEff + seniorBonus) - baseOrdIncForWd - wdTrd)
         : 0;
       const activeWindow = activePolicy ? findWindow(activePolicy, ageA) : undefined;
       const spillWindow = activeWindow
@@ -866,7 +876,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       // headroomNominal was estimated before convergence (uses seniorBonusEst); the final
       // seniorBonus can differ materially when OBBBA phase-out depends on actual conv size.
       const baseOrdIncDisplay = ordIncomeFinal - conv;
-      const headroomNominalDisplay = Math.max(0, ceilForConv - (baseOrdIncDisplay - stdD - seniorBonus));
+      const headroomNominalDisplay = Math.max(0, ceilForConv - (baseOrdIncDisplay - stdDEff - seniorBonus));
       const notes = buildYearDecisions({
         year: i + 1,
         ageA,
@@ -985,7 +995,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       const magi = ordIncome + ltcg;
       const surchargeMAGI = magi + exemptIncome;
       seniorBonus = seniorBonusDeduction(filingStatus, filerAge, ageB, magi, calYear);
-      const t = yearFederalTax({ filingStatus, inflationFactor, ordinaryIncome: ordIncome, ltcgIncome: ltcg, standardDeduction: stdD + seniorBonus });
+      const t = yearFederalTax({ filingStatus, inflationFactor, ordinaryIncome: ordIncome, ltcgIncome: ltcg, standardDeduction: stdDEff + seniorBonus });
       fedTax = t.fedTax; effRate = t.effRate; marginalRate = t.marginalRate;
       ordIncomeFinal = ordIncome; ltcgFinal = ltcg; taxableSSFinal = taxableSS;
       irmaaMAGIFinal = i >= 2 ? surchargeMagiHistory[i - 2] : surchargeMAGI;
@@ -1042,7 +1052,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
           gap: need, taxable, traditional: tradTotal, roth,
           rmd: rmdAmt, baseOrdinaryIncome: baseOrdIncForWd + wdTrd,
           bracketCeiling: effectiveBracketCeiling(plan.withdrawalBracketCeiling, filingStatus),
-          stdD: stdD + seniorBonus, inflationFactor,
+          stdD: stdDEff + seniorBonus, inflationFactor,
         });
       }
       const fromTax = Math.min(taxable, top.wdTax);
@@ -1161,7 +1171,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       effRate,
       marginalRate,
       stateMarginalRate,
-      stdDeduction: stdD + seniorBonus,
+      stdDeduction: stdDEff + seniorBonus,
       seniorBonus,
       magi: ordIncomeFinal + ltcgFinal,
       acaMagi: ordIncomeFinal + ltcgFinal + exemptIncome + (ss.total - taxableSSFinal),
@@ -1190,6 +1200,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       charitableSpend: spend.charitable,
       qcd: qcdTotal,
       qcdBeyondRmd: qcdTotal > 0 ? trdForced - rmdAmt : 0,
+      charityDeduction: charDed,
     });
   }
 

@@ -3,6 +3,7 @@ import type { ProjectionRow, ProjectionResult } from '../projection';
 import { runProjection } from '../projection';
 import { rmdStartAgeForDob } from '../rmd';
 import { qcdLimit } from '../qcd';
+import { OBBBA_NONITEMIZER_CHARITY } from '../taxConstants';
 import { taxAdjustedRates } from '../taxAdjusted';
 
 /**
@@ -140,6 +141,11 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   const qcdOwners = (aliveA ? 1 : 0) + (aliveB ? 1 : 0);
   if (qcd > qcdOwners * qcdLimit(r.inflationFactor) + tol) {
     out.push(`QCD above the annual limit: qcd=${qcd}, owners=${qcdOwners}, limit each=${qcdLimit(r.inflationFactor)}`);
+  }
+
+  const cd = r.charityDeduction ?? 0;
+  if (cd < -tol || cd > (r.filingStatus === 'MFJ' ? OBBBA_NONITEMIZER_CHARITY.mfj : OBBBA_NONITEMIZER_CHARITY.single) + tol || cd > r.charitableSpend - qcd + tol) {
+    out.push(`Charity deduction out of range: ${cd} (filing ${r.filingStatus}, charitable=${r.charitableSpend}, qcd=${qcd})`);
   }
 
   // 7b. Category split: tagged spending is a subset of total spending.

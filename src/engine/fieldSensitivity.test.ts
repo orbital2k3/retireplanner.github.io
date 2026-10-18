@@ -204,6 +204,32 @@ describe('Field sensitivity — UI-editable fields must affect the projection', 
   });
 
   describe('Expense streams', () => {
+    // A charitable row from retirement on: the QCD (70½+) and the OBBBA deduction (cash gifts before
+    // then) both read the category and the qcd flag.
+    const withGiving = (p: Plan, extra: Partial<Plan['expenseStreams'][number]> = {}): Plan => ({
+      ...p,
+      expenseStreams: [...p.expenseStreams, {
+        id: 'giving', description: 'Giving', whose: 'Household' as const, startAge: p.personA.retirementAge,
+        end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: 25_000, inflationPct: { mode: 'cpi' as const }, ...extra,
+      }],
+    });
+
+    it('expense category (charitable gifts are paid as QCDs from 70½ and get the OBBBA deduction before)', () => {
+      const base = withGiving(defaultPlan());
+      const d = sensitivity(base, (p) => ({
+        ...p, expenseStreams: p.expenseStreams.map((e) => e.id === 'giving' ? { ...e, category: 'charitable' as const } : e),
+      }));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('expense qcd flag (a donor-advised-fund gift is not paid as a QCD)', () => {
+      const base = withGiving(defaultPlan(), { category: 'charitable' });
+      const d = sensitivity(base, (p) => ({
+        ...p, expenseStreams: p.expenseStreams.map((e) => e.id === 'giving' ? { ...e, qcd: false } : e),
+      }));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
     it('annualAmount', () => {
       const d = sensitivity(defaultPlan(), (p) => ({
         ...p,
@@ -278,19 +304,6 @@ describe('Field sensitivity — UI-editable fields must affect the projection', 
         }],
       });
       expect(Math.abs(withWages.endTotalReal - base.endTotalReal)).toBeLessThan(1);
-    });
-
-    it.skip('expense category / qcd tags do NOT affect the projection until the QCD engine lands (Q-2, Q-3)', () => {
-      // category and qcd are tags only (F-1..F-3): they feed the medicalSpend/charitableSpend row
-      // fields and nothing else. Once QCD is wired in, a charitable row at age 70½+ moves taxes and
-      // this must become an active sensitivity case (plan item Q-3: remove from the skip list and add
-      // QCD and deduction cases). Until then expenseCategory.test.ts asserts they are inert.
-      const p = defaultPlan();
-      const base = runProjection(p);
-      const tagged = runProjection({
-        ...p, expenseStreams: p.expenseStreams.map((e) => ({ ...e, category: 'charitable' as const })),
-      });
-      expect(Math.abs(tagged.endTotalReal - base.endTotalReal)).toBeLessThan(1);
     });
   });
 });
