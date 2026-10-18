@@ -127,6 +127,11 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
     }
   }
 
+  // 7b. Category split: tagged spending is a subset of total spending.
+  if (r.medicalSpend < -tol || r.charitableSpend < -tol || r.medicalSpend + r.charitableSpend > r.netSpend + tol) {
+    out.push(`Category spend exceeds netSpend: medical=${r.medicalSpend}, charitable=${r.charitableSpend}, netSpend=${r.netSpend}`);
+  }
+
   // 8. Accum.-phase guard: when neither person is retired, no spend/withdrawals/conversions.
   //    SemiRetire (one retired) legitimately has netSpend, so gate on semiRetired.
   if (!semiRetired && (r.netSpend > tol || r.totalWD > tol || r.rothConv > tol)) {

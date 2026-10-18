@@ -106,6 +106,9 @@ export interface ProjectionRow {
   ranOut: boolean;          // true from the first year spending could not be funded from the portfolio
   shortfall: number;        // unfunded spending gap this year (nominal $, scaled to real at lifetimeShortfallReal)
   taxFromBrokerage: number;   // amount pulled from taxable to cover taxes (taxFromBrokFinal)
+  // Spending by category tag (subsets of netSpend). Informational until the HSA/QCD features read them.
+  medicalSpend: number;       // expense rows tagged 'medical'
+  charitableSpend: number;    // expense rows tagged 'charitable'
 }
 
 export interface ProjectionResult {
@@ -1147,6 +1150,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       ranOut,
       shortfall,
       taxFromBrokerage: taxFromBrokFinal,
+      medicalSpend: spend.medical,
+      charitableSpend: spend.charitable,
     });
   }
 
