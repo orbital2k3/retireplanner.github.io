@@ -30,7 +30,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 18 | ◐ |
+| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 19 | ◐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
@@ -62,8 +62,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | QU-2 | Split QCD out of cash RMD in charts and Sankey | ☑ | 2026-10-17 | 25ebe44 | Shared rmdCashOf() in qcd.ts. CashFlowsBalanced, IncomeSourcesArea, RothVsRmd: RMD bar is the cash part, new pale-gold 'QCDs' series only when a QCD exists. Sankey: new 'QCD · Pre-tax' source pinned to a new 'Charity (QCD)' use, Net Spending excludes it, taxable-SS back-out uses the cash RMD. 4 new sankey tests; ledger balances for all golden plans incl. Q. Chart verified in browser. Not changed here: explain-layer RMD readers (bracketCliff, optimizerRationale), handled in QU-5. |
 | QU-3 | [M4-B] `qcdBenefit.ts` + Taxes card | ☑ | 2026-10-17 | 5cf93ca | qcdBenefit.ts (compareWithWithoutQCD: same plan with disableQCD, real $; copy builder) + gold info card at the top of Taxes > Federal, memoized, hidden without QCDs. 7 tests. Copy deviations from the mockup, to stay truthful: 'IRMAA surcharges in N years' (not 'tier 1'); each effect is mentioned only if it happened; a neutral title when the saving is under $100. Uses useEnginePlan (not the what-if projection) for both runs. Verified in browser. |
 | QU-4 | [M4-C] QCD warnings | ☑ | 2026-10-17 | 69d2bd8 | Two warnings in planWarnings.ts: qcd-no-ira (warn: every owner who would pay the gifts has no IRA and none building) and qcd-optout (new 'info' severity for qcd:false rows, with .plan-warning.info style and an ⓘ icon in the strip). 6 tests. Copy deviates from the mockup to stay accurate: the age isn't quoted ('Charitable giving "X" can't be paid as QCDs because Y's IRA is empty…') since giving can start years before 70½. Not browser-checked (strip markup unchanged apart from the icon). |
-| QU-5 | QCD explain notes + insight rule | ☑ | 2026-10-17 | (hash backfilled in QU-6) | yearDecisions: rmdAmt renamed rmdTaxable (+ optional rmdGross/qcd/qcdBeyondRmd) and a non-binding 'qcd-rmd' note; headroom display already uses stdDEff (Q-3). bracketCliff and optimizerRationale now read the taxable (cash) RMD via rmdCashOf. New rule qcd.ts ('QCDs cut your required-withdrawal tax', taxes+strategy): only fires when QCDs satisfy RMD dollars; copy says 'fewer Roth conversions are usually needed overall', never 'before 70½' (Q-8 finding). 10 new tests. |
-| QU-6 | QCD docs, Learn More, release notes | ☐ | | | |
+| QU-5 | QCD explain notes + insight rule | ☑ | 2026-10-17 | 4172d5e | yearDecisions: rmdAmt renamed rmdTaxable (+ optional rmdGross/qcd/qcdBeyondRmd) and a non-binding 'qcd-rmd' note; headroom display already uses stdDEff (Q-3). bracketCliff and optimizerRationale now read the taxable (cash) RMD via rmdCashOf. New rule qcd.ts ('QCDs cut your required-withdrawal tax', taxes+strategy): only fires when QCDs satisfy RMD dollars; copy says 'fewer Roth conversions are usually needed overall', never 'before 70½' (Q-8 finding). 10 new tests. |
+| QU-6 | QCD docs, Learn More, release notes | ☑ | 2026-10-17 | (hash backfilled in QU-7) | HowToGuide Expenses: Category table + deduction tip. learnMoreTopics: QCD_HELP, opened from an 'ⓘ Learn more' link in the Taxes card. releases.ts: 2.3.0 entry (package.json version bump deferred to Q-REL). The guide says Medical is a tag with no effect yet. RELEASE_NOTES.md is stale (stops at 2.0.2) and was left alone. Modal verified in browser. |
 | QU-7 | QCD E2E + v35 freshness | ☐ | | | |
 | Q-REL | v36 migration + release gate + PR merge | ☐ | | | |
 | H-1 | HSA schema (+ `hsaReturn` registry) | ☐ | | | |
@@ -260,7 +260,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - `yearDecisions` takes `rmdTaxable` and adds a QCD note
   - headroom display uses `stdDEff`
   - new insight rule in `explain/rules/` ("QCDs cut future RMD tax, so fewer conversions are needed overall"; Q-8 found pre-70½ conversions are not lower, so don't claim that)
-- [ ] **QU-6** Docs: HowToGuide Expenses (~L453), a `learnMoreTopics.ts` QCD topic, and the `releases.ts` 2.3.0 entry.
+- [x] **QU-6** Docs: HowToGuide Expenses (~L453), a `learnMoreTopics.ts` QCD topic, and the `releases.ts` 2.3.0 entry.
 - [ ] **QU-7** E2E (`e2e/smoke.spec.ts`): a seeded 72-year-old with charity sees a non-zero QCD column and the Taxes card. Seed a v35 plan with a result: no stale banner.
 - [ ] **Q-REL** No-op migration v36 plus `planMigrationV36.test.ts` (upgrade freshness). Run the **release gate**.
 
@@ -457,6 +457,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | QU-3 | `qcdBenefit.ts` and the Taxes card built and browser-verified. |
 | 2026-10-17 | QU-4 | QCD warnings (and an `info` severity) added with tests. |
 | 2026-10-17 | QU-5 | Explain layer: QCD year note, taxable-RMD readers, new insight rule. |
+| 2026-10-17 | QU-6 | QCD docs, Learn More topic and the 2.3.0 release entry written. |
 
 ---
 

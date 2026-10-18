@@ -473,6 +473,21 @@ export function GuideContent() {
         ["Fixed Rate", "Grows at a locked percentage independent of the inflation assumption.", "Mortgage at 0% (fixed payment), parking at 3%"],
       ]} />
       <P>
+        Each row also has a <strong>Category</strong>: General (the default), Medical or Charitable.
+        Rows saved before this release show General, and General changes nothing about your results.
+      </P>
+      <FieldTable rows={[
+        ["General", "Ordinary spending. Nothing special happens.", "Food, travel, housing"],
+        ["Medical", "A tag for medical spending. It does not change your results yet.", "Healthcare"],
+        ["Charitable", "Giving. From age 70½ it is paid straight from your IRA as a qualified charitable distribution (QCD), which counts toward your required withdrawal and is not taxed. Untick \"Paid directly to a public charity\" for gifts to donor-advised funds or private foundations.", "Church and charities"],
+      ]} />
+      <Tip>
+        Before you are eligible for QCDs, or for gifts a QCD can&apos;t cover, cash gifts to public
+        charities get a deduction even if you don&apos;t itemize: up to $1,000, or $2,000 for a
+        couple, from 2026. The Taxes page shows what QCDs save you compared with paying the same
+        gifts in cash.
+      </Tip>
+      <P>
         This lets you model things like a mortgage that ends at age 72 with 0% inflation, or
         travel spending that tapers off in your late 70s, or healthcare that inflates faster than
         the rest of your budget.

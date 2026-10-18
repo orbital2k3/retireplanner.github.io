@@ -16,6 +16,33 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.3.0',
+    date: '2026-10-17',
+    summary: 'Give to charity straight from your IRA. Tag spending as charitable and the plan pays it as qualified charitable distributions, with the tax effect shown.',
+    changes: [
+      {
+        kind: 'feature',
+        title: 'Qualified charitable distributions (QCDs)',
+        text: 'Each expense row now has a Category: General, Medical or Charitable. From age 70½, charitable giving is paid straight from your IRA. It counts toward your required withdrawal and is left out of your taxable income, which can lower tax on Social Security, Medicare surcharges and state tax. Couples use each spouse\u2019s own $111,000 limit. Untick "Paid directly to a public charity" for gifts to donor-advised funds or private foundations.',
+        bullets: [
+          'The Projections table has new QCD and Charity deduction columns, and the RMD tooltip shows how much went to charity.',
+          'The cash-flow charts and the Sankey show QCDs going to charity instead of counting them as cash.',
+          'The Taxes page shows what QCDs save you compared with paying the same gifts in cash.',
+          'New plan notes appear when a charitable row can\u2019t be paid as QCDs because the IRA is empty, or when a gift is marked as not paid to a public charity.',
+        ],
+      },
+      {
+        kind: 'feature',
+        title: 'Charitable deduction without itemizing',
+        text: 'From 2026, cash gifts to public charities that a QCD didn\u2019t cover get a deduction even if you take the standard deduction: up to $1,000, or $2,000 for a couple. It drops to $1,000 when only one of you is left.',
+      },
+      {
+        kind: 'cosmetic',
+        text: 'The Medical category is a tag for now and does not change your results.',
+      },
+    ],
+  },
+  {
     version: '2.2.3',
     date: '2026-10-17',
     summary: 'Roth conversion strategies you choose are no longer switched off when you re-optimize.',

@@ -11,6 +11,8 @@ import { STATE_PROFILES } from '../engine/stateTax';
 import { compareWithWithoutConversion } from '../engine/comparison';
 import { compareWithWithoutQCD, qcdBenefitCopy } from '../engine/qcdBenefit';
 import { fmtK } from '../lib/format';
+import LearnMoreModal from '../components/LearnMoreModal';
+import { QCD_HELP } from '../components/learnMoreTopics';
 
 type TaxTab = 'federal' | 'state' | 'irmaa';
 
@@ -29,6 +31,7 @@ export default function TaxPlanning() {
     return q === 'state' || q === 'irmaa' ? q : 'federal';
   })();
   const [tab, setTab] = useState<TaxTab>(initialTab);
+  const [qcdHelpOpen, setQcdHelpOpen] = useState(false);
   const cmp = useMemo(() => compareWithWithoutConversion(plan), [plan]);
   // "Tax saved by QCD": same plan with the gifts paid in cash instead. Null (card hidden) without QCDs.
   const qcdCopy = useMemo(() => {
@@ -73,9 +76,16 @@ export default function TaxPlanning() {
             <div className="insight-content">
               <div className="insight-title">{qcdCopy.title}</div>
               <div className="insight-body">{qcdCopy.body}</div>
+              <button
+                onClick={() => setQcdHelpOpen(true)}
+                style={{ background: 'transparent', border: 'none', padding: 0, marginTop: 6, cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+              >
+                ⓘ Learn more
+              </button>
             </div>
           </div>
         )}
+        {qcdHelpOpen && <LearnMoreModal topic={QCD_HELP} onClose={() => setQcdHelpOpen(false)} />}
 
         {tab === 'federal' && (
           <div className="panel" style={{ marginBottom: 20 }}>

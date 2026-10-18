@@ -107,3 +107,51 @@ export const MC_OPTIMIZE_HELP: HelpTopic = {
     },
   ],
 };
+
+export const QCD_HELP: HelpTopic = {
+  eyebrow: 'Learn more',
+  title: 'Giving from your IRA (QCDs)',
+  sections: [
+    {
+      heading: 'What a QCD is',
+      paras: [
+        'A qualified charitable distribution, or QCD, sends money straight from your IRA to a charity. The money never passes through your hands, so it is not added to your income.',
+        'Once you are 70½, a QCD also counts toward your required withdrawal for the year. That is the useful part: you meet the requirement without paying income tax on that money.',
+      ],
+    },
+    {
+      heading: 'The rules this tool follows',
+      paras: [
+        'You can start in the year you turn 70½. The limit in 2026 is $111,000 a year for each person, and it rises with inflation. A couple has two limits.',
+        'The money has to come from an IRA. If your savings are in a 401(k), assume they have been rolled into an IRA. Money in an inherited IRA is left out.',
+        'The gift has to go directly to a public charity. Donor-advised funds and private foundations do not qualify. Untick the box on a giving row to mark a gift like that, and it will be paid as ordinary spending.',
+      ],
+    },
+    {
+      heading: 'What happens in your plan',
+      paras: [
+        'Mark an expense row as Charitable. Once you are eligible, the tool pays that giving from your IRA. It covers your required withdrawal first, then any extra up to the limit. Anything left over is paid from your other accounts the usual way.',
+        'The part that goes to charity is left out of your taxable income. It counts toward your required withdrawal, but you do not receive it as cash.',
+      ],
+    },
+    {
+      heading: 'Why it can lower your taxes',
+      paras: [
+        'Lower taxable income can mean less of your Social Security is taxed, a lower Medicare surcharge two years later, and less state tax in states that tax IRA income.',
+        'The Taxes page compares your plan with the same gifts paid in cash, using the same withdrawal plan, and shows the difference in today\u2019s dollars.',
+      ],
+    },
+    {
+      heading: 'Gifts that are not QCDs',
+      paras: [
+        'From 2026, cash gifts to public charities can be deducted even if you do not itemize, up to $1,000 for one person or $2,000 for a couple. The tool applies this to any giving a QCD did not cover. The limits are fixed by law and do not rise with inflation.',
+      ],
+    },
+    {
+      heading: 'What it leaves out',
+      paras: [
+        'It does not model leaving part of an IRA to charity when you die, itemized deductions, or bunching several years of gifts into one.',
+      ],
+    },
+  ],
+};
