@@ -31,7 +31,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 |---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
 | 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
-| 2 HSA | 2.4.0 / v37 | 20 | 12 | ◐ |
+| 2 HSA | 2.4.0 / v37 | 20 | 13 | ◐ |
 | 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
 | Housekeeping | none | 2 | 0 | ☐ |
@@ -77,8 +77,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | H-9 | HSA risk tests (R7, R9) | ☑ | 2026-10-17 | d28e3c2 | hsa.risks.test.ts (16 tests). R7: couple on a 240k pension in the IRMAA range spending from taxable; HSA pays medical+IRMAA: residual <$1 in every draw year, gross-up iterations <= baseline (HSA present, policy age 120) + 2 every year, IRMAA actually paid from the HSA in >=3 years. Added test-only ProjectionOptions.stats.grossUpIters (one counter assignment per iteration, no numeric effect). R9: depletion fixtures at 60 and 66: HSA touched only after every other account is empty, order qualified -> receipts -> non-qualified, penalty = 20% of non-qual under 65 and 0 from 65, ranOut age strictly later than without the HSA. Receipts: endTaxAdjusted rises by exactly 22% x min(HSA, receipts). Note: late survivor years legitimately sweep surplus (income > spending), so the residual check is limited to draw years. |
 | H-10 | HSA fuzz | ☑ | 2026-10-17 | 7352e01 | __fuzz__/hsa.fuzz.test.ts + arbHsaPlan generator (separate from arbPlan so existing properties keep their samples): optional per-person HSA, policy, hsaReturn, medical row, ACA, 25% cash-poor plans (so last-resort draws occur: of 1,000 plans 810 qualified, 148 last-resort, 26 penalty, 187 retiree contributions). Properties: all dollar-flow invariants incl. HSA conservation; qualified path never adds taxable income (vs policy 120 in the first paying year); absent = zeros = unused policy bit-identical; determinism. Held over 3,000 runs. FINDING (existing engine behavior, not HSA): with ACA modeling on, plans sitting at the 100%-FPL cliff have no gross-up fixed point (premium jumps 0 <-> full benchmark), so a smaller draw can end with more income than a baseline; counterexample seed 1050108452. The income property therefore disables ACA; HSA/ACA behavior is covered in hsa.retirement.test.ts. |
 | H-11 | Golden `planR_hsaEarlyRetiree` + MC test | ☑ | 2026-10-17 | dfe22ee | planR_hsaEarlyRetiree (A 55 / B 53 retired, ACA bronze benchmark 17k, family HSA 150k + 22k receipts, retiree contributions of the family limit to 64, medical 9k tagged, default policy, IL, A dies 88 / B 92). New CSVs only: planR_hsaEarlyRetiree.csv plus planR_hsaEarlyRetiree.hsa.csv (the 10-column golden format has no HSA column, so runAndCompareHsa in harness.ts stores contrib/qualified/reimbursed/non-qual/penalty/endHSA/receipts/acaMagi/acaPremium/irmaa; A-M and Q CSVs untouched). Guard test checks the plan really exercises retiree contributions, receipts, qualified payments from 65 and the survivor merge. monteCarlo.hsa.test.ts (4): one parametric trial reproduces HSA0 x prod(1+r) exactly along the sampled path, crash path moves HSA and total, HSA counts in the MC bands, determinism. Deviation: sankeyFlows.test.ts golden loop excludes planR (ledger has no HSA flows yet); HU-2 must remove PENDING_HSA_SANKEY. |
-| H-12 | HSA opt-tier tests | ☑ | 2026-10-17 | PENDING-COMMIT | hsa.optimizer.test.ts (opt tier, added to OPT_FILES, ~18s): determinism (raw optimizeStrategy twice on planF+HSA), windows keep the three-bucket shape and key set of the no-HSA run (no HSA share), objective = projection endTaxAdjusted incl. the HSA term (haircut above receipts, receipts untaxed; metric equals REC_GOALS score; scores above the no-HSA plan), max-spending seed/result with a legacy target on planP+HSA. Full opt tier: 75/76 first time; optimizer.isolation.test.ts hit its 180s timeout under the 11-file load (passes alone in 75s), so its timeout was raised to 300s like the P0-4 snapshot tests. |
-| HU-1 | [M2] HSA inputs block + policy + return field | ☐ | | | |
+| H-12 | HSA opt-tier tests | ☑ | 2026-10-17 | 0ade0ab | hsa.optimizer.test.ts (opt tier, added to OPT_FILES, ~18s): determinism (raw optimizeStrategy twice on planF+HSA), windows keep the three-bucket shape and key set of the no-HSA run (no HSA share), objective = projection endTaxAdjusted incl. the HSA term (haircut above receipts, receipts untaxed; metric equals REC_GOALS score; scores above the no-HSA plan), max-spending seed/result with a legacy target on planP+HSA. Full opt tier: 75/76 first time; optimizer.isolation.test.ts hit its 180s timeout under the 11-file load (passes alone in 75s), so its timeout was raised to 300s like the P0-4 snapshot tests. |
+| HU-1 | [M2] HSA inputs block + policy + return field | ☑ | 2026-10-17 | PENDING-COMMIT | components/inputs/HsaBlock.tsx: collapsible per-person HSA block (balance, contribution with live max hint incl. catch-up, over-limit note, Self/Family toggle, receipts, retirement-contribution checkbox only when retiring before 65, 'shared with <spouse>' hint for two family plans) placed before the contribution mix; HsaPolicyRow ('HSA pays medical expenses from age', Always/55-75, shown only when an HSA exists) under both people; 4th HSA column in the returns grid only when an HSA exists (shows the pre-tax rate while hsaReturn is absent); the deferred M1 medical hint under Medical expense rows; What-If return delta moves hsaReturn when it is set (store + WhatIfBar scenario snapshot); usePlanStore.setHsaPolicy. Zero/default values are written as absent (hsa 0, 'self', policy 65 -> key removed) so untouched plans keep their saved shape. Verified in the browser preview: block collapsed by default, store writes, over-limit text, family max 9,750, policy row and HSA return column appear, hint appears, no console errors. |
 | HU-2 | [M4-D] HSA palette + charts + Sankey | ☐ | | | |
 | HU-3 | [M4-A] HSA Projections columns | ☐ | | | |
 | HU-4 | [M4-C] HSA warnings | ☐ | | | |
@@ -323,7 +323,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - [x] **H-12** Opt tier: deterministic results; the 3-bucket windows are unchanged in shape; the objective includes the haircut HSA.
 
 ### 2D UI (1–2 sessions)
-- [ ] **HU-1** [M2] Also add the deferred M1 hint under Medical expense rows ("Your HSA can pay this tax-free (see Portfolio › HSA)."; deferred from F-4). `PortfolioPersonSection` (`InputsPage.tsx` ~L1014) gets a collapsible HSA block:
+- [x] **HU-1** [M2] Also add the deferred M1 hint under Medical expense rows ("Your HSA can pay this tax-free (see Portfolio › HSA)."; deferred from F-4). `PortfolioPersonSection` (`InputsPage.tsx` ~L1014) gets a collapsible HSA block:
   - balance
   - contribution, with a live limit hint
   - coverage
@@ -472,6 +472,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | H-10 | HSA fuzz properties and generator; ACA-cliff oscillation finding recorded. |
 | 2026-10-17 | H-11 | Golden planR with HSA CSV extension, Monte Carlo HSA tests. |
 | 2026-10-17 | H-12 | HSA opt-tier tests; isolation test timeout raised. |
+| 2026-10-17 | HU-1 | HSA inputs block, policy row, return field and Medical hint built and browser-verified. |
 
 ---
 

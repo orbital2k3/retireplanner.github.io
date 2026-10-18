@@ -3,7 +3,7 @@ import type { Plan, Assumptions } from '../schemas/plan';
 
 /** The fact fields what-if touches; satisfied by both the saved plan and the engine plan. */
 export type WhatIfTarget = Pick<Plan, 'personA' | 'personB' | 'expenseStreams'> & {
-  assumptions: Pick<Assumptions, 'taxableReturn' | 'tradReturn' | 'rothReturn' | 'inflation'>;
+  assumptions: Pick<Assumptions, 'taxableReturn' | 'tradReturn' | 'rothReturn' | 'inflation'> & { hsaReturn?: number };
 };
 
 /** Ephemeral overrides to overlay on the saved plan for "what-if" exploration.
@@ -109,6 +109,8 @@ export function applyWhatIf<T extends WhatIfTarget>(plan: T, w: WhatIfState): T 
         taxableReturn: next.assumptions.taxableReturn + d,
         tradReturn: next.assumptions.tradReturn + d,
         rothReturn: next.assumptions.rothReturn + d,
+        // An explicit HSA rate moves with the others; when absent it already follows the pre-tax rate.
+        ...(next.assumptions.hsaReturn !== undefined ? { hsaReturn: next.assumptions.hsaReturn + d } : {}),
         inflation: o.inflation ?? next.assumptions.inflation,
       },
     };

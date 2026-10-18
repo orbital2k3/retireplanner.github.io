@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Plan, Person, Assumptions, PersonPortfolio, IncomeStream, ExpenseStream, LumpSumEvent, Goal } from '../schemas/plan';
+import type { Plan, Person, Assumptions, PersonPortfolio, Portfolio, IncomeStream, ExpenseStream, LumpSumEvent, Goal } from '../schemas/plan';
 import type { SavedPlan, ManualStrategy, OptimizerStrategy, ConversionSettings, Strategy } from '../schemas/savedPlan';
 import { defaultSavedPlan, enginePlan } from '../engine/strategy/savedPlan';
 import { runProjection, type ProjectionResult } from '../engine/projection';
@@ -43,6 +43,8 @@ interface PlanState {
   setAssumptions: (patch: Partial<FactsAssumptions>) => void;
   setPersonAPortfolio: (patch: Partial<PersonPortfolio>) => void;
   setPersonBPortfolio: (patch: Partial<PersonPortfolio>) => void;
+  /** Household HSA payment policy; undefined removes it (absent means age 65). */
+  setHsaPolicy: (policy: Portfolio['hsaPolicy']) => void;
   setIncomeStreams: (streams: IncomeStream[]) => void;
   addIncomeStream: (s: IncomeStream) => void;
   updateIncomeStream: (id: string, patch: Partial<IncomeStream>) => void;
@@ -105,6 +107,11 @@ export const usePlanStore = create<PlanState>()(
       setPersonBPortfolio: (patch) => set((s) => ({
         plan: { ...s.plan, portfolio: { ...s.plan.portfolio, personB: s.plan.portfolio.personB ? { ...s.plan.portfolio.personB, ...patch } : undefined } },
       })),
+      setHsaPolicy: (policy) => set((s) => {
+        const { hsaPolicy: _drop, ...rest } = s.plan.portfolio;
+        void _drop;
+        return { plan: { ...s.plan, portfolio: policy ? { ...rest, hsaPolicy: policy } : rest } };
+      }),
       setIncomeStreams: (incomeStreams) => set((s) => ({ plan: { ...s.plan, incomeStreams } })),
       addIncomeStream: (stream) => set((s) => ({ plan: { ...s.plan, incomeStreams: [...s.plan.incomeStreams, stream] } })),
       updateIncomeStream: (id, patch) => set((s) => ({
