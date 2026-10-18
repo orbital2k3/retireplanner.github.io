@@ -279,5 +279,18 @@ describe('Field sensitivity — UI-editable fields must affect the projection', 
       });
       expect(Math.abs(withWages.endTotalReal - base.endTotalReal)).toBeLessThan(1);
     });
+
+    it.skip('expense category / qcd tags do NOT affect the projection until the QCD engine lands (Q-2, Q-3)', () => {
+      // category and qcd are tags only (F-1..F-3): they feed the medicalSpend/charitableSpend row
+      // fields and nothing else. Once QCD is wired in, a charitable row at age 70½+ moves taxes and
+      // this must become an active sensitivity case (plan item Q-3: remove from the skip list and add
+      // QCD and deduction cases). Until then expenseCategory.test.ts asserts they are inert.
+      const p = defaultPlan();
+      const base = runProjection(p);
+      const tagged = runProjection({
+        ...p, expenseStreams: p.expenseStreams.map((e) => ({ ...e, category: 'charitable' as const })),
+      });
+      expect(Math.abs(tagged.endTotalReal - base.endTotalReal)).toBeLessThan(1);
+    });
   });
 });

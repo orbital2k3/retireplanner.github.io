@@ -30,7 +30,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 4 | ◐ |
+| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 5 | ◐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
@@ -48,8 +48,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | F-1 | Schema: expense `category`, `qcd` | ☑ | 2026-10-17 | 93f7bc9 | Optional fields only, no default, no migration. Fast tier green, bit-exact unchanged. |
 | F-2 | `sumExpenseStreams` split (total bit-identical) | ☑ | 2026-10-17 | 69b3387 | sumExpenseStreams returns {total, medical, charitable}; total computed by the same expression and accumulation order. Bit-exact snapshot and fast tier green. |
 | F-3 | Row fields `medicalSpend`/`charitableSpend` + invariant | ☑ | 2026-10-17 | 71ca054 | Row fields medicalSpend/charitableSpend (outside the bit-exact whitelist); invariant 7b. Fast tier green. |
-| F-4 | [M1] Category select + QCD sub-row + templates | ☑ | 2026-10-17 | (hash backfilled in F-5) | Category select, QCD sub-row, healthcare->medical, giving template, 9-col grid, mobile min-width 760. Deviation: the M1 medical hint ('Your HSA can pay this tax-free') is NOT shown yet: no HSA exists until Phase 2, so it would be false. Add it in HU-1. Verified in browser: tint, checkbox (untick writes qcd:false, ticking or leaving charitable removes the key), no console errors. |
-| F-5 | Foundation tests, sensitivity skip | ☐ | | | |
+| F-4 | [M1] Category select + QCD sub-row + templates | ☑ | 2026-10-17 | 8e47bfb | Category select, QCD sub-row, healthcare->medical, giving template, 9-col grid, mobile min-width 760. Deviation: the M1 medical hint ('Your HSA can pay this tax-free') is NOT shown yet: no HSA exists until Phase 2, so it would be false. Add it in HU-1. Verified in browser: tint, checkbox (untick writes qcd:false, ticking or leaving charitable removes the key), no console errors. |
+| F-5 | Foundation tests, sensitivity skip | ☑ | 2026-10-17 | (hash backfilled in Q-1) | New expenseCategory.test.ts (9 tests: tag-neutrality bit-exact on 4 plans, split sums, schema no-default) + skipped sensitivity entry for category/qcd until Q-3. Bit-exact snapshot green. |
 | Q-1 | `qcd.ts` eligibility, allocation, limit + unit tests | ☐ | | | |
 | Q-2 | QCD integration in `runProjection` (A1 table) | ☐ | | | |
 | Q-3 | OBBBA non-itemizer deduction | ☐ | | | |
@@ -215,7 +215,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - It writes only on user change and never back-fills.
   - Charitable rows show a "Paid to a public charity (QCD-eligible)" checkbox plus helper copy.
   - `streamTemplates.ts`: the healthcare template becomes `medical`; add a `giving` template.
-- [ ] **F-5** Tests: bit-exact stays green, and tags alone change nothing. Add `category` to the `fieldSensitivity.test.ts` skip list until Q-3.
+- [x] **F-5** Tests: bit-exact stays green, and tags alone change nothing. Add `category` to the `fieldSensitivity.test.ts` skip list until Q-3.
 
 ### 1B QCD engine (1–2 sessions)
 - [ ] **Q-1** New `src/engine/qcd.ts`:
@@ -445,6 +445,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | F-2 | `sumExpenseStreams` split; `netSpend = spend.total`. |
 | 2026-10-17 | F-3 | `medicalSpend`/`charitableSpend` row fields and invariant 7b (tagged spend <= netSpend). |
 | 2026-10-17 | F-4 | Expense Category UI built and browser-verified. Medical hint deferred to HU-1 (see F-4 Notes). |
+| 2026-10-17 | F-5 | Foundation tests added. Phase 1A (F-1..F-5) complete. |
 
 ---
 
