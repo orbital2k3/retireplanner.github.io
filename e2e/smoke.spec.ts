@@ -5,7 +5,7 @@ import { enginePlan } from '../src/engine/strategy/savedPlan';
 import { fmtM } from '../src/lib/format';
 import { PLAN_STORE_KEY } from '../src/store/planStoreVersion';
 import type { SavedPlan } from '../src/schemas/savedPlan';
-import { optimizedPlanA, optimizedPlanABracketFill, seedPlan, heroStat, gotoDashboard, saved } from './fixtures';
+import { optimizedPlanA, optimizedPlanABracketFill, seedPlan, heroStat, gotoDashboard, saved, qcdGiver } from './fixtures';
 import { exportPlanToJSON } from '../src/storage/exportImport';
 
 // The UI optimizer runs in a Web Worker; max-spending on planA takes ~5s in Node.
@@ -255,4 +255,44 @@ test('P18 Reset after a pending result leaves no result, no pending result and n
   await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
   await expect(pendingBanner(page)).toHaveCount(0);
   await expect(dashboardStale(page)).toHaveCount(0);
+});
+
+test('QCD giver: Projections shows a non-zero QCD column and the Taxes page shows the savings card', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await seedPlan(page, qcdGiver());
+
+  await page.goto('/#/projections');
+  await expect(page.getByText('Year-by-Year Detail', { exact: true }).first()).toBeVisible();
+  const qcdHeader = page.locator('table.data-table thead th', { hasText: /^QCD$/ });
+  await expect(qcdHeader).toBeVisible();
+  const col = await qcdHeader.evaluate((th) => Array.from(th.parentElement!.children).indexOf(th));
+  const firstCell = page.locator('table.data-table tbody tr').first().locator('td').nth(col);
+  await expect(firstCell).toHaveText(/\$[1-9]/);
+
+  await page.goto('/#/taxes');
+  await expect(page.getByText(/^QCDs save you \$/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('Inputs: a charitable expense row shows the QCD checkbox, and unticking it is saved', async ({ page }) => {
+  await seedPlan(page, qcdGiver());
+  await page.goto('/#/inputs');
+  const box = page.getByLabel(/Paid directly to a public charity/);
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  const giving = (await storedPlan(page)).expenseStreams.find((e) => e.category === 'charitable')!;
+  expect(giving.qcd).toBe(false);
+});
+
+test('a plan saved by v35 with a current result opens with no stale banner and the same numbers', async ({ page }) => {
+  const plan = optimizedPlanA();
+  const before = runProjection(enginePlan(plan));
+  await seedPlan(page, plan, 'real', 35);
+  await gotoDashboard(page);
+  await expect(dashboardStale(page)).toHaveCount(0);
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(fmtM(before.endTotalReal));
+  await page.goto('/#/inputs');
+  await expect(staleBanner(page)).toHaveCount(0);
+  expect((await storedPlan(page)).strategy.result?.inputKey).toBe(plan.strategy.result?.inputKey);
 });

@@ -490,5 +490,8 @@ export function migrateStoredPlan(plan: Record<string, unknown>, fromVersion: nu
   if (fromVersion < 34) migratePlanToV34(plan);
   // v35: flat strategy fields → strategy slots (runs after every flat-shape migration).
   if (fromVersion < 35) return migrateFlatToSaved(plan) as unknown as Record<string, unknown>;
+  // v36 (QCD): no migration. The new expense `category` and `qcd` fields are optional with no default,
+  // so a v35 plan is already valid and its optimizer key is unchanged. Writing a default here would
+  // change every saved plan's key and mark its result out of date (see planMigrationV36.test.ts).
   return plan;
 }
