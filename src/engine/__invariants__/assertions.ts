@@ -2,6 +2,7 @@ import type { Plan } from '../../schemas/plan';
 import type { ProjectionRow, ProjectionResult } from '../projection';
 import { runProjection } from '../projection';
 import { rmdStartAgeForDob } from '../rmd';
+import { qcdLimit } from '../qcd';
 import { taxAdjustedRates } from '../taxAdjusted';
 
 /**
@@ -43,9 +44,9 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   // 1. NO-OVERDRAW: total outflow per bucket must not exceed what's available (growth + contrib).
   //    Catches phantom withdrawals — bucket-A drained while withdrawal still claimed cash.
   const tradAvail = r.begTraditional * (1 + gRateTrad) + contribToTrad;
-  const tradOutflow = r.wdTrd + r.rmd + r.rothConv + (r.lumpSumForcedTradDist ?? 0);
+  const tradOutflow = r.wdTrd + r.rmd + (r.qcdBeyondRmd ?? 0) + r.rothConv + (r.lumpSumForcedTradDist ?? 0);
   if (tradOutflow > tradAvail + tol) {
-    out.push(`Trad OVERDRAW: outflow $${tradOutflow.toFixed(2)} > available $${tradAvail.toFixed(2)} (wdTrd=${r.wdTrd.toFixed(2)} + rmd=${r.rmd.toFixed(2)} + conv=${r.rothConv.toFixed(2)} + forcedTrad=${(r.lumpSumForcedTradDist ?? 0).toFixed(2)} vs begTrad*(1+g)+contribTrad)`);
+    out.push(`Trad OVERDRAW: outflow $${tradOutflow.toFixed(2)} > available $${tradAvail.toFixed(2)} (wdTrd=${r.wdTrd.toFixed(2)} + rmd=${r.rmd.toFixed(2)} + qcdBeyondRmd=${(r.qcdBeyondRmd ?? 0).toFixed(2)} + conv=${r.rothConv.toFixed(2)} + forcedTrad=${(r.lumpSumForcedTradDist ?? 0).toFixed(2)} vs begTrad*(1+g)+contribTrad)`);
   }
   const rothAvail = r.begRoth * (1 + gRateRoth) + contribToRoth + r.rothConv;
   const rothOutflow = r.wdRth + (r.lumpSumForcedRothDist ?? 0);
@@ -60,7 +61,7 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   // 2. MASS BALANCE: end-of-year balance must match the bucket-update arithmetic
   //    when no clamping occurred. Pinpoints both subtle update bugs and validates
   //    that the conversion symmetry (trad - conv = -delta, roth + conv = +delta) holds.
-  const expectedEndTrad = Math.max(0, r.begTraditional * (1 + gRateTrad) + contribToTrad - r.wdTrd - r.rmd - r.rothConv) + (r.lumpSumInjectTrad ?? 0) - (r.lumpSumForcedTradDist ?? 0);
+  const expectedEndTrad = Math.max(0, r.begTraditional * (1 + gRateTrad) + contribToTrad - r.wdTrd - r.rmd - (r.qcdBeyondRmd ?? 0) - r.rothConv) + (r.lumpSumInjectTrad ?? 0) - (r.lumpSumForcedTradDist ?? 0);
   if (Math.abs(r.endTraditional - expectedEndTrad) > tol) {
     out.push(`Trad MASS BALANCE: endTraditional $${r.endTraditional.toFixed(2)} != expected $${expectedEndTrad.toFixed(2)} (delta $${(r.endTraditional - expectedEndTrad).toFixed(2)})`);
   }
@@ -114,7 +115,7 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   //    In SemiRetire, working person's contributions offset expense draws, so the coverage
   //    check still holds. Allow 5% slack for gross-up convergence drift.
   if (semiRetired && r.endTotal > 1 && !opts.skipSpendingCoverage) {
-    const cashIn = r.wdTax + r.wdTrd + r.wdRth + r.totalSS + r.otherIncome + (r.distributedCash ?? 0) + r.rmd + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0);
+    const cashIn = r.wdTax + r.wdTrd + r.wdRth + r.totalSS + r.otherIncome + (r.distributedCash ?? 0) + r.rmd + (r.qcdBeyondRmd ?? 0) + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0);
     const cashOut = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa;
     // 5% slack: pathological first-retirement-year scenarios (high marginal-bracket
     // crossings combined with low starting balance) can have gross-up convergence
@@ -125,6 +126,20 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
     if (cashIn + coverageSlack < cashOut) {
       out.push(`SPENDING NOT COVERED: cash-in $${cashIn.toFixed(2)} < cash-out $${cashOut.toFixed(2)} (gap $${(cashOut - cashIn).toFixed(2)})`);
     }
+  }
+
+  // 7a. QCD: a qcd is charitable giving paid from an IRA, so it cannot exceed that year's charitable
+  //     spend, is split into an RMD part and a beyond-RMD part, and is capped per person.
+  const qcd = r.qcd ?? 0, qcdBeyond = r.qcdBeyondRmd ?? 0;
+  if (qcd < -tol || qcdBeyond < -tol || qcdBeyond > qcd + tol) {
+    out.push(`QCD fields inconsistent: qcd=${qcd}, qcdBeyondRmd=${qcdBeyond}`);
+  }
+  if (qcd > r.charitableSpend + tol) {
+    out.push(`QCD exceeds charitable spend: qcd=${qcd}, charitable=${r.charitableSpend}`);
+  }
+  const qcdOwners = (aliveA ? 1 : 0) + (aliveB ? 1 : 0);
+  if (qcd > qcdOwners * qcdLimit(r.inflationFactor) + tol) {
+    out.push(`QCD above the annual limit: qcd=${qcd}, owners=${qcdOwners}, limit each=${qcdLimit(r.inflationFactor)}`);
   }
 
   // 7b. Category split: tagged spending is a subset of total spending.

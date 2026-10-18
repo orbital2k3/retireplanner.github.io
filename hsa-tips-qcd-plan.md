@@ -30,7 +30,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 6 | ◐ |
+| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 8 | ◐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
@@ -50,10 +50,10 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | F-3 | Row fields `medicalSpend`/`charitableSpend` + invariant | ☑ | 2026-10-17 | 71ca054 | Row fields medicalSpend/charitableSpend (outside the bit-exact whitelist); invariant 7b. Fast tier green. |
 | F-4 | [M1] Category select + QCD sub-row + templates | ☑ | 2026-10-17 | 8e47bfb | Category select, QCD sub-row, healthcare->medical, giving template, 9-col grid, mobile min-width 760. Deviation: the M1 medical hint ('Your HSA can pay this tax-free') is NOT shown yet: no HSA exists until Phase 2, so it would be false. Add it in HU-1. Verified in browser: tint, checkbox (untick writes qcd:false, ticking or leaving charitable removes the key), no console errors. |
 | F-5 | Foundation tests, sensitivity skip | ☑ | 2026-10-17 | 3ce5543 | New expenseCategory.test.ts (9 tests: tag-neutrality bit-exact on 4 plans, split sums, schema no-default) + skipped sensitivity entry for category/qcd until Q-3. Bit-exact snapshot green. |
-| Q-1 | `qcd.ts` eligibility, allocation, limit + unit tests | ☑ | 2026-10-17 | (hash backfilled in Q-2) | qcd.ts: qcdEligible, qcdLimit, qcdAvailable, allocateQcd (pure, not yet wired). qcd.test.ts: 18 tests. |
-| Q-2 | QCD integration in `runProjection` (A1 table) | ☐ | | | |
+| Q-1 | `qcd.ts` eligibility, allocation, limit + unit tests | ☑ | 2026-10-17 | 39efb11 | qcd.ts: qcdEligible, qcdLimit, qcdAvailable, allocateQcd (pure, not yet wired). qcd.test.ts: 18 tests. |
+| Q-2 | QCD integration in `runProjection` (A1 table) | ☑ | 2026-10-17 | (hash backfilled in Q-3) | Wired per Appendix A1: rmdTaxable/trdForced/forcedA aliases (equal rmdAmt without a QCD), 9 trad-outflow, 14 income, 1 per-person and state-tax uses replaced, rmdAmt kept for lifetimeRMD, row rmd and the unused withdrawal arg. qcdOn hoisted; opts.disableQCD added; sumExpenseStreams gained charitableQcd. Bit-exact snapshot and golden CSVs unchanged. Sanity on planF + 20k charity: lifetime fed tax 3.39M -> 3.14M. |
 | Q-3 | OBBBA non-itemizer deduction | ☐ | | | |
-| Q-4 | QCD row fields + invariants | ☐ | | | |
+| Q-4 | QCD row fields + invariants | ☑ | 2026-10-17 | (same commit as Q-2) | Built together with Q-2 so every commit stays green: row fields qcd/qcdBeyondRmd and invariants (trad outflow, mass balance, coverage cashIn += qcdBeyondRmd; qcd <= charitable; qcd <= owners x limit). |
 | Q-5 | QCD projection tests (R3–R6) | ☐ | | | |
 | Q-6 | QCD fuzz property | ☐ | | | |
 | Q-7 | Golden `planQ_qcdGiver` | ☐ | | | |
@@ -223,13 +223,13 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - `allocateQcd`: first covers RMDs A then B; the excess goes A then B; each person is capped by the limit and by own available trad excluding inherited
   - Constant `QCD_LIMIT_2026`, scaled by `inflationFactor`
   - `qcd.test.ts`: Jun 30 / Jul 1 DOBs, limit cap, MFJ split, survivor only, empty trad, inherited excluded
-- [ ] **Q-2** Integrate into `runProjection` following Appendix A1:
+- [x] **Q-2** Integrate into `runProjection` following Appendix A1:
   - Derive `qcd`, `rmdTaxable`, `trdForced` and `forcedA/B`.
   - Replace each `rmdAmt` use according to the A1 table.
   - Add `opts.disableQCD`.
   - Charity that QCD doesn't cover stays in `netSpend` and is funded normally.
 - [ ] **Q-3** OBBBA deduction: `charDed = min(charitable − qcd, MFJ ? 2000 : 1000)` from 2026. `stdDEff` replaces `stdD` at the lines listed in A1; magi and seniorBonus are untouched. Add row field `charityDeduction`; `row.stdDeduction` includes it. Remove `category` from the sensitivity skip list and add QCD and deduction cases.
-- [ ] **Q-4** Row fields `qcd`, `qcdBeyondRmd`. Invariants (`__invariants__/assertions.ts`):
+- [x] **Q-4** Row fields `qcd`, `qcdBeyondRmd`. Invariants (`__invariants__/assertions.ts`):
   - trad outflow `+= qcdBeyondRmd`
   - mass balance
   - coverage cashIn `+= qcdBeyondRmd`
@@ -447,6 +447,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | F-4 | Expense Category UI built and browser-verified. Medical hint deferred to HU-1 (see F-4 Notes). |
 | 2026-10-17 | F-5 | Foundation tests added. Phase 1A (F-1..F-5) complete. |
 | 2026-10-17 | Q-1 | `qcd.ts` + 18 unit tests. Added `qcdLimit` and `qcdAvailable` helpers beyond the spec. |
+| 2026-10-17 | Q-2, Q-4 | QCD wired into `runProjection` with its row fields and invariants in one commit (invariants had to move with the engine to keep tests green). Q-3 (OBBBA deduction) is next. |
 
 ---
 

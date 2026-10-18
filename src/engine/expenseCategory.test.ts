@@ -23,8 +23,9 @@ const plans: Array<[string, () => Plan]> = [
 ];
 
 describe('expense category tags', () => {
-  it.each(plans)('%s: tags alone change no projection value (bit-exact)', (_n, mk) => {
+  it.each(plans)('%s: tags that don\'t trigger a QCD change no projection value (bit-exact)', (_n, mk) => {
     const base = digestProjection(runProjection(mk()));
+    // Charitable rows carry qcd:false (a gift that can't be a QCD); an eligible charitable row is covered in qcd.projection.test.ts.
     const cycle = ['general', 'medical', 'charitable'] as const;
     const tagged = digestProjection(runProjection(tagAll(mk(), (_e, i) => ({ category: cycle[i % 3], qcd: i % 3 === 2 ? false : undefined }))));
     expect(enc(tagged)).toBe(enc(base));
