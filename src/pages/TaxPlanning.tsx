@@ -10,6 +10,7 @@ import ChartFrame from '../components/charts/ChartFrame';
 import { STATE_PROFILES } from '../engine/stateTax';
 import { compareWithWithoutConversion } from '../engine/comparison';
 import { compareWithWithoutQCD, qcdBenefitCopy } from '../engine/qcdBenefit';
+import { computeHsaBenefit, hsaBenefitCopy } from '../engine/hsaBenefit';
 import { fmtK } from '../lib/format';
 import LearnMoreModal from '../components/LearnMoreModal';
 import { QCD_HELP } from '../components/learnMoreTopics';
@@ -32,6 +33,11 @@ export default function TaxPlanning() {
   })();
   const [tab, setTab] = useState<TaxTab>(initialTab);
   const [qcdHelpOpen, setQcdHelpOpen] = useState(false);
+  // HSA card: what the HSA pays tax-free and (when a retiree keeps contributing) the ACA effect. Null without either.
+  const hsaCopy = useMemo(() => {
+    const b = computeHsaBenefit(plan);
+    return b ? hsaBenefitCopy(b) : null;
+  }, [plan]);
   const cmp = useMemo(() => compareWithWithoutConversion(plan), [plan]);
   // "Tax saved by QCD": same plan with the gifts paid in cash instead. Null (card hidden) without QCDs.
   const qcdCopy = useMemo(() => {
@@ -82,6 +88,15 @@ export default function TaxPlanning() {
               >
                 ⓘ Learn more
               </button>
+            </div>
+          </div>
+        )}
+        {tab === 'federal' && hsaCopy && (
+          <div className="insight-card success" style={{ marginBottom: 20, borderRadius: 'var(--radius)' }}>
+            <div className="insight-icon">✚</div>
+            <div className="insight-content">
+              <div className="insight-title">{hsaCopy.title}</div>
+              <div className="insight-body">{hsaCopy.body}</div>
             </div>
           </div>
         )}
