@@ -244,6 +244,8 @@ Test tiers: every step `pnpm test:fast`; steps 2-4 also `pnpm test:opt` (optimiz
 
 ## 6. Open questions (answer before planning)
 
+> **Answered.** All questions below have been answered; the decisions are recorded in [hsa-tips-qcd-plan.md](hsa-tips-qcd-plan.md) (Decisions table, D1–D13), which also holds the phased build plan and tracker.
+
 **General**
 1. Delivery order QCD → HSA → TIPS OK, or is one of these urgent for you personally?
 2. Expense category tagging as the shared mechanism, or a separate "Giving" section and "Healthcare" section?
