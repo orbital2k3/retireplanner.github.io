@@ -13,6 +13,7 @@ import { filingStatusForYear, type FilingStatus } from './filingStatus';
 import { rmdDivisor, rmdStartAgeForDob, inheritedRmdDivisor } from './rmd';
 import { allocateQcd, qcdAvailable, qcdEligible, qcdLimit } from './qcd';
 import { allocateHsaContribution, hsaContribEligible, hsaLastResortDraw, hsaPayAge, splitHsaPayment, HSA_MEDICARE_AGE } from './hsa';
+import { resolveTipsLadder, tipsLadderYear, type TipsYear } from './tipsLadder';
 import { householdSS } from './socialSecurity';
 import { yearFederalTax, standardDeduction, taxableSocialSecurity, seniorBonusDeduction } from './tax';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS, OBBBA_NONITEMIZER_CHARITY, OBBBA_NONITEMIZER_CHARITY_FIRST_YEAR } from './taxConstants';
@@ -127,6 +128,21 @@ export interface ProjectionRow {
   hsaReimbursed: number;      // receipts reimbursed tax-free
   hsaNonQualWD: number;       // non-qualified draw: ordinary income (in magi, ACA, state tax)
   hsaPenalty: number;         // 20% penalty on the part of hsaNonQualWD taken by an owner under 65
+  // TIPS ladder sleeve. Zero on plans without a ladder; kept out of the bit-exact whitelist. The sleeve
+  // is part of endTotal but not of endTaxable/endTraditional/endRoth, and it follows CPI only.
+  begTips: number;            // sleeve value at the start of the year (all accounts)
+  endTipsTaxable: number;     // year-end sleeve value held in taxable
+  endTipsTrad: number;        // ... in pre-tax (IRA) accounts
+  endTipsRoth: number;        // ... in Roth
+  tipsCoupon: number;         // coupons paid this year (all accounts)
+  tipsAccrual: number;        // indexation of principal (signed; taxable rungs owe tax on it, no cash)
+  tipsMaturity: number;       // principal paid at maturity this year (includes tipsFloorBonus)
+  tipsFloorBonus: number;     // part of the maturity above indexed principal (deflation floor)
+  tipsCash: number;           // coupons + maturities from taxable rungs: cash to the household
+  tipsToTrad: number;         // coupons + maturities from pre-tax rungs, returned to the IRAs
+  tipsToRoth: number;         // coupons + maturities from Roth rungs, returned to the Roth
+  tipsOrdInc: number;         // federal ordinary income from taxable rungs (state-exempt)
+  rmdUnmet: number;           // RMD that the liquid IRA balance could not cover (ladder rungs are illiquid)
 }
 
 export interface ProjectionResult {
@@ -204,6 +220,12 @@ const sumIncomeStreams = (
  *  `charitableQcd` is the part of `charitable` eligible for a QCD (rows not marked `qcd: false`). */
 interface ExpenseSums { total: number; medical: number; charitable: number; charitableQcd: number }
 const NO_EXPENSES: ExpenseSums = { total: 0, medical: 0, charitable: 0, charitableQcd: 0 };
+
+/** Every ladder quantity for a plan without one: adding these zeros leaves the arithmetic untouched. */
+const NO_TIPS: TipsYear = {
+  beg: 0, begTradA: 0, begTradB: 0, coupon: 0, accrual: 0, maturity: 0, floorBonus: 0,
+  cash: 0, toTradA: 0, toTradB: 0, toRoth: 0, ordInc: 0, endTaxable: 0, endTrad: 0, endRoth: 0,
+};
 
 const sumExpenseStreams = (
   resolved: ResolvedExpense[],
@@ -338,6 +360,18 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
   // Medical bills the HSA did not pay are kept as receipts: reimbursable tax-free later (D4).
   let hsaReceipts = hasHSA ? (pfA.hsaReceipts ?? 0) + (pfB?.hsaReceipts ?? 0) : 0;
   const hsaPayFromAge = hasHSA ? hsaPayAge(plan.portfolio) : 0;
+  // TIPS ladder (D10): by default the entered balances already contain the bonds, so their value is
+  // carved out of each account here and tracked in a separate sleeve that follows CPI, not returns.
+  // hasTips gates every ladder step; without one nothing below changes.
+  const tipsLadder = resolveTipsLadder(plan.portfolio, startYear);
+  const hasTips = tipsLadder !== null;
+  if (tipsLadder) {
+    taxable -= tipsLadder.carve.taxable;
+    roth -= tipsLadder.carve.roth;
+    tradA -= tipsLadder.carve.tradA;
+    tradB -= tipsLadder.carve.tradB;
+    taxableBasis = Math.max(0, taxableBasis - tipsLadder.carve.taxable);
+  }
 
   const rows: ProjectionRow[] = [];
   const decisionNotes: YearDecision[] = [];
@@ -439,9 +473,15 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     };
     const cA = bucketize(pfA, workingA, contribA, spousalA);
     const cB = bucketize(pfB, workingB, contribB, spousalB);
+    // TIPS sleeve for the year. Coupons and maturities from IRA and Roth rungs flow back into those
+    // accounts like a contribution; taxable ones are household cash (see tips.cash below).
+    const tips = hasTips
+      ? tipsLadderYear(tipsLadder, startYear + i, inflationFactor,
+          inflationFactor * (1 + (opts?.inflationOverrides?.[i] ?? plan.assumptions.inflation)), aliveA, aliveB)
+      : NO_TIPS;
     const contribToTax  = cA.tax  + cB.tax;
-    const contribToTrad = cA.trad + cB.trad;
-    const contribToRoth = cA.roth + cB.roth;
+    const contribToTrad = cA.trad + cB.trad + tips.toTradA + tips.toTradB;
+    const contribToRoth = cA.roth + cB.roth + tips.toRoth;
 
     // HSA contributions. A working person (still under Medicare) adds them from outside the
     // portfolio like a payroll deduction, so they never pass through contribA/B or contribSplit.
@@ -537,9 +577,19 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const gRateHsaYear  = override ?? (plan.assumptions.hsaReturn ?? plan.assumptions.tradReturn);
 
     // Per-person RMD — each governed by their own age and SECURE 2.0 start age.
-    const rmdA = (aliveA && ageA >= rmdStartAgeA) ? Math.max(0, tradA - inheritedInTradA) / rmdDivisor(ageA) : 0;
-    const rmdB = (aliveB && ageB !== undefined && ageB >= rmdStartAgeB)
-      ? Math.max(0, tradB - inheritedInTradB) / rmdDivisor(ageB) : 0;
+    // A person's pre-tax ladder rungs count in the RMD base (the IRA balance includes the bonds).
+    let rmdA = (aliveA && ageA >= rmdStartAgeA) ? (Math.max(0, tradA - inheritedInTradA) + tips.begTradA) / rmdDivisor(ageA) : 0;
+    let rmdB = (aliveB && ageB !== undefined && ageB >= rmdStartAgeB)
+      ? (Math.max(0, tradB - inheritedInTradB) + tips.begTradB) / rmdDivisor(ageB) : 0;
+    // The bonds cannot be distributed in cash. When the RMD is larger than the liquid IRA money, the
+    // RMD is clamped to it and the rest is recorded as unmet (D11); in-kind distributions are not modeled.
+    let rmdUnmet = 0;
+    if (hasTips) {
+      const liqA = qcdAvailable(tradA, inheritedInTradA, gRateTradYear, cA.trad, tips.toTradA);
+      const liqB = qcdAvailable(tradB, inheritedInTradB, gRateTradYear, cB.trad, tips.toTradB);
+      if (rmdA > liqA) { rmdUnmet += rmdA - liqA; rmdA = liqA; }
+      if (rmdB > liqB) { rmdUnmet += rmdB - liqB; rmdB = liqB; }
+    }
     const rmdAmt = rmdA + rmdB;
     lifetimeRMD += rmdAmt;
     lifetimeRMDReal += rmdAmt / inflationFactor;
@@ -554,9 +604,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     if (qcdOn && spend.charitableQcd > 0) {
       const q = allocateQcd(
         spend.charitableQcd, qcdLimit(inflationFactor),
-        { eligible: aliveA && qcdEligible(plan.personA.dob, ageA), rmd: rmdA, available: qcdAvailable(tradA, inheritedInTradA, gRateTradYear, cA.trad) },
+        { eligible: aliveA && qcdEligible(plan.personA.dob, ageA), rmd: rmdA, available: qcdAvailable(tradA, inheritedInTradA, gRateTradYear, cA.trad, tips.toTradA) },
         plan.personB
-          ? { eligible: aliveB && ageB !== undefined && qcdEligible(plan.personB.dob, ageB), rmd: rmdB, available: qcdAvailable(tradB, inheritedInTradB, gRateTradYear, cB.trad) }
+          ? { eligible: aliveB && ageB !== undefined && qcdEligible(plan.personB.dob, ageB), rmd: rmdB, available: qcdAvailable(tradB, inheritedInTradB, gRateTradYear, cB.trad, tips.toTradB) }
           : undefined,
       );
       qcdA = q.qcdA; qcdB = q.qcdB;
@@ -610,7 +660,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const distributedCashEst  = (annualDivEstForDist + exemptIntEstForDist) * distributePct;
     // Estimate of what the HSA will pay (medical only; IRMAA is not known until the loop runs).
     const hsaQualEst = hasHSA ? Math.min(hsaAvail, spend.medical) : 0;
-    const spendingGapEst = Math.max(0, netSpend - ss.total - other.gross - trdForced - distributedCashEst - hsaQualEst + hsaContribRet);
+    const spendingGapEst = Math.max(0, netSpend - ss.total - other.gross - trdForced - distributedCashEst - hsaQualEst + hsaContribRet - tips.cash);
     // Ordinary dividends from the taxable account are ordinary income (eat bracket space) but are
     // reinvested — not a spending resource. Estimate them here so baseOrdIncForConv is complete.
     const annualDivEst = (retiredA || retiredB) ? taxable * taxableDivYield : 0;
@@ -648,8 +698,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Pass 1 — wdTrd estimate ignoring conversion taxes on taxable
     const wdTrdEst1  = _wdTrdEst(spendingGapEst, taxAvailEst);
     const wdRthEst1  = _wdRthEst(spendingGapEst, taxAvailEst);
-    const piEst1     = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEst1 + annualDivEst + 0.5 * ss.total - hsaContribRet;
-    const baseOrdEst1 = hsaDed(taxableSocialSecurity(piEst1, ss.total, filingStatus) + rmdTaxable + other.taxableAmt + wdTrdEst1 + wdRthEst1 + ordDivEst);
+    const piEst1     = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEst1 + annualDivEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
+    const baseOrdEst1 = hsaDed(taxableSocialSecurity(piEst1, ss.total, filingStatus) + rmdTaxable + other.taxableAmt + wdTrdEst1 + wdRthEst1 + ordDivEst + tips.ordInc);
     const ceilForConv = effectiveBracketCeiling(plan.conversion.bracketCeiling, filingStatus) * inflationFactor;
     // Inherited pre-tax IRAs cannot be converted to Roth — exclude their tracked balance.
     const inheritedTradBal = inheritedState
@@ -677,14 +727,14 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const taxAvailForSpendingEst = Math.max(0, taxAvailEst - convTaxFromBrok);
     const wdTrdEstForConv = _wdTrdEst(spendingGapEst, taxAvailForSpendingEst);
     const wdRthEstForConv = _wdRthEst(spendingGapEst, taxAvailForSpendingEst);
-    const piForConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + annualDivEst + 0.5 * ss.total - hsaContribRet;
+    const piForConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + annualDivEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
     const taxableSSForConv = taxableSocialSecurity(piForConv, ss.total, filingStatus);
-    const baseOrdIncForConv0 = hsaDed(taxableSSForConv + rmdTaxable + other.taxableAmt + wdTrdEstForConv + wdRthEstForConv + ordDivEst);
+    const baseOrdIncForConv0 = hsaDed(taxableSSForConv + rmdTaxable + other.taxableAmt + wdTrdEstForConv + wdRthEstForConv + ordDivEst + tips.ordInc);
     // Pass 3 — SS taxability feedback: if the conversion itself pushes PI above the 85% tier,
     // SS becomes more taxable, adding to ordIncome. Compute SS gain at full headroom and absorb
     // it into the base so rothConversion sizes conv to stay within the ceiling after the flip.
     const headroomNominal = Math.max(0, ceilForConv - (baseOrdIncForConv0 - stdDEff - seniorBonusEst));
-    const piWithFullConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + headroomNominal + annualDivEst + 0.5 * ss.total - hsaContribRet;
+    const piWithFullConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + headroomNominal + annualDivEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
     const taxableSSWithFullConv = taxableSocialSecurity(piWithFullConv, ss.total, filingStatus);
     const ssGain = Math.max(0, taxableSSWithFullConv - taxableSSForConv);
     const baseOrdIncForConv = baseOrdIncForConv0 + ssGain;
@@ -758,11 +808,11 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const lumpSumOrdIncomeEst = lumpSumHSAIncomeEst + lumpSumForcedTradDistEst;
 
     // Base ordinary income for withdrawal bracket-fill sizing (conv now known; wdTrd unknown).
-    const piForWd = other.taxableAmt + exemptIncomeEst + rmdTaxable + conv + lumpSumOrdIncomeEst + 0.5 * ss.total - hsaContribRet;
+    const piForWd = other.taxableAmt + exemptIncomeEst + rmdTaxable + conv + lumpSumOrdIncomeEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
     const taxableSSForWd = taxableSocialSecurity(piForWd, ss.total, filingStatus);
     // Include ordinary dividends so bracketfill withdrawal sees the correct pre-wdTrd taxable income.
     const baseOrdIncForWd = hsaDed(taxableSSForWd + rmdTaxable + conv + other.taxableAmt + lumpSumOrdIncomeEst
-      + (eitherRetired ? taxable * taxableDivYield * (1 - taxableQualifiedPct) : 0));
+      + (eitherRetired ? taxable * taxableDivYield * (1 - taxableQualifiedPct) : 0) + tips.ordInc);
 
     // Per-bucket "available to withdraw" caps. All three buckets are debited by the
     // end-of-year update `bucket = max(0, bucket*(1+g) + contrib +/- credits - withdrawal)`,
@@ -837,13 +887,13 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       // the cash the rest of the portfolio has to produce.
       const hsaQualIter = hasHSA ? Math.min(hsaAvail, spend.medical + prevIRMAA) : 0;
       const incomeAvailForTax = Math.max(0,
-        ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncomeEst + lumpSumTaxFreeEst - netSpend + hsaQualIter - hsaContribRet
+        ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncomeEst + lumpSumTaxFreeEst - netSpend + hsaQualIter - hsaContribRet + tips.cash
       );
       const taxFromBrok = (plan.payTaxFromBrokerage ?? false)
         ? Math.min(Math.max(0, taxBurden - incomeAvailForTax), taxAvail)
         : 0;
       taxFromBrokFinal = taxFromBrok;
-      gap = Math.max(0, netSpend - ss.total - other.gross - distributedCash - trdForced - lumpSumOrdIncomeEst - lumpSumTaxFreeEst + taxBurden - taxFromBrok - hsaQualIter + hsaContribRet);
+      gap = Math.max(0, netSpend - ss.total - other.gross - distributedCash - trdForced - lumpSumOrdIncomeEst - lumpSumTaxFreeEst + taxBurden - taxFromBrok - hsaQualIter + hsaContribRet - tips.cash);
       const w = activePolicy
         ? applyBlendPolicy({ policy: activePolicy, ageA, gap, taxable: taxAvail - taxFromBrok, traditional: tradAvail, roth: rothAvail })
         : applyWithdrawalOrder({
@@ -860,10 +910,10 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       const ltcg = wdTax * gainFraction + qualifiedDiv;
       // SS taxability via IRC §86 provisional-income tiers (replaces flat 0.85).
       // annualDiv and §103 exempt interest count toward provisional income per IRC §86.
-      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDiv + 0.5 * ss.total - hsaContribRet;
+      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDiv + 0.5 * ss.total - hsaContribRet + tips.ordInc;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
       // ordinaryDiv is ordinary income; qualifiedDiv is captured in ltcg (LTCG stack path).
-      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + ordinaryDiv);
+      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + ordinaryDiv + tips.ordInc);
       const magi = ordIncome + ltcg;  // NIIT + OBBBA senior bonus: exempt interest excluded
       const surchargeMAGI = magi + exemptIncome;  // IRMAA (§1395r(i)(4)) + ACA (§36B(d)(2)(B))
       seniorBonus = seniorBonusDeduction(filingStatus, filerAge, ageB, magi, calYear);
@@ -882,7 +932,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       irmaaMAGIFinal = irmaaMAGI;
       const irmaaFS = i >= 2 ? filingStatusHistory[i - 2] : filingStatus;
       irmaa = numAt65Plus > 0 ? annualIRMAACost(irmaaMAGI, inflationFactor, numAt65Plus, irmaaFS) : 0;
-      niit = annualNIIT(magi, ltcg + ordinaryDiv, filingStatus);
+      niit = annualNIIT(magi, ltcg + ordinaryDiv + tips.ordInc, filingStatus);
 
       // Refine state tax to include retirement distributions for states that tax them.
       // Include stateAmt in the convergence check — for CA/NY plans, state tax is a
@@ -994,7 +1044,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // one person's RMD rate differs from the other's (different ages → per-person overdraft).
     const totalTradBeg = tradA + tradB;
     const ratioA = totalTradBeg > 0 ? tradA / totalTradBeg : 0;
-    const tradANext = tradA * (1 + gRateTradYear) + cA.trad - forcedA - (wdTrd + conv) * ratioA;
+    const tradANext = tradA * (1 + gRateTradYear) + cA.trad + tips.toTradA - forcedA - (wdTrd + conv) * ratioA;
     const tradCombined = Math.max(0, totalTradBeg * (1 + gRateTradYear) + contribToTrad - trdForced - wdTrd - conv);
     tradA = tradCombined > 0 ? Math.max(0, Math.min(tradCombined, tradANext)) : 0;
     tradB = tradCombined - tradA;
@@ -1075,9 +1125,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Mirrors one pass of the gross-up loop body.
     const resolveYearTaxes = () => {
       const ltcg = wdTax * gainFraction + qualifiedDiv;
-      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + annualDiv + 0.5 * ss.total + hsaNonQual - hsaContribRet;
+      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + annualDiv + 0.5 * ss.total + hsaNonQual - hsaContribRet + tips.ordInc;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
-      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + ordinaryDiv + hsaNonQual);
+      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + ordinaryDiv + hsaNonQual + tips.ordInc);
       const magi = ordIncome + ltcg;
       const surchargeMAGI = magi + exemptIncome;
       seniorBonus = seniorBonusDeduction(filingStatus, filerAge, ageB, magi, calYear);
@@ -1087,7 +1137,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       irmaaMAGIFinal = i >= 2 ? surchargeMagiHistory[i - 2] : surchargeMAGI;
       const irmaaFS = i >= 2 ? filingStatusHistory[i - 2] : filingStatus;
       irmaa = numAt65Plus > 0 ? annualIRMAACost(irmaaMAGIFinal, inflationFactor, numAt65Plus, irmaaFS) : 0;
-      niit = annualNIIT(magi, ltcg + ordinaryDiv, filingStatus);
+      niit = annualNIIT(magi, ltcg + ordinaryDiv + tips.ordInc, filingStatus);
       stateAmt = stateTax(
         plan.state,
         other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + ltcg + lumpSumHSAIncome + hsaNonQual,
@@ -1116,7 +1166,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // adds income. Each round leaves a deficit of roughly need x marginal rate, so the loop
     // converges geometrically; 40 rounds clears it even at very high combined rates.
     // Whatever the portfolio still cannot cover is the shortfall.
-    const cashIn = ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncome + lumpSumTaxFreeCash + hsaQualFinal;
+    const cashIn = ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncome + lumpSumTaxFreeCash + hsaQualFinal + tips.cash;
     const residualOf = () => cashIn + wdTax + wdTrd + wdRth
       - netSpend - fedTax - stateAmt - irmaa - niit - acaPremiumYear
       + (hsaQualLR + hsaReimb + hsaNonQual) - hsaPenalty - hsaContribRet;
@@ -1220,7 +1270,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
 
     // Medical bills paid from other accounts become receipts the HSA can reimburse later.
     if (hasHSA) hsaReceipts = hsaReceipts - hsaReimb + Math.max(0, spend.medical - Math.min(hsaQualFinal + hsaQualLR, spend.medical));
-    const endTotal = taxable + tradA + tradB + roth + hsaA + hsaB;
+    const endTotal = taxable + tradA + tradB + roth + hsaA + hsaB + tips.endTaxable + tips.endTrad + tips.endRoth;
     // Depletion is "could not fund the year's spending need from the portfolio", NOT just
     // "endTotal reached exactly zero". Each bucket's update is max(0, bal*g - wd), and wd is
     // capped at bal, so residuals decay geometrically toward zero but never quite hit it —
@@ -1300,7 +1350,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       endTotal,
       endTaxableBasis: taxableBasis,
       endTaxAdjusted: taxAdjustedValue(taxable, taxableBasis, tradA + tradB, roth, taxAdjRates.ordRate, taxAdjRates.ltcgRate,
-        hasHSA ? { hsa: hsaA + hsaB, hsaReceipts } : undefined),
+        hasHSA || hasTips
+          ? { ...(hasHSA ? { hsa: hsaA + hsaB, hsaReceipts } : {}), ...(hasTips ? { preTax: tips.endTrad, clean: tips.endTaxable + tips.endRoth } : {}) }
+          : undefined),
       ranOut,
       shortfall,
       taxFromBrokerage: taxFromBrokFinal,
@@ -1318,6 +1370,19 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       hsaReimbursed: hsaReimb,
       hsaNonQualWD: hsaNonQual,
       hsaPenalty,
+      begTips: tips.beg,
+      endTipsTaxable: tips.endTaxable,
+      endTipsTrad: tips.endTrad,
+      endTipsRoth: tips.endRoth,
+      tipsCoupon: tips.coupon,
+      tipsAccrual: tips.accrual,
+      tipsMaturity: tips.maturity,
+      tipsFloorBonus: tips.floorBonus,
+      tipsCash: tips.cash,
+      tipsToTrad: tips.toTradA + tips.toTradB,
+      tipsToRoth: tips.toRoth,
+      tipsOrdInc: tips.ordInc,
+      rmdUnmet,
     });
   }
 
