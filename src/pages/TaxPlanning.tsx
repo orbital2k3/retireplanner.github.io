@@ -9,6 +9,7 @@ import StateTaxDrag from '../components/charts/StateTaxDrag';
 import ChartFrame from '../components/charts/ChartFrame';
 import { STATE_PROFILES } from '../engine/stateTax';
 import { compareWithWithoutConversion } from '../engine/comparison';
+import { compareWithWithoutQCD, qcdBenefitCopy } from '../engine/qcdBenefit';
 import { fmtK } from '../lib/format';
 
 type TaxTab = 'federal' | 'state' | 'irmaa';
@@ -29,6 +30,11 @@ export default function TaxPlanning() {
   })();
   const [tab, setTab] = useState<TaxTab>(initialTab);
   const cmp = useMemo(() => compareWithWithoutConversion(plan), [plan]);
+  // "Tax saved by QCD": same plan with the gifts paid in cash instead. Null (card hidden) without QCDs.
+  const qcdCopy = useMemo(() => {
+    const b = compareWithWithoutQCD(plan);
+    return b ? qcdBenefitCopy(b) : null;
+  }, [plan]);
   const taxDelta = real
     ? (cmp.cumulativeTaxWith.at(-1) ?? 0) - (cmp.cumulativeTaxNo.at(-1) ?? 0)
     : (cmp.cumulativeTaxWithNom.at(-1) ?? 0) - (cmp.cumulativeTaxNoNom.at(-1) ?? 0);
@@ -61,6 +67,16 @@ export default function TaxPlanning() {
         </div>
       </div>
       <div className="page-body">
+        {tab === 'federal' && qcdCopy && (
+          <div className="insight-card info" style={{ marginBottom: 20, borderRadius: 'var(--radius)' }}>
+            <div className="insight-icon">◆</div>
+            <div className="insight-content">
+              <div className="insight-title">{qcdCopy.title}</div>
+              <div className="insight-body">{qcdCopy.body}</div>
+            </div>
+          </div>
+        )}
+
         {tab === 'federal' && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">
