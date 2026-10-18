@@ -19,6 +19,13 @@ import StrategyCustomizeSheet from '../components/strategy/StrategyCustomizeShee
 
 const headerStyle: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', whiteSpace: 'nowrap' };
 
+/** Tint for the expense Category select (general stays neutral). Matches mockup M1. */
+const CATEGORY_SELECT_STYLE: Record<NonNullable<ExpenseStream['category']>, React.CSSProperties> = {
+  general: {},
+  medical: { borderColor: 'var(--success)', background: 'var(--success-light)', color: '#0f5c3b' },
+  charitable: { borderColor: 'var(--gold)', background: 'var(--gold-pale)', color: '#6b5418' },
+};
+
 function EndRuleControl({ end, startAge, onChange }: {
   end: EndRule;
   startAge: number;
@@ -676,6 +683,7 @@ export default function InputsPage() {
             <div className="stream-rows-scroll">
               <div className="stream-row expense-row" style={{ padding: '6px 0', borderBottom: '2px solid var(--border-light)' }}>
                 <div style={headerStyle}>Description</div>
+                <div style={headerStyle}>Category</div>
                 <div style={headerStyle}>Whose</div>
                 <div style={headerStyle}>Start age</div>
                 <div style={headerStyle}>Until</div>
@@ -687,6 +695,19 @@ export default function InputsPage() {
               {plan.expenseStreams.map((s) => (
                 <div key={s.id} className="stream-row expense-row">
                   <input type="text" value={s.description} style={{ fontSize: 13 }} onChange={(e) => updateExpenseStream(s.id, { description: e.target.value })} />
+                  <select
+                    value={s.category ?? 'general'}
+                    style={{ fontSize: 13, ...(CATEGORY_SELECT_STYLE[s.category ?? 'general']) }}
+                    onChange={(e) => {
+                      const category = e.target.value as NonNullable<ExpenseStream['category']>;
+                      // Only a user change writes the tag; 'qcd' belongs to charitable rows, so leaving one clears it.
+                      updateExpenseStream(s.id, category === 'charitable' ? { category } : { category, qcd: undefined });
+                    }}
+                  >
+                    <option value="general">General</option>
+                    <option value="medical">Medical</option>
+                    <option value="charitable">Charitable</option>
+                  </select>
                   <select value={s.whose} style={{ fontSize: 13 }} onChange={(e) => updateExpenseStream(s.id, { whose: e.target.value as ExpenseStream['whose'] })}>
                     <option value="Household">Household</option>
                     <option value="A">{nameA}</option>
@@ -703,6 +724,12 @@ export default function InputsPage() {
                     <span className="input-suffix">%</span>
                   </div>
                   <button className="remove-btn" onClick={() => removeExpenseStream(s.id)}>×</button>
+                  {s.category === 'charitable' && (
+                    <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', padding: '2px 0 4px 4px' }}>
+                      <input type="checkbox" checked={s.qcd !== false} onChange={(e) => updateExpenseStream(s.id, { qcd: e.target.checked ? undefined : false })} style={{ accentColor: 'var(--gold)', width: 13, height: 13, marginTop: 1, flexShrink: 0 }} />
+                      Paid directly to a public charity. From age 70½ this is paid straight from your IRA as a QCD: it counts toward your required withdrawal and isn't taxed. Untick for donor-advised funds or private foundations.
+                    </label>
+                  )}
                 </div>
               ))}
             </div>

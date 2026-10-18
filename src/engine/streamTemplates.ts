@@ -101,6 +101,18 @@ export const EXPENSE_TEMPLATES: ExpenseTemplate[] = [
       id: nid('expense'), description: 'Healthcare',
       whose: 'Household', startAge: retirementAge, end: { mode: 'lastSurvivor' as const }, survivorPct: 1,
       annualAmount: 18000, inflationPct: { mode: 'fixed', rate: 0.055 },
+      category: 'medical',
+    }),
+  },
+  {
+    id: 'giving',
+    label: 'Charitable giving',
+    hint: 'Gifts to public charities; paid from your IRA as QCDs from age 70½',
+    make: ({ retirementAge }) => ({
+      id: nid('expense'), description: 'Charitable giving',
+      whose: 'Household', startAge: retirementAge, end: { mode: 'lastSurvivor' as const }, survivorPct: 1,
+      annualAmount: 10000, inflationPct: { mode: 'cpi' },
+      category: 'charitable',
     }),
   },
   {
