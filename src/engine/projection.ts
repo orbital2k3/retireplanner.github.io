@@ -178,6 +178,11 @@ const sumIncomeStreams = (
   return { gross, taxableAmt, exemptInterest, nonExempt, pensionAmt, nonExemptSS };
 };
 
+/** Annual spending split by category tag. `total` is the sum of every active row (unchanged);
+ *  `medical` and `charitable` are the tagged subsets of it. Untagged rows count as 'general'. */
+interface ExpenseSums { total: number; medical: number; charitable: number }
+const NO_EXPENSES: ExpenseSums = { total: 0, medical: 0, charitable: 0 };
+
 const sumExpenseStreams = (
   resolved: ResolvedExpense[],
   ageA: number,
@@ -188,8 +193,8 @@ const sumExpenseStreams = (
   cumulativeInflationFactor?: number,
   retiredA = true,
   retiredB = true,
-): number => {
-  let total = 0;
+): ExpenseSums => {
+  let total = 0, medical = 0, charitable = 0;
   for (const { e, w, growthRate, cpiMode } of resolved) {
     // Gate by whose retirement: A-tagged flows when A retires, B-tagged when B retires,
     // Household when EITHER retires (working person's contributions offset the draw).
@@ -204,9 +209,12 @@ const sumExpenseStreams = (
     const growthFactor = isCpiIndexed
       ? cumulativeInflationFactor
       : Math.pow(1 + growthRate, yearIndex);
-    total += e.annualAmount * factor * growthFactor;
+    const amt = e.annualAmount * factor * growthFactor;
+    total += amt;
+    if (e.category === 'medical') medical += amt;
+    else if (e.category === 'charitable') charitable += amt;
   }
-  return total;
+  return { total, medical, charitable };
 };
 
 /**
@@ -419,12 +427,13 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Expenses start when either person retires (semi-retirement or full retirement).
     // Per-whose gate inside sumExpenseStreams: A-tagged on retiredA, B-tagged on retiredB,
     // Household on retiredA||retiredB. Working person's contributions offset the portfolio draw.
-    const netSpend = (retiredA || retiredB) ? sumExpenseStreams(
+    const spend = (retiredA || retiredB) ? sumExpenseStreams(
       rExpense, ageA, ageB, i,
       aliveA, aliveB,
       opts?.inflationOverrides ? inflationFactor : undefined,
       retiredA, retiredB,
-    ) : 0;
+    ) : NO_EXPENSES;
+    const netSpend = spend.total;
 
     // Spousal rollover: merge deceased person's traditional balance into the survivor's IRA.
     // Handles both death orders. Self-extinguishing once the balance reaches zero.
