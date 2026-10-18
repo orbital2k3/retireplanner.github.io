@@ -70,9 +70,24 @@ const expenseStream = () =>
       return { ...rest, end: { mode: 'age' as const, age: stopAge }, survivorPct: 1 };
     });
 
+/** An optional charitable-giving row. `qcd:false` marks a donor-advised-fund style gift. */
+const charitableExpense = () =>
+  fc.record({
+    annualAmount: fc.integer({ min: 1_000, max: 120_000 }),
+    startAge: fc.integer({ min: 55, max: 75 }),
+    qcd: fc.option(fc.constant(false), { nil: undefined }),
+  }).map((c) => ({
+    id: 'exp-charity', description: 'Giving', whose: 'Household' as const, startAge: c.startAge,
+    end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: c.annualAmount,
+    inflationPct: { mode: 'fixed' as const, rate: 0.025 }, category: 'charitable' as const,
+    ...(c.qcd === false ? { qcd: false } : {}),
+  }));
+
 /** Generate a valid Plan. Couples vs singles, varied states, varied returns and balances. */
 export const arbPlan = (): fc.Arbitrary<Plan> =>
   fc.record({
+    // Ages 54 to 75 at the start, so QCD ages (70+) and RMD ages show up in the first years too.
+    aBirthYear: fc.integer({ min: new Date().getFullYear() - 75, max: new Date().getFullYear() - 54 }),
     ageDeltaB: fc.integer({ min: -10, max: 10 }),                       // personB age relative to personA
     aRetireAge: fc.integer({ min: 50, max: 70 }),
     aPlanThroughAge: fc.integer({ min: 75, max: 100 }),
@@ -94,11 +109,12 @@ export const arbPlan = (): fc.Arbitrary<Plan> =>
     convMode: fc.constantFrom(...CONV_MODES),
     convOptimize: fc.boolean(),
     expense: expenseStream(),
+    charity: fc.option(charitableExpense(), { nil: undefined }),
     incomes: fc.array(incomeStream(), { minLength: 0, maxLength: 3 }),
   })
-    .filter((s) => s.aPlanThroughAge > s.aRetireAge + 5)
+    .filter((s) => s.aPlanThroughAge > s.aRetireAge + 5 && s.aPlanThroughAge >= new Date().getFullYear() - s.aBirthYear + 3)
     .map((s): Plan => {
-      const aBirthYear = 1970;
+      const aBirthYear = s.aBirthYear;
       const bBirthYear = aBirthYear + s.ageDeltaB;
       const bRetire = Math.max(50, Math.min(70, s.aRetireAge - s.ageDeltaB));
       const bPlanTo = Math.max(s.aPlanThroughAge - 2, 75);
@@ -145,7 +161,7 @@ export const arbPlan = (): fc.Arbitrary<Plan> =>
         },
         incomeStreams: s.incomes,
         lumpSumEvents: [],
-        expenseStreams: [s.expense],
+        expenseStreams: s.charity ? [s.expense, s.charity] : [s.expense],
         withdrawalStrategy: s.strategy,
         withdrawalBracketCeiling: s.hasPersonB ? 100800 : 50400,
         conversion: {

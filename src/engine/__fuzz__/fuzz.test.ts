@@ -4,6 +4,7 @@ import { runProjection } from '../projection';
 import { assertProjectionInvariants, assertDeterministic } from '../__invariants__/assertions';
 import { rmdStartAgeForDob } from '../rmd';
 import { arbPlan } from './generators';
+import { enc } from '../__regression__/snapshotUtil';
 
 /**
  * Property-based fuzz tests. Generates random valid plans and asserts that the
@@ -81,6 +82,31 @@ describe('Property-based fuzz: projection invariants', () => {
           if (Math.abs(r.endTotal - sum) > 1) {
             throw new Error(`endTotal mismatch at year ${r.year}: ${r.endTotal} vs sum ${sum}`);
           }
+        }
+      }),
+      { numRuns: NUM_RUNS, verbose: true },
+    );
+  }, 120_000);
+
+  it(`enabling QCD never raises lifetime federal + state + IRMAA + NIIT tax under a preset strategy (${NUM_RUNS} runs)`, () => {
+    // Conversions are off: a bracket-fill or optimizer-sized conversion uses the room a QCD frees, so it
+    // can legitimately pay more tax now to save more later. The comparison is the same withdrawal
+    // preset with and without the QCD step; the OBBBA deduction applies on both sides.
+    const lifetimeTax = (rows: ReturnType<typeof runProjection>['rows']) =>
+      rows.reduce((s, r) => s + r.fedTax + r.stateTaxAmt + r.irmaa + r.niit, 0);
+    fc.assert(
+      fc.property(arbPlan(), (generated) => {
+        const plan = { ...generated, conversion: { ...generated.conversion, mode: 'off' as const, optimize: false } };
+        const on = runProjection(plan);
+        const off = runProjection(plan, { disableQCD: true });
+        assertProjectionInvariants(on, plan, { skipSpendingCoverage: true });
+        const taxOn = lifetimeTax(on.rows), taxOff = lifetimeTax(off.rows);
+        // 0.5% + $500 slack for gross-up convergence drift.
+        if (taxOn > taxOff + 500 + 0.005 * taxOff) {
+          throw new Error(`QCD raised lifetime tax: on=${taxOn.toFixed(0)} off=${taxOff.toFixed(0)} (qcd total ${on.rows.reduce((s, r) => s + r.qcd, 0).toFixed(0)})`);
+        }
+        if (!plan.expenseStreams.some((e) => e.category === 'charitable')) {
+          if (enc(on) !== enc(off)) throw new Error('disableQCD changed a plan with no charitable rows');
         }
       }),
       { numRuns: NUM_RUNS, verbose: true },

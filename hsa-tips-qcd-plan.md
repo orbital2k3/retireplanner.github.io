@@ -30,7 +30,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 10 | ◐ |
+| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 11 | ◐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
@@ -52,10 +52,10 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | F-5 | Foundation tests, sensitivity skip | ☑ | 2026-10-17 | 3ce5543 | New expenseCategory.test.ts (9 tests: tag-neutrality bit-exact on 4 plans, split sums, schema no-default) + skipped sensitivity entry for category/qcd until Q-3. Bit-exact snapshot green. |
 | Q-1 | `qcd.ts` eligibility, allocation, limit + unit tests | ☑ | 2026-10-17 | 39efb11 | qcd.ts: qcdEligible, qcdLimit, qcdAvailable, allocateQcd (pure, not yet wired). qcd.test.ts: 18 tests. |
 | Q-2 | QCD integration in `runProjection` (A1 table) | ☑ | 2026-10-17 | e44ea9c | Wired per Appendix A1: rmdTaxable/trdForced/forcedA aliases (equal rmdAmt without a QCD), 9 trad-outflow, 14 income, 1 per-person and state-tax uses replaced, rmdAmt kept for lifetimeRMD, row rmd and the unused withdrawal arg. qcdOn hoisted; opts.disableQCD added; sumExpenseStreams gained charitableQcd. Bit-exact snapshot and golden CSVs unchanged. Sanity on planF + 20k charity: lifetime fed tax 3.39M -> 3.14M. |
-| Q-3 | OBBBA non-itemizer deduction | ☑ | 2026-10-17 | (hash backfilled in Q-6) | charDed = min(max(0, charitableQcd - qcd), 2000 MFJ / 1000 Single) from 2026, stdDEff at the 11 A1 sites, row charityDeduction (included in stdDeduction); magi/seniorBonus untouched. Deviation: the base is public-charity giving only (rows not marked qcd:false) because §170(p) excludes donor-advised funds, where the plan said all charitable spend. Computed even under disableQCD. Sensitivity skip entry removed; 2 active category/qcd cases added; invariant for the deduction. |
+| Q-3 | OBBBA non-itemizer deduction | ☑ | 2026-10-17 | 996827f | charDed = min(max(0, charitableQcd - qcd), 2000 MFJ / 1000 Single) from 2026, stdDEff at the 11 A1 sites, row charityDeduction (included in stdDeduction); magi/seniorBonus untouched. Deviation: the base is public-charity giving only (rows not marked qcd:false) because §170(p) excludes donor-advised funds, where the plan said all charitable spend. Computed even under disableQCD. Sensitivity skip entry removed; 2 active category/qcd cases added; invariant for the deduction. |
 | Q-4 | QCD row fields + invariants | ☑ | 2026-10-17 | (same commit as Q-2) | Built together with Q-2 so every commit stays green: row fields qcd/qcdBeyondRmd and invariants (trad outflow, mass balance, coverage cashIn += qcdBeyondRmd; qcd <= charitable; qcd <= owners x limit). |
 | Q-5 | QCD projection tests (R3–R6) | ☑ | 2026-10-17 | (same commit as Q-3) | qcd.projection.test.ts: 20 tests for R3-R6 (RMD/QCD income split, tax and IRMAA-lookback effects, CA vs IL, beyond-RMD window, conversion cap, oversized convAmt, per-person allocation, limits, DAF, deduction cases incl. survivor halving). Deviation: tradB path identity (R5) is checked via B's rows being identical while A's IRA is empty, since rows don't expose per-person balances. |
-| Q-6 | QCD fuzz property | ☐ | | | |
+| Q-6 | QCD fuzz property | ☑ | 2026-10-17 | (hash backfilled in Q-7) | Generator: optional charitable row (qcd:false sometimes) and start ages 54-75. Property: with conversions off, QCD on never raises lifetime fed+state+IRMAA+NIIT tax beyond 0.5%+$500, and disableQCD is a no-op without charitable rows. Held over 1,500 runs; ~16% of charity plans actually exercise a QCD. Conversions are excluded on purpose: a QCD frees bracket room that a conversion can use. |
 | Q-7 | Golden `planQ_qcdGiver` | ☐ | | | |
 | Q-8 | QCD opt-tier tests | ☐ | | | |
 | QU-1 | [M4-A] Projections QCD columns + RMD tooltip | ☐ | | | |
@@ -244,7 +244,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - survivor/Single halves the OBBBA cap
   - deduction is 0 when QCD covers all giving
   - huge `convAmt` policy never overdraws
-- [ ] **Q-6** Fuzz (`__fuzz__/generators.ts`): an optional charitable stream and older ages. Property: enabling QCD never raises lifetime fed + state + IRMAA under a preset strategy.
+- [x] **Q-6** Fuzz (`__fuzz__/generators.ts`): an optional charitable stream and older ages. Property: enabling QCD never raises lifetime fed + state + IRMAA under a preset strategy.
 - [ ] **Q-7** Golden `planQ_qcdGiver`: a 72+ couple with large trad balances, in NY. Create its CSV only.
 - [ ] **Q-8** Opt tier (cheap fixture, `optimizeCached`): with charity, pre-70½ conversions are ≤ the no-charity run, and results are deterministic.
 
@@ -449,6 +449,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | Q-1 | `qcd.ts` + 18 unit tests. Added `qcdLimit` and `qcdAvailable` helpers beyond the spec. |
 | 2026-10-17 | Q-2, Q-4 | QCD wired into `runProjection` with its row fields and invariants in one commit (invariants had to move with the engine to keep tests green). Q-3 (OBBBA deduction) is next. |
 | 2026-10-17 | Q-3, Q-5 | OBBBA deduction + 20 projection tests. Fast tier 624 pass. |
+| 2026-10-17 | Q-6 | QCD fuzz property added; generator now covers charity and older ages. |
 
 ---
 
