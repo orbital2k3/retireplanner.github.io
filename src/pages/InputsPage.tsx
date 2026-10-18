@@ -19,6 +19,7 @@ import { USER_GOALS, type UserGoal } from '../engine/recommender';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS } from '../engine/taxConstants';
 import StrategyCustomizeSheet from '../components/strategy/StrategyCustomizeSheet';
 import { HsaBlock, HsaPolicyRow } from '../components/inputs/HsaBlock';
+import { TipsLadderCard } from '../components/inputs/TipsLadderCard';
 
 const headerStyle: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', whiteSpace: 'nowrap' };
 
@@ -207,6 +208,7 @@ export default function InputsPage() {
   const setPersonAPortfolio = usePlanStore((s) => s.setPersonAPortfolio);
   const setPersonBPortfolio = usePlanStore((s) => s.setPersonBPortfolio);
   const setHsaPolicy = usePlanStore((s) => s.setHsaPolicy);
+  const setTipsLadder = usePlanStore((s) => s.setTipsLadder);
   const addIncomeStream = usePlanStore((s) => s.addIncomeStream);
   const updateIncomeStream = usePlanStore((s) => s.updateIncomeStream);
   const removeIncomeStream = usePlanStore((s) => s.removeIncomeStream);
@@ -922,6 +924,7 @@ export default function InputsPage() {
               )}
             </div>
             {hasHsa && <HsaPolicyRow value={pf.hsaPolicy?.payMedicalFromAge} onChange={(age) => setHsaPolicy(age === undefined ? undefined : { payMedicalFromAge: age })} />}
+            <TipsLadderCard portfolio={pf} nameA={nameA} nameB={pf.personB ? nameB : undefined} startYear={new Date().getFullYear()} onChange={setTipsLadder} />
           </div>
         </div>
 

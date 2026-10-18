@@ -19,7 +19,7 @@ const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`
 export const ladderInBalances = (portfolio: Portfolio): boolean =>
   portfolio.tipsLadder?.balancesIncludeLadder !== false;
 
-export function tipsLadderIssues(portfolio: Portfolio, startYear: number): TipsIssue[] {
+export function tipsLadderIssues(portfolio: Portfolio, startYear: number, names: { a?: string; b?: string } = {}): TipsIssue[] {
   const ladder = portfolio.tipsLadder;
   if (!ladder || ladder.rungs.length === 0) return [];
   const issues: TipsIssue[] = [];
@@ -41,8 +41,8 @@ export function tipsLadderIssues(portfolio: Portfolio, startYear: number): TipsI
   const checks: Array<{ account: TipsRung['account']; label: string; total: number; balance: number }> = [
     { account: 'taxable', label: 'Taxable', total: sum((r) => r.account === 'taxable'), balance: a.taxable + (b?.taxable ?? 0) },
     { account: 'roth', label: 'Roth', total: sum((r) => r.account === 'roth'), balance: a.roth + (b?.roth ?? 0) },
-    { account: 'traditional', label: 'Pre-tax (Person A)', total: sum((r) => r.account === 'traditional' && r.whose === 'A'), balance: a.traditional },
-    { account: 'traditional', label: 'Pre-tax (Person B)', total: sum((r) => r.account === 'traditional' && r.whose === 'B'), balance: b?.traditional ?? 0 },
+    { account: 'traditional', label: `Pre-tax (${names.a ?? 'Person A'})`, total: sum((r) => r.account === 'traditional' && r.whose === 'A'), balance: a.traditional },
+    { account: 'traditional', label: `Pre-tax (${names.b ?? 'Person B'})`, total: sum((r) => r.account === 'traditional' && r.whose === 'B'), balance: b?.traditional ?? 0 },
   ];
   for (const c of checks) {
     if (c.total > c.balance + 0.005) {

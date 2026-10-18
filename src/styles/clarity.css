@@ -795,6 +795,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .stream-row.income-row  { grid-template-columns: 0.85fr 0.65fr 0.9fr 0.5fr 1.1fr 0.65fr 1.0fr 0.5fr 0.5fr 28px; }
 .stream-row.expense-row { grid-template-columns: 1.3fr 0.9fr 0.65fr 0.5fr 1.4fr 0.8fr 1.1fr 0.55fr 28px; }
 .stream-row.lumpsum-row { grid-template-columns: 1fr 0.9fr 1.2fr 0.6fr 1.5fr 28px; }
+.stream-row.tips-row { grid-template-columns: 0.7fr 1fr 0.9fr 0.7fr 1fr 0.8fr 28px; }
 .stream-expander-btn {
   width: 26px; height: 32px; border: none; background: transparent;
   color: var(--text-muted); font-size: 10px; cursor: pointer; padding: 0;
@@ -1374,6 +1375,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   .stream-row.income-row { min-width: 860px; }
   .stream-row.expense-row { min-width: 760px; }
   .stream-row.lumpsum-row { min-width: 600px; }
+  .stream-row.tips-row { min-width: 640px; }
 
   /* CashFlowTable — make outer wrapper scroll horizontally */
   .cashflow-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }

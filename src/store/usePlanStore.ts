@@ -45,6 +45,8 @@ interface PlanState {
   setPersonBPortfolio: (patch: Partial<PersonPortfolio>) => void;
   /** Household HSA payment policy; undefined removes it (absent means age 65). */
   setHsaPolicy: (policy: Portfolio['hsaPolicy']) => void;
+  /** TIPS ladder; undefined (or no rungs) removes it, so a plan without one keeps its saved shape. */
+  setTipsLadder: (ladder: Portfolio['tipsLadder']) => void;
   setIncomeStreams: (streams: IncomeStream[]) => void;
   addIncomeStream: (s: IncomeStream) => void;
   updateIncomeStream: (id: string, patch: Partial<IncomeStream>) => void;
@@ -111,6 +113,11 @@ export const usePlanStore = create<PlanState>()(
         const { hsaPolicy: _drop, ...rest } = s.plan.portfolio;
         void _drop;
         return { plan: { ...s.plan, portfolio: policy ? { ...rest, hsaPolicy: policy } : rest } };
+      }),
+      setTipsLadder: (ladder) => set((s) => {
+        const { tipsLadder: _drop, ...rest } = s.plan.portfolio;
+        void _drop;
+        return { plan: { ...s.plan, portfolio: ladder && ladder.rungs.length > 0 ? { ...rest, tipsLadder: ladder } : rest } };
       }),
       setIncomeStreams: (incomeStreams) => set((s) => ({ plan: { ...s.plan, incomeStreams } })),
       addIncomeStream: (stream) => set((s) => ({ plan: { ...s.plan, incomeStreams: [...s.plan.incomeStreams, stream] } })),
