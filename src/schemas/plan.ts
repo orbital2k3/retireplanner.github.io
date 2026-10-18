@@ -152,10 +152,40 @@ export const HsaPolicySchema = z.object({
 });
 export type HsaPolicy = z.infer<typeof HsaPolicySchema>;
 
+/** One rung of a TIPS ladder: a Treasury inflation-protected bond held to maturity. */
+export const TipsRungSchema = z.object({
+  id: z.string(),
+  /** Calendar year the bond matures. */
+  maturityYear: z.number().int().min(1990).max(2200),
+  /** Today's inflation-adjusted principal (the figure on a brokerage statement). */
+  adjustedPrincipal: z.number().positive(),
+  /** Par (original face) value. Sets the deflation floor at maturity. Absent = adjustedPrincipal. */
+  faceValue: z.number().positive().optional(),
+  /** Fixed real coupon, e.g. 0.0125. */
+  couponRate: z.number().min(0).max(0.2),
+  account: z.enum(['taxable', 'traditional', 'roth']),
+  /** Whose IRA holds it. Only meaningful for traditional rungs (it sets the RMD owner). */
+  whose: z.enum(['A', 'B', 'Household']),
+}).refine((r) => r.account !== 'traditional' || r.whose !== 'Household', {
+  message: 'A pre-tax rung must belong to Person A or Person B',
+  path: ['whose'],
+});
+export type TipsRung = z.infer<typeof TipsRungSchema>;
+
+export const TipsLadderSchema = z.object({
+  rungs: z.array(TipsRungSchema),
+  /** True (or absent): the account balances entered already include these bonds, so the engine
+   *  carves them out. False: they are on top of the entered balances. */
+  balancesIncludeLadder: z.boolean().optional(),
+});
+export type TipsLadder = z.infer<typeof TipsLadderSchema>;
+
 export const PortfolioSchema = z.object({
   personA: PersonPortfolioSchema,
   personB: PersonPortfolioSchema.optional(),
   hsaPolicy: HsaPolicySchema.optional(),
+  /** Optional TIPS ladder. Absent (or no rungs) is exactly the pre-ladder behavior. */
+  tipsLadder: TipsLadderSchema.optional(),
 });
 export type Portfolio = z.infer<typeof PortfolioSchema>;
 

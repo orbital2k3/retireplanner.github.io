@@ -32,7 +32,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
 | 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
 | 2 HSA | 2.4.0 / v37 | 20 | 20 | ☑ |
-| 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
+| 3 TIPS core | 2.5.0 / v38 | 13 | 1 | ◐ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
 | Housekeeping | none | 2 | 0 | ☐ |
 
@@ -86,7 +86,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | HU-6 | HSA docs, Learn More, release notes, sensitivity | ☑ | 2026-10-17 | 844baa2 | HowToGuide: new 'Health savings account (HSA)' subsection in Portfolio (6-row field table + last-resort tip), HSA Return row in the returns table, Medical category row rewritten (no longer 'no effect yet'). learnMoreTopics.HSA_HELP (6 sections) opened from 'Learn more about HSAs' in the HSA block and from the Taxes HSA card. releases.ts 2.4.0 entry (package.json version bump is at H-REL). fieldSensitivity: 7 HSA cases (balance, contribution, coverage, receipts [only the after-tax end value moves, so that case asserts endTaxAdjustedReal], retirement election via the ACA fixture, policy age, hsaReturn). Line numbers in the plan (~L505/~L564) were stale; sites found by content. Learn More modal verified in the browser. |
 | HU-7 | HSA E2E + v36 freshness | ☑ | 2026-10-17 | dccfd4c | 3 e2e tests: (1) planR seeded: HSA columns hidden until the chooser group is ticked, then 'HSA Bal.' shows a non-zero value; Dashboard Sankey at age 55 shows 'Contributed to HSA' and at 65 'Medical & IRMAA (HSA)'; Taxes shows the HSA card; (2) entering an HSA on Inputs is saved, the payment-policy row appears, policy 70 is saved and the default 65 is stored as absent; (3) a v36 plan with a current result opens with no stale banner and unchanged numbers. Chart.js canvas series can't be read from the DOM, so 'chart series' is covered through the SVG Sankey plus unit tests of the dataset builders' inputs. Includes the v37 store bump (PLAN_STORE_VERSION 37, no-op migration) and planMigrationV37.test.ts: 19 plans captured on the v36 release commit b36447b via a worktree (v36-baselines.json), store migration, export/import, and the 3 legacy exports against v35-legacy-imports.json (v36 reproduced them exactly): keys, statuses and projections bit-identical; no HSA key appears. FINDING fixed in copy: in planR (taxfirst) the retiree contribution does NOT lower ACA MAGI, because the withdrawals that fund it (gains, then pre-tax money) cancel the deduction; the HSA card now says so instead of promising a subsidy (Roth-funded plans still show the lever); Learn More and the guide carry the same caveat. |
 | H-REL | v37 migration + release gate | ☑ | 2026-10-17 | ca0dc15 | 2.4.0 / store v37, no-op migration (the bump and planMigrationV37.test.ts landed in HU-7, as QU-7 did for v36). Gate: cold tsc -b --force clean; eslint . clean (fixed 3 unused imports in my test files); test:fast 871 pass / 1 skip (70 files); test:opt 76 pass (11 files, 226s vs 221s at Q-REL); e2e 21/21; golden CSVs vs the pre-Phase-2 commit: only planR_hsaEarlyRetiree.csv and .hsa.csv added (A-M and Q untouched), bit-exact and optimizer snapshots unchanged; legacy exports import with identical status/key/numbers (planMigrationV37.test.ts). Optimizer timing, same-session A/B vs b36447b: first pass samplePlan max-end 24.7s -> 26.6s (+7.5%), max-spending 51.0 -> 54.2s (+6%), planF max-end +6%, planF max-spend -1%, planP -5..-7%; an interleaved rerun of samplePlan max-end (2 rounds x 2 runs) gave v36 mean 28.6s (25.4-33.1) vs v37 27.1s (26.4-29.0), i.e. inside machine noise, no systematic slowdown (no-HSA path adds only a few gated scalars per year). Not pushed (local main only, nothing deployed). Not done: the side-by-side mockup pass was done piece by piece in the browser while building, not as a final pass, and the Browser pane was not displayed so there are no screenshots; Chart.js series are not asserted in e2e. |
-| T-1 | TIPS schema + validation | ☐ | | | |
+| T-1 | TIPS schema + validation | ☑ | 2026-10-18 |  | TipsRungSchema (refine: pre-tax rungs need whose A/B; coupon 0-20%, principal > 0) and PortfolioSchema.tipsLadder, all optional, no default, no migration; balancesIncludeLadder optional (absent = true, D10). Deviation: 'maturity >= start year' and 'rungs <= account balance' are NOT Zod refinements; they live in tipsValidation.ts (tipsLadderIssues(portfolio, startYear): matured / owner / overflow, overflow per account and per person for pre-tax) because a calendar-dependent refine would make a saved plan fail to load once a rung matures. The engine will stay safe on any input. 12 tests; fast tier 883 pass. |
 | T-2 | `tipsLadder.ts` pure functions + tests | ☐ | | | |
 | T-3 | TIPS projection integration (A3) | ☐ | | | |
 | T-4 | TIPS invariants | ☐ | | | |
@@ -353,7 +353,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 
 ## Phase 3: TIPS core → 2.5.0 / store v38
 ### 3A Schema and engine (2 sessions)
-- [ ] **T-1** Schema:
+- [x] **T-1** Schema:
   - `TipsRungSchema { id, maturityYear, adjustedPrincipal, faceValue?, couponRate, account, whose }`
   - refine: traditional rungs require whose A or B
   - `PortfolioSchema.tipsLadder?: { rungs, balancesIncludeLadder }`
@@ -480,6 +480,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | HU-6 | HSA docs, Learn More topic, 2.4.0 release entry and sensitivity cases. |
 | 2026-10-17 | HU-7 | HSA e2e tests, v37 store bump and v36->v37 freshness test. |
 | 2026-10-17 | H-REL | v2.4.0 / store v37 release gate passed; Phase 2 (HSA) complete on local main, not pushed. |
+| 2026-10-18 | T-1 | TIPS schema (optional, nested in portfolio) and plan-level validation helper. Phase 3 started. |
 
 ---
 
