@@ -1,6 +1,6 @@
 import type { ProjectionResult } from '../engine/projection';
 import type { Plan } from '../schemas/plan';
-import { taxAdjustedRates } from '../engine/taxAdjusted';
+import { taxAdjustedRates, hsaTaxableBalance } from '../engine/taxAdjusted';
 import { fmtFull, fmtM } from '../lib/format';
 
 interface Props {
@@ -29,6 +29,10 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
   const gainAdj = unrealizedGain * (1 - ltcgRate);
   const tradAdj = endTraditional * (1 - ordRate);
 
+  const endHSA = last?.endHSA ?? 0;
+  const hsaReceipts = Math.min(endHSA, last?.hsaReceiptsBal ?? 0);
+  const hsaTaxable = hsaTaxableBalance(endHSA, last?.hsaReceiptsBal ?? 0);
+
   const toReal = (n: number) => (real ? n / inflFactor : n);
   const totalDisplay = real ? proj.endTaxAdjustedReal : proj.endTaxAdjustedNominal;
 
@@ -49,6 +53,19 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
       result: tradAdj,
     },
   ];
+  // HSA rows appear only when the plan ends with an HSA, so other plans see the same table as before.
+  if (endHSA > 0) {
+    rows.push(
+      { label: 'HSA backed by receipts', balance: hsaReceipts, rateLabel: '0% (claimable tax-free)', result: hsaReceipts },
+      {
+        label: 'HSA above receipts',
+        balance: hsaTaxable,
+        rateLabel: `${(ordRate * 100).toFixed(0)}% blended effective rate`,
+        result: hsaTaxable * (1 - ordRate),
+        note: 'A non-spouse heir owes ordinary tax on an inherited HSA',
+      },
+    );
+  }
 
   return (
     <div

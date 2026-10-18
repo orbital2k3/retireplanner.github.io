@@ -236,3 +236,23 @@ describe('HSA last resort (H-5)', () => {
     expect(spent).toBeGreaterThan(y.netSpend + y.hsaPenalty - 1);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// H-6: ending value
+// ---------------------------------------------------------------------------------------------
+describe('HSA in the tax-adjusted end value (H-6)', () => {
+  it('haircuts the ending HSA above receipts and leaves the receipts-backed part whole', () => {
+    const noH = runProjection(withHsa(base(), {}));
+    // policy age 120: the HSA never pays (not even IRMAA), so only its own end value differs
+    const p = withHsa(base(), { a: { hsa: 100_000, hsaReceipts: 20_000 }, policyAge: 120 });
+    const res = runProjection(p);
+    const last = res.rows[res.rows.length - 1];
+    const lastNo = noH.rows[noH.rows.length - 1];
+    expect(last.endHSA).toBeGreaterThan(100_000);
+    // nothing else moves (no medical spending), so the difference is the HSA term only
+    const rate = p.assumptions.taxAdjOrdRate;
+    const exempt = Math.min(last.endHSA, last.hsaReceiptsBal);
+    expect(last.endTaxAdjusted - lastNo.endTaxAdjusted).toBeCloseTo((last.endHSA - exempt) * (1 - rate) + exempt, 4);
+    expect(last.endTaxAdjusted).toBeLessThan(last.endTotal);
+  });
+});

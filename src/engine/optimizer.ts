@@ -881,8 +881,13 @@ function amortizationSeed(plan: Plan, legacyTaxAdjReal = 0): { absoluteReal: num
   const taxAdjTrad = p.personA.traditional + (p.personB?.traditional ?? 0);
   const taxAdjRoth = p.personA.roth + (p.personB?.roth ?? 0);
   const { ordRate, ltcgRate } = taxAdjustedRates(plan.assumptions);
-  const taxAdjTotal = taxAdjustedValue(taxAdjTaxable, taxAdjBasis, taxAdjTrad, taxAdjRoth, ordRate, ltcgRate);
-  const grossUp = (totA + totB) / Math.max(1, taxAdjTotal);
+  // An owned HSA is haircut at ordRate above its receipts, like the projection's ending value does.
+  const hsaNow = (p.personA.hsa ?? 0) + (p.personB?.hsa ?? 0);
+  const hsaExtras = hsaNow > 0
+    ? { hsa: hsaNow, hsaReceipts: (p.personA.hsaReceipts ?? 0) + (p.personB?.hsaReceipts ?? 0) }
+    : undefined;
+  const taxAdjTotal = taxAdjustedValue(taxAdjTaxable, taxAdjBasis, taxAdjTrad, taxAdjRoth, ordRate, ltcgRate, hsaExtras);
+  const grossUp = (totA + totB + hsaNow) / Math.max(1, taxAdjTotal);
   const reserveGrossToday = legacyTaxAdjReal * grossUp / Math.pow(1 + realR, n);
   const spendable = Math.max(0, portfolioRealAtRetire - reserveGrossToday);
   const absoluteReal = Math.max(1, spendable / annuityFactor + avgExternalReal);
