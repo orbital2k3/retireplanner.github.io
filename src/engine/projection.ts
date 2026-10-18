@@ -119,7 +119,8 @@ export interface ProjectionRow {
   // Owned HSA (both persons combined). Zero on plans without one; kept out of the bit-exact whitelist.
   begHSA: number;
   endHSA: number;             // included in endTotal
-  hsaContrib: number;         // contributions this year (working, paid from outside the portfolio)
+  hsaContrib: number;         // contributions this year (working ones come from outside the portfolio)
+  hsaContribRet: number;      // part of hsaContrib paid by a retiree out of the portfolio (cash need, tax deduction)
   hsaQualifiedWD: number;     // paid tax-free to qualified medical spending and IRMAA; counts as cash in
   hsaReceiptsBal: number;     // household pool of medical bills paid elsewhere, still claimable tax-free
   // Last-resort HSA draws, used only after taxable, pre-tax and Roth money is gone.
@@ -1296,6 +1297,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       begHSA,
       endHSA: hsaA + hsaB,
       hsaContrib: hsaContribExtA + hsaContribExtB,
+      hsaContribRet: 0,
       hsaQualifiedWD: hsaQualFinal + hsaQualLR,
       hsaReceiptsBal: hsaReceipts,
       hsaReimbursed: hsaReimb,

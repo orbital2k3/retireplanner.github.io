@@ -78,7 +78,7 @@ describe('Property-based fuzz: projection invariants', () => {
           if (r.endTotal < -0.5) {
             throw new Error(`negative endTotal at year ${r.year}: ${r.endTotal}`);
           }
-          const sum = r.endTaxable + r.endTraditional + r.endRoth;
+          const sum = r.endTaxable + r.endTraditional + r.endRoth + r.endHSA;
           if (Math.abs(r.endTotal - sum) > 1) {
             throw new Error(`endTotal mismatch at year ${r.year}: ${r.endTotal} vs sum ${sum}`);
           }

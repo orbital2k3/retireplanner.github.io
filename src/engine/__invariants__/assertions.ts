@@ -27,6 +27,7 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   const gRateTax = plan.assumptions.taxableReturn;
   const gRateTrad = plan.assumptions.tradReturn;
   const gRateRoth = plan.assumptions.rothReturn;
+  const gRateHsa = plan.assumptions.hsaReturn ?? plan.assumptions.tradReturn;
 
   // Derive contributions per bucket from the plan's contribSplit and the row's contribA/contribB.
   // Spousal IRA contributions (the spousalA/spousalB portion of contribA/contribB) bypass
@@ -78,8 +79,37 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
     out.push(`Taxable MASS BALANCE: endTaxable $${r.endTaxable.toFixed(2)} != expected $${expectedEndTax.toFixed(2)}`);
   }
 
+  // 2b. HSA: no overdraw and mass balance. Every draw (qualified, reimbursed, non-qualified) comes out of
+  //     the owners' accounts, which grow at hsaReturn and take this year's contribution.
+  const hsaBeg = r.begHSA ?? 0, hsaEnd = r.endHSA ?? 0, hsaIn = r.hsaContrib ?? 0;
+  const hsaQual = r.hsaQualifiedWD ?? 0, hsaReimb = r.hsaReimbursed ?? 0, hsaNonQual = r.hsaNonQualWD ?? 0;
+  const hsaDraws = hsaQual + hsaReimb + hsaNonQual;
+  const hsaAvail = hsaBeg * (1 + gRateHsa) + hsaIn;
+  if (hsaDraws > hsaAvail + tol) {
+    out.push(`HSA OVERDRAW: draws $${hsaDraws.toFixed(2)} > available $${hsaAvail.toFixed(2)} (qualified=${hsaQual.toFixed(2)}, reimbursed=${hsaReimb.toFixed(2)}, nonQual=${hsaNonQual.toFixed(2)})`);
+  }
+  const expectedEndHsa = Math.max(0, hsaAvail - hsaDraws);
+  if (Math.abs(hsaEnd - expectedEndHsa) > tol) {
+    out.push(`HSA MASS BALANCE: endHSA $${hsaEnd.toFixed(2)} != expected $${expectedEndHsa.toFixed(2)}`);
+  }
+  if (hsaEnd < -tol || hsaQual < -tol || hsaReimb < -tol || hsaNonQual < -tol || (r.hsaPenalty ?? 0) < -tol || (r.hsaReceiptsBal ?? 0) < -tol) {
+    out.push(`HSA negative field: end=${hsaEnd}, qualified=${hsaQual}, reimbursed=${hsaReimb}, nonQual=${hsaNonQual}, penalty=${r.hsaPenalty}, receipts=${r.hsaReceiptsBal}`);
+  }
+  // Qualified spending is bounded by what was qualified to pay: the year's medical bills plus IRMAA.
+  if (hsaQual > r.medicalSpend + r.irmaa + tol) {
+    out.push(`HSA paid more than the qualified need: qualified=${hsaQual}, medical=${r.medicalSpend}, irmaa=${r.irmaa}`);
+  }
+  // The 20% penalty applies to non-qualified draws by owners under 65 only.
+  const hsaPenalty = r.hsaPenalty ?? 0;
+  if (hsaPenalty > 0.2 * hsaNonQual + tol) {
+    out.push(`HSA penalty $${hsaPenalty.toFixed(2)} exceeds 20% of non-qualified draws $${hsaNonQual.toFixed(2)}`);
+  }
+  if (r.ageA >= 65 && (r.ageB === undefined || r.ageB >= 65) && hsaPenalty > tol) {
+    out.push(`HSA penalty charged when every owner is 65+: ${hsaPenalty}`);
+  }
+
   // 3. endTotal consistency
-  const expectedEndTotal = r.endTaxable + r.endTraditional + r.endRoth;
+  const expectedEndTotal = r.endTaxable + r.endTraditional + r.endRoth + hsaEnd;
   if (Math.abs(r.endTotal - expectedEndTotal) > tol) {
     out.push(`endTotal MISMATCH: $${r.endTotal.toFixed(2)} != sum-of-buckets $${expectedEndTotal.toFixed(2)}`);
   }
@@ -116,8 +146,8 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   //    In SemiRetire, working person's contributions offset expense draws, so the coverage
   //    check still holds. Allow 5% slack for gross-up convergence drift.
   if (semiRetired && r.endTotal > 1 && !opts.skipSpendingCoverage) {
-    const cashIn = r.wdTax + r.wdTrd + r.wdRth + r.totalSS + r.otherIncome + (r.distributedCash ?? 0) + r.rmd + (r.qcdBeyondRmd ?? 0) + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0);
-    const cashOut = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa;
+    const cashIn = r.wdTax + r.wdTrd + r.wdRth + r.totalSS + r.otherIncome + (r.distributedCash ?? 0) + r.rmd + (r.qcdBeyondRmd ?? 0) + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0) + hsaDraws;
+    const cashOut = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa + hsaPenalty;
     // 5% slack: pathological first-retirement-year scenarios (high marginal-bracket
     // crossings combined with low starting balance) can have gross-up convergence
     // drift up to a few percent of cashOut. A missing tax category (e.g., forgetting
@@ -186,11 +216,17 @@ export function assertPortfolioConservation(
     if (r.contribA !== 0 || r.contribB !== 0) continue;
     const grown = r.begTaxable * (1 + a.taxableReturn)
       + r.begTraditional * (1 + a.tradReturn)
-      + r.begRoth * (1 + a.rothReturn);
+      + r.begRoth * (1 + a.rothReturn)
+      + (r.begHSA ?? 0) * (1 + (a.hsaReturn ?? a.tradReturn));
     const acctInjects = (r.lumpSumInjectTaxable ?? 0) + (r.lumpSumInjectTrad ?? 0) + (r.lumpSumInjectRoth ?? 0);
-    const hsaCash = (r.lumpSumOrdinaryIncome ?? 0) - (r.lumpSumForcedTradDist ?? 0);
-    const inflows = r.totalSS + r.otherIncome + acctInjects + hsaCash;
-    const outflows = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa + r.niit + (r.acaPremium ?? 0);
+    // Inherited-HSA lump sum (an event, not an owned account): external cash entering the household.
+    const inheritedHsaCash = (r.lumpSumOrdinaryIncome ?? 0) - (r.lumpSumForcedTradDist ?? 0);
+    // Contributions made while still working come from outside the portfolio (payroll); a contribution
+    // paid by a retiree comes out of the portfolio and nets to zero, so only the external part enters.
+    const hsaContribExt = (r.hsaContrib ?? 0) - (r.hsaContribRet ?? 0);
+    const inflows = r.totalSS + r.otherIncome + acctInjects + inheritedHsaCash + hsaContribExt;
+    // The 20% penalty leaves the household like a tax.
+    const outflows = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa + r.niit + (r.acaPremium ?? 0) + (r.hsaPenalty ?? 0);
     const expected = grown + inflows - outflows + (r.shortfall ?? 0);
     const leak = r.endTotal - expected;
     if (Math.abs(leak) > tol) {
@@ -238,6 +274,15 @@ export function assertProjectionInvariants(
       if (proj.rows[i].ageB !== proj.rows[i - 1].ageB! + 1) {
         throw new Error(`ageB not monotonic at row ${i}: ${proj.rows[i - 1].ageB} → ${proj.rows[i].ageB}`);
       }
+    }
+  }
+
+  // Cross-row: receipts are only reimbursed up to what was on file at the start of the year.
+  const seedReceipts = (plan.portfolio.personA.hsaReceipts ?? 0) + (plan.portfolio.personB?.hsaReceipts ?? 0);
+  for (let i = 0; i < proj.rows.length; i++) {
+    const onFile = i === 0 ? seedReceipts : (proj.rows[i - 1].hsaReceiptsBal ?? 0);
+    if ((proj.rows[i].hsaReimbursed ?? 0) > onFile + tol) {
+      throw new Error(`HSA reimbursed $${proj.rows[i].hsaReimbursed} more than the receipts on file $${onFile} at year ${proj.rows[i].year}`);
     }
   }
 

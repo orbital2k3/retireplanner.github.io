@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import * as golden from './__golden/plans';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
-import { withHsa } from './__testutil__/hsaPlans';
+import { withHsa, medicalRow, withExpenses, medicalPlan, hsaOnlyPlan } from './__testutil__/hsaPlans';
 
 beforeAll(pinDate);
 afterAll(unpinDate);
@@ -99,21 +99,7 @@ describe('HSA core: balance, growth and contributions (H-3)', () => {
 // ---------------------------------------------------------------------------------------------
 // H-4: qualified spending, policy age and receipts
 // ---------------------------------------------------------------------------------------------
-import type { Plan } from '../schemas/plan';
-import { medicalRow, withExpenses } from './__testutil__/hsaPlans';
 
-/** planA retiring at 58 with 40k of medical spending starting then. A is 53 in 2026. */
-function medicalPlan(over: Parameters<typeof withHsa>[1], medical = 40_000): Plan {
-  const p = base();
-  const retired = { ...p, personA: { ...p.personA, retirementAge: 58 }, personB: { ...p.personB!, retirementAge: 55 } };
-  return withExpenses(
-    withHsa(retired, over),
-    [
-      { ...p.expenseStreams[0], startAge: 58 },
-      medicalRow({ id: 'med', startAge: 58, annualAmount: medical, inflationPct: { mode: 'fixed', rate: 0.03 } }),
-    ],
-  );
-}
 
 describe('HSA qualified spending (H-4)', () => {
   it('pays medical from the HSA once the owner reaches the policy age (always = 0)', () => {
@@ -181,21 +167,6 @@ describe('HSA qualified spending (H-4)', () => {
 // ---------------------------------------------------------------------------------------------
 // H-5: last-resort draws
 // ---------------------------------------------------------------------------------------------
-/** Nothing but an HSA: the household has to live on it (plus Social Security later). */
-function hsaOnlyPlan(receipts = 0, medical = 10_000): Plan {
-  const p = base();
-  const zero = { taxable: 0, taxableBasis: 0, traditional: 0, roth: 0, annualContribution: 0 };
-  const hsa = withHsa({
-    ...p,
-    personA: { ...p.personA, retirementAge: 55, ssClaimAge: 70 },
-    personB: { ...p.personB!, retirementAge: 55, ssClaimAge: 70 },
-    portfolio: { personA: { ...p.portfolio.personA, ...zero }, personB: { ...p.portfolio.personB!, ...zero } },
-  }, { a: { hsa: 700_000, hsaReceipts: receipts } });
-  return withExpenses(hsa, [
-    { ...p.expenseStreams[0], startAge: 55, annualAmount: 30_000, inflationPct: { mode: 'fixed', rate: 0.025 } },
-    medicalRow({ id: 'med', startAge: 55, annualAmount: medical, inflationPct: { mode: 'fixed', rate: 0.025 } }),
-  ]);
-}
 
 describe('HSA last resort (H-5)', () => {
   const rows = runProjection(hsaOnlyPlan(25_000)).rows;
