@@ -29,7 +29,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 ### Rollup
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
-| 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 2 | ◐ |
+| 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 3 | ◐ |
 | 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 0 | ☐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
@@ -40,8 +40,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | ID | Activity | Status | Date | Commit / PR | Notes |
 |---|---|---|---|---|---|
 | P0-1 | Copy plan into repo as tracker; mark analysis §6 answered | ☑ | 2026-10-17 | e2cd7ac | Plan copied verbatim; analysis §6 marked answered and linked. |
-| P0-2 | Verify IRS constants, cite sources | ☑ | 2026-10-17 | (hash backfilled in P0-3) | All plan values confirmed, none differ. Flags: HSA catch-up $1,000 is statutory, NOT indexed (H-2 says 'indexed': scale only the base limit); OBBBA $1k/$2k NOT indexed; $170(p) statute text not retrievable, rests on secondary sources + absence from Rev. Proc. 2025-32; Reg. 1.1275-7 / Notice 2011-21 not read at source. Added HSA_CATCHUP_AGE, OBBBA first-year consts (unused). |
-| P0-3 | Record test and optimizer timing baselines | ☐ | | | |
+| P0-2 | Verify IRS constants, cite sources | ☑ | 2026-10-17 | 7b4e8ea | All plan values confirmed, none differ. Flags: HSA catch-up $1,000 is statutory, NOT indexed (H-2 says 'indexed': scale only the base limit); OBBBA $1k/$2k NOT indexed; $170(p) statute text not retrievable, rests on secondary sources + absence from Rev. Proc. 2025-32; Reg. 1.1275-7 / Notice 2011-21 not read at source. Added HSA_CATCHUP_AGE, OBBBA first-year consts (unused). |
+| P0-3 | Record test and optimizer timing baselines | ☑ | 2026-10-17 | (hash backfilled in P0-4) | Baselines in Session log. pnpm not installed on this machine: ran the same vitest commands via npx (`vitest run --project fast|opt`). |
 | P0-4 | Bit-exact snapshot harness (fast) + optimizer snapshot (opt) | ☐ | | | |
 | P0-5 | Hoist growth-rate consts in projection.ts | ☐ | | | |
 | P0-6 | Save mockups M1–M5 to `ui-mockups/hsa-tips-qcd.html` | ☐ | | | |
@@ -197,7 +197,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - OBBBA non-itemizer deduction $1k / $2k: start year, and whether it is indexed
   - Bronze/catastrophic HSA eligibility (Notice 2026-5 or later)
   - TIPS OID rules
-- [ ] **P0-3** Baselines: record `test:fast` and `test:opt` wall times, and optimizer times for samplePlan, planF and planP, in the session log.
+- [x] **P0-3** Baselines: record `test:fast` and `test:opt` wall times, and optimizer times for samplePlan, planF and planP, in the session log.
 - [ ] **P0-4** Bit-exact harness, `src/engine/__regression__/bitExact.test.ts` (fast tier):
   - `JSON.stringify` of a **whitelist of today's `ProjectionRow` keys**, plus all `ProjectionResult` aggregates
   - Plans: golden A–P, samplePlan, one seeded MC trial, one historical cohort, and a CA plan with `payTaxFromBrokerage`
@@ -434,6 +434,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 |---|---|---|
 | 2026-10-17 | P0-1 | Branch `chore/phase0` cut from main (869e998). Plan copied into repo; analysis §6 marked answered. |
 | 2026-10-17 | P0-2 | Constants verified (Notice 2025-67, Rev. Proc. 2025-19, Notice 2026-5 read from IRS PDFs). No value differs; indexing flags recorded in Notes. Added as unused exports in `taxConstants.ts`. |
+| 2026-10-17 | P0-3 | **Baselines at 7b4e8ea** (Apple Silicon Mac, node via npx, `vitest run --project <tier>`): `test:fast` 9.5s vitest duration / 10.7s wall (52 files, 548 pass, 1 skip); `test:opt` 176s vitest duration / 2:57 wall (8 files, 65 tests). `optimizeStrategy(plan, goal, { thorough: false })` wall time, repeats listed: **samplePlan** max-end 21.4, 21.7s; max-spending 46.2s. **planF** max-end 2.5, 2.4, 2.4s; max-spending 5.4, 4.9s. **planP** max-end 1.1, 1.2, 1.0s; max-spending 3.7, 3.6s. Release-gate comparison: run the same loop, accept within about 5% (expect run-to-run noise of a few %). samplePlan is faster than the plan's 37s/80s estimate. |
 
 ---
 
