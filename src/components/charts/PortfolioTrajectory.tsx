@@ -112,6 +112,16 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
         pointRadius: 0,
         tension: 0.2,
       }] : []),
+      ...(rows.some((r) => r.endHSA > 0) ? [{
+        label: 'HSA',
+        data: rows.map((r) => scale(r.endHSA, r.inflationFactor)),
+        backgroundColor: bucketColors.hsa + 'd0',
+        borderColor: bucketColors.hsa,
+        borderWidth: 0,
+        fill: '-1',
+        pointRadius: 0,
+        tension: 0.2,
+      }] : []),
     ],
   };
 

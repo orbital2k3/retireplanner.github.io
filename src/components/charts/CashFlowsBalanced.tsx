@@ -1,6 +1,6 @@
 import { Bar } from 'react-chartjs-2';
 import type { ChartOptions, ChartData, Chart, TooltipModel } from 'chart.js';
-import { palette, fmtCompact, fmtFull } from './setup';
+import { palette, bucketColors, fmtCompact, fmtFull } from './setup';
 import { useAgeAxis } from './useAgeAxis';
 import type { ProjectionResult } from '../../engine/projection';
 import { rmdCashOf } from '../../engine/qcd';
@@ -180,6 +180,15 @@ export default function CashFlowsBalanced({ proj, real = true, height = 280 }: P
         borderWidth: 1.5,
         stack: 'in',
       }] : []),
+      // HSA money that reached the household as cash: qualified payments, reimbursed receipts and any
+      // non-qualified draw. Only drawn when the plan has an HSA that paid something.
+      ...(rows.some((r) => r.hsaQualifiedWD + r.hsaReimbursed + r.hsaNonQualWD > 0) ? [{
+        type: 'bar' as const,
+        label: 'HSA payments',
+        data: rows.map((r) => scale(r.hsaQualifiedWD + r.hsaReimbursed + r.hsaNonQualWD, r.inflationFactor)),
+        backgroundColor: bucketColors.hsa,
+        stack: 'in',
+      }] : []),
       {
         type: 'bar',
         label: 'Spending',
@@ -194,6 +203,14 @@ export default function CashFlowsBalanced({ proj, real = true, height = 280 }: P
         backgroundColor: palette.acaBar,
         stack: 'out',
       },
+      // A retiree's HSA contribution (and any early-draw penalty) is paid out of the portfolio.
+      ...(rows.some((r) => r.hsaContribRet + r.hsaPenalty > 0) ? [{
+        type: 'bar' as const,
+        label: 'HSA contribution & penalty',
+        data: rows.map((r) => -scale(r.hsaContribRet + r.hsaPenalty, r.inflationFactor)),
+        backgroundColor: bucketColors.hsa + '99',
+        stack: 'out',
+      }] : []),
       {
         type: 'bar',
         label: 'Federal Tax',

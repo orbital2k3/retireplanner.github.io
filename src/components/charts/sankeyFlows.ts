@@ -5,8 +5,8 @@ import { rmdCashOf } from '../../engine/qcd';
 /** Where a source's money may go.
  *  - general: pays its tax share, then spreads across spending, ACA, and savings
  *  - brokTax: pays tax first; anything left over joins the general pool
- *  - toRoth / deposit / spend / save / charity: pinned to that single use */
-export type SankeyRoute = 'general' | 'brokTax' | 'toRoth' | 'deposit' | 'spend' | 'save' | 'charity';
+ *  - toRoth / deposit / spend / save / charity / medical: pinned to that single use */
+export type SankeyRoute = 'general' | 'brokTax' | 'toRoth' | 'deposit' | 'spend' | 'save' | 'charity' | 'medical';
 
 /** A source of money on the left. `taxBase` is the slice of this source that lands in
  *  taxable income, and it is what the tax allocation is keyed off. */
@@ -45,8 +45,9 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   //             which the row does not carry on its own.
   // Only the RMD cash that reached the household is income; the QCD part went to charity untaxed.
   const rmdCash = rmdCashOf(row);
+  // A non-qualified HSA draw is ordinary income; a retiree's HSA contribution is deducted from it.
   const ordDriversExSS = row.otherIncomeTaxable + row.wdTrd + rmdCash + row.rothConv
-    + row.lumpSumOrdinaryIncome + row.ordinaryDiv;
+    + row.lumpSumOrdinaryIncome + row.ordinaryDiv + row.hsaNonQualWD - row.hsaContribRet;
   const taxableSS = Math.max(0, row.ordIncome - ordDriversExSS);
   const realizedGains = Math.max(0, row.ltcg - row.qualifiedDiv);
 
@@ -58,6 +59,9 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const inheritedCash = (row.lumpSumOrdinaryIncome ?? 0) + (row.lumpSumForcedRothDist ?? 0) + inhTrdFromWd + inhRthFromWd;
   const deposits = (row.lumpSumInjectTaxable ?? 0) + (row.lumpSumInjectTrad ?? 0) + (row.lumpSumInjectRoth ?? 0);
   const contributions = row.contribA + row.contribB;
+  // HSA qualified payments go straight to medical bills (and the IRMAA surcharge), like a QCD to charity.
+  const hsaMed = Math.min(row.hsaQualifiedWD, row.medicalSpend);
+  const hsaIrmaa = row.hsaQualifiedWD - hsaMed;
 
   // ---- Sources -----------------------------------------------------------------------
   const raw: SankeySource[] = [
@@ -71,6 +75,10 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
       taxBase: rmdCash, route: 'general' },
     { id: 'qcd', label: 'QCD · Pre-tax', value: row.qcd ?? 0, color: palette.goldLight,
       taxBase: 0, route: 'charity' },
+    { id: 'hsaQual', label: 'HSA · Qualified', value: row.hsaQualifiedWD, color: palette.bucketHSA,
+      taxBase: 0, route: 'medical' },
+    { id: 'hsaCash', label: 'HSA · Reimbursed / withdrawn', value: row.hsaReimbursed + row.hsaNonQualWD, color: palette.bucketHSA,
+      taxBase: row.hsaNonQualWD, route: 'general' },
     { id: 'wdRth', label: 'Withdrawal · Roth', value: row.wdRth - inhRthFromWd, color: palette.bucketRoth,
       taxBase: 0, route: 'general' },
     { id: 'ss', label: 'Social Security', value: row.totalSS, color: palette.goldLight,
@@ -96,11 +104,14 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
 
   // ---- Use totals --------------------------------------------------------------------
   const fedTax = scale(row.fedTax);
-  const otherTax = scale(row.stateTaxAmt + row.irmaa + row.niit);
+  const otherTax = scale(row.stateTaxAmt + row.irmaa + row.niit - hsaIrmaa);
   const aca = scale(row.acaPremium ?? 0);
   // QCD-funded giving is its own use (Pre-tax → Charity); the rest of net spending is paid from the pool.
   const charity = scale(row.qcd ?? 0);
-  const spending = scale(row.netSpend - (row.qcd ?? 0));
+  const spending = scale(row.netSpend - (row.qcd ?? 0) - hsaMed);
+  const medical = scale(row.hsaQualifiedWD);
+  const hsaContrib = scale(row.hsaContribRet);
+  const hsaPenalty = scale(row.hsaPenalty);
   const taxPool = fedTax + otherTax;
   const fedShare = taxPool > 0 ? fedTax / taxPool : 0;
 
@@ -146,7 +157,7 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const poolAfterTax = pooled.reduce((s, n) => s + afterTax(n), 0);
   const fromGap = sources.filter((n) => n.route === 'spend').reduce((s, n) => s + n.value, 0);
   const spendFromPool = Math.max(0, spending - fromGap);
-  const savingsFromPool = poolAfterTax - spendFromPool - aca;
+  const savingsFromPool = poolAfterTax - spendFromPool - aca - hsaContrib - hsaPenalty;
 
   // Safety node: uses outrunning sources means the row drew on the portfolio in a way its
   // cash fields do not name. It should never appear for a valid plan.
@@ -166,9 +177,12 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const uses: SankeyUse[] = [
     { id: 'spend', label: 'Net Spending', value: spending, color: palette.danger },
     { id: 'charity', label: 'Charity (QCD)', value: charity, color: palette.goldLight },
+    { id: 'medical', label: 'Medical & IRMAA (HSA)', value: medical, color: palette.bucketHSA },
     { id: 'fed', label: 'Federal Tax', value: fedTax, color: palette.warning },
     { id: 'state', label: 'State + IRMAA + NIIT', value: otherTax, color: palette.taxOther },
     { id: 'aca', label: 'ACA Premium', value: aca, color: palette.acaBar },
+    { id: 'hsaContrib', label: 'Contributed to HSA', value: hsaContrib, color: palette.bucketHSA },
+    { id: 'hsaPenalty', label: 'HSA early-draw penalty', value: hsaPenalty, color: palette.danger },
     { id: 'toRoth', label: 'Converted to Roth', value: scale(row.rothConv), color: palette.bucketRoth },
     { id: 'deposit', label: 'Deposited to accounts', value: scale(deposits), color: palette.gold },
     { id: 'save', label: 'Net Savings', value: savings + toSave, color: palette.success },
@@ -179,6 +193,8 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
     if (pool <= 0) return 0;
     if (target === 'spend') return spendFromPool / pool;
     if (target === 'aca') return aca / pool;
+    if (target === 'hsaContrib') return hsaContrib / pool;
+    if (target === 'hsaPenalty') return hsaPenalty / pool;
     if (target === 'save') return savings / pool;
     return 0;
   };

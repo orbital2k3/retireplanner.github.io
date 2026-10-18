@@ -67,6 +67,10 @@ export const palette = {
   bucketTrad:    '#0d1b2e',   // navy
   bucketRoth:    '#c9a84c',   // gold
   bucketInherited: '#7b5ea7', // muted violet — distinct from all three own-account buckets
+  // HSA: cyan-teal. Run through the dataviz validator against the other bucket colors (all pairs, light
+  // surface): normal-vision ΔE 16 to Taxable green (the earlier #2a9d9a placeholder was 9.9, a FAIL) and no
+  // CVD pair under 12. Contrast on the surface is under 3:1 (like the gold), so charts keep the legend.
+  bucketHSA:     '#2bb3b9',
   incomeOther:   '#3b5e8a',   // blue-slate — distinct from textMuted
   taxOther:      '#7a96b0',   // textMuted — kept for state-tax / IRMAA aggregate
   acaBar:        '#c0714d',   // warm coral — ACA premium (spend, not tax)
@@ -77,6 +81,7 @@ export const bucketColors = {
   traditional: palette.bucketTrad,
   roth: palette.bucketRoth,
   inherited: palette.bucketInherited,
+  hsa: palette.bucketHSA,
 };
 
 export const fmtCompact = (n: number): string => {

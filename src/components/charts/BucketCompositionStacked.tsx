@@ -22,11 +22,13 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
   const ownTrad = (r: (typeof rows)[number]) => r.endTraditional - (r.inheritedBal - r.inheritedRothBal);
   const ownRoth = (r: (typeof rows)[number]) => r.endRoth - r.inheritedRothBal;
   const hasInherited = rows.some((r) => r.inheritedBal > 0);
+  const hasHsa = rows.some((r) => r.endHSA > 0);
   const dollars = {
     taxable: rows.map((r) => scale(r.endTaxable, r.inflationFactor)),
     traditional: rows.map((r) => scale(ownTrad(r), r.inflationFactor)),
     roth: rows.map((r) => scale(ownRoth(r), r.inflationFactor)),
     inherited: rows.map((r) => scale(r.inheritedBal, r.inflationFactor)),
+    hsa: rows.map((r) => scale(r.endHSA, r.inflationFactor)),
     total: rows.map((r) => scale(r.endTotal, r.inflationFactor)),
   };
 
@@ -76,6 +78,18 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
         rawDollars: dollars.inherited,
         backgroundColor: bucketColors.inherited + 'cc',
         borderColor: bucketColors.inherited,
+        borderWidth: 1,
+        fill: '-1',
+        pointRadius: 0,
+        tension: 0.25,
+      }] : []),
+      ...(hasHsa ? [{
+        label: 'HSA',
+        data: rows.map((r) => +pct(r.endHSA, r.endTotal).toFixed(2)),
+        // @ts-expect-error custom property for tooltip
+        rawDollars: dollars.hsa,
+        backgroundColor: bucketColors.hsa + 'cc',
+        borderColor: bucketColors.hsa,
         borderWidth: 1,
         fill: '-1',
         pointRadius: 0,

@@ -3,11 +3,9 @@ import { buildSankeyFlows } from './sankeyFlows';
 import { runProjection, type ProjectionRow } from '../../engine/projection';
 import type { Plan, LumpSumEvent } from '../../schemas/plan';
 import * as G from '../../engine/__golden/plans';
+import { acaRetireePlan, hsaOnlyPlan, medicalPlan } from '../../engine/__testutil__/hsaPlans';
 
-// planR (HSA) is left out until HU-2 teaches the ledger the HSA flows (contributions out, qualified
-// payments in, HSA -> Medical). HU-2 must delete this filter.
-const PENDING_HSA_SANKEY = new Set(['planR_hsaEarlyRetiree']);
-const golden = (Object.entries(G).filter(([name, f]) => typeof f === 'function' && !PENDING_HSA_SANKEY.has(name)) as [string, () => Plan][])
+const golden = (Object.entries(G).filter(([, f]) => typeof f === 'function') as [string, () => Plan][])
   .map(([name, make]) => [name, make()] as [string, Plan]);
 
 function singlePlan(): Plan {
@@ -48,6 +46,9 @@ const extra: [string, Plan][] = [
   ['conversion + pay tax from brokerage', convBrok()],
   ['QCD inside the RMD', qcdGiver('1950-01-01')],
   ['QCD beyond the RMD (70, no RMD yet)', qcdGiver('1956-01-01')],
+  ['HSA pays medical + IRMAA', medicalPlan({ a: { hsa: 400_000 }, policyAge: 0 })],
+  ['HSA last resort with penalty', hsaOnlyPlan(20_000)],
+  ['HSA retiree contribution (ACA)', acaRetireePlan()],
 ];
 
 const TAX = new Set(['fed', 'state']);
@@ -142,6 +143,32 @@ describe('buildSankeyFlows', () => {
       checkRow(row, true);
       const gapLinks = buildSankeyFlows(row).links.filter((l) => l.source === 'gap');
       expect(gapLinks.map((l) => l.target)).toEqual(['spend']);
+    }
+  });
+
+  it('HSA qualified payments go straight to a Medical use; the HSA never shows as a cash source for them', () => {
+    const rows = runProjection(medicalPlan({ a: { hsa: 400_000 }, policyAge: 0 })).rows.filter((r) => r.hsaQualifiedWD > 0);
+    expect(rows.length).toBeGreaterThan(5);
+    for (const row of rows) {
+      const f = buildSankeyFlows(row, false);
+      expect(f.links.filter((l) => l.source === 'hsaQual').map((l) => l.target)).toEqual(['medical']);
+      expect(f.uses.find((u) => u.id === 'medical')?.value).toBeCloseTo(row.hsaQualifiedWD, 6);
+      // net spending excludes the medical bills the HSA paid
+      expect((f.uses.find((u) => u.id === 'spend')?.value ?? 0) + Math.min(row.hsaQualifiedWD, row.medicalSpend)).toBeCloseTo(row.netSpend, 6);
+    }
+  });
+
+  it('a retiree HSA contribution and an early-draw penalty are uses paid from the pool', () => {
+    const c = runProjection(acaRetireePlan()).rows[0];
+    expect(buildSankeyFlows(c, false).uses.find((u) => u.id === 'hsaContrib')?.value).toBeCloseTo(c.hsaContribRet, 6);
+    const p = runProjection(hsaOnlyPlan(20_000)).rows.find((r) => r.hsaPenalty > 0)!;
+    expect(buildSankeyFlows(p, false).uses.find((u) => u.id === 'hsaPenalty')?.value).toBeCloseTo(p.hsaPenalty, 6);
+  });
+
+  it('a plan without an HSA has no HSA source or use', () => {
+    for (const row of runProjection(G.planA_simple()).rows) {
+      const f = buildSankeyFlows(row);
+      expect([...f.sources, ...f.uses].some((n) => /hsa|medical/i.test(n.id))).toBe(false);
     }
   });
 });
