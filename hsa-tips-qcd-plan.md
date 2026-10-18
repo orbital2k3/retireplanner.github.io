@@ -30,7 +30,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 17 | ◐ |
+| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 18 | ◐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
@@ -61,8 +61,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | QU-1 | [M4-A] Projections QCD columns + RMD tooltip | ☑ | 2026-10-17 | b87da3a | New QCD column group (QCD, Charity ded.) in gold; shown by default only when lifetime QCD > 0 until the user changes columns (then their choice sticks; Reset clears it). RMD tooltip uses the mockup copy (+ a beyond-RMD sentence). Std Deduct column now excludes the charity deduction so the columns sum. Verified in browser. Pre-existing React key warning in this table (fragment in rows.map) left alone. |
 | QU-2 | Split QCD out of cash RMD in charts and Sankey | ☑ | 2026-10-17 | 25ebe44 | Shared rmdCashOf() in qcd.ts. CashFlowsBalanced, IncomeSourcesArea, RothVsRmd: RMD bar is the cash part, new pale-gold 'QCDs' series only when a QCD exists. Sankey: new 'QCD · Pre-tax' source pinned to a new 'Charity (QCD)' use, Net Spending excludes it, taxable-SS back-out uses the cash RMD. 4 new sankey tests; ledger balances for all golden plans incl. Q. Chart verified in browser. Not changed here: explain-layer RMD readers (bracketCliff, optimizerRationale), handled in QU-5. |
 | QU-3 | [M4-B] `qcdBenefit.ts` + Taxes card | ☑ | 2026-10-17 | 5cf93ca | qcdBenefit.ts (compareWithWithoutQCD: same plan with disableQCD, real $; copy builder) + gold info card at the top of Taxes > Federal, memoized, hidden without QCDs. 7 tests. Copy deviations from the mockup, to stay truthful: 'IRMAA surcharges in N years' (not 'tier 1'); each effect is mentioned only if it happened; a neutral title when the saving is under $100. Uses useEnginePlan (not the what-if projection) for both runs. Verified in browser. |
-| QU-4 | [M4-C] QCD warnings | ☑ | 2026-10-17 | (hash backfilled in QU-5) | Two warnings in planWarnings.ts: qcd-no-ira (warn: every owner who would pay the gifts has no IRA and none building) and qcd-optout (new 'info' severity for qcd:false rows, with .plan-warning.info style and an ⓘ icon in the strip). 6 tests. Copy deviates from the mockup to stay accurate: the age isn't quoted ('Charitable giving "X" can't be paid as QCDs because Y's IRA is empty…') since giving can start years before 70½. Not browser-checked (strip markup unchanged apart from the icon). |
-| QU-5 | QCD explain notes + insight rule | ☐ | | | |
+| QU-4 | [M4-C] QCD warnings | ☑ | 2026-10-17 | 69d2bd8 | Two warnings in planWarnings.ts: qcd-no-ira (warn: every owner who would pay the gifts has no IRA and none building) and qcd-optout (new 'info' severity for qcd:false rows, with .plan-warning.info style and an ⓘ icon in the strip). 6 tests. Copy deviates from the mockup to stay accurate: the age isn't quoted ('Charitable giving "X" can't be paid as QCDs because Y's IRA is empty…') since giving can start years before 70½. Not browser-checked (strip markup unchanged apart from the icon). |
+| QU-5 | QCD explain notes + insight rule | ☑ | 2026-10-17 | (hash backfilled in QU-6) | yearDecisions: rmdAmt renamed rmdTaxable (+ optional rmdGross/qcd/qcdBeyondRmd) and a non-binding 'qcd-rmd' note; headroom display already uses stdDEff (Q-3). bracketCliff and optimizerRationale now read the taxable (cash) RMD via rmdCashOf. New rule qcd.ts ('QCDs cut your required-withdrawal tax', taxes+strategy): only fires when QCDs satisfy RMD dollars; copy says 'fewer Roth conversions are usually needed overall', never 'before 70½' (Q-8 finding). 10 new tests. |
 | QU-6 | QCD docs, Learn More, release notes | ☐ | | | |
 | QU-7 | QCD E2E + v35 freshness | ☐ | | | |
 | Q-REL | v36 migration + release gate + PR merge | ☐ | | | |
@@ -256,7 +256,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - The Taxes page card (`TaxPlanning.tsx` ~L97) shows lifetime fed + state + IRMAA + NIIT + ACA saved in real dollars, labeled "same withdrawal plan"
   - The card is hidden when total QCD is 0
 - [x] **QU-4** [M4-C] `planWarnings.ts`: charity at 70½+ with empty trad; charity rows marked non-QCD (info). Tests in `planWarnings.test.ts`.
-- [ ] **QU-5** Explain:
+- [x] **QU-5** Explain:
   - `yearDecisions` takes `rmdTaxable` and adds a QCD note
   - headroom display uses `stdDEff`
   - new insight rule in `explain/rules/` ("QCDs cut future RMD tax, so fewer conversions are needed overall"; Q-8 found pre-70½ conversions are not lower, so don't claim that)
@@ -456,6 +456,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | QU-2 | QCD split out of cash RMD in 3 charts and the Sankey. |
 | 2026-10-17 | QU-3 | `qcdBenefit.ts` and the Taxes card built and browser-verified. |
 | 2026-10-17 | QU-4 | QCD warnings (and an `info` severity) added with tests. |
+| 2026-10-17 | QU-5 | Explain layer: QCD year note, taxable-RMD readers, new insight rule. |
 
 ---
 

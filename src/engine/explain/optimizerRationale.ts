@@ -4,6 +4,7 @@ import type { DecisionTrace } from './decisionTrace';
 import { runProjection } from '../projection';
 import { fmtUSD } from '../../lib/format';
 import { rmdStartAgeForDob } from '../rmd';
+import { rmdCashOf } from '../qcd';
 import { generateInsights, insightsForSurface } from './index';
 import { resolveStrategy } from '../strategy/resultSettings';
 
@@ -60,7 +61,7 @@ export function explainPolicy(livePlan: Plan, result: OptimizeResult, trace?: De
     if (tradShare < 0.30) {
       reasons.push(`only ${Math.round(tradShare * 100)}% of assets are in pre-tax accounts — not enough future RMD pressure to justify conversions`);
     }
-    const peakRmdReal = Math.max(0, ...rows.map((r) => r.rmd / r.inflationFactor));
+    const peakRmdReal = Math.max(0, ...rows.map((r) => rmdCashOf(r) / r.inflationFactor));
     if (peakRmdReal < 30_000) {
       reasons.push(`projected RMDs stay below ${fmtUSD(peakRmdReal)} — no meaningful bracket-push from required distributions`);
     }
@@ -121,7 +122,7 @@ export function explainPolicy(livePlan: Plan, result: OptimizeResult, trace?: De
   }
 
   const rmdAge  = rmdStartAgeForDob(plan.personA.dob);
-  const peakRmdReal = Math.max(0, ...rows.map((r) => r.rmd / r.inflationFactor));
+  const peakRmdReal = Math.max(0, ...rows.map((r) => rmdCashOf(r) / r.inflationFactor));
   if (peakRmdReal > 50_000) {
     drivers.push(
       `without conversions, RMDs would peak above ${fmtUSD(peakRmdReal)} (today's $) after age ${rmdAge}, pushing MAGI into higher brackets and IRMAA tiers`
@@ -189,7 +190,7 @@ export function explainPolicy(livePlan: Plan, result: OptimizeResult, trace?: De
     );
   }
 
-  const convDuringRmdYears = rows.filter((r) => r.rothConv > 100 && r.rmd > 100);
+  const convDuringRmdYears = rows.filter((r) => r.rothConv > 100 && rmdCashOf(r) > 100);
   if (convDuringRmdYears.length > 0) {
     const age = convDuringRmdYears[0].ageA;
     insightItems.push(

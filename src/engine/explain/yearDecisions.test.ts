@@ -16,7 +16,7 @@ const base: YearDecisionContext = {
   wdTrd: 0,
   wdRth: 0,
   gap: 71_300,
-  rmdAmt: 0,
+  rmdTaxable: 0,
   bracketOverridden: false,
   spill: undefined,
   spillWindow: undefined,
@@ -113,8 +113,8 @@ describe('buildYearDecisions', () => {
   });
 
   describe('conv-during-rmd', () => {
-    it('fires (non-binding) when conv>1 and rmdAmt>1', () => {
-      const ctx: YearDecisionContext = { ...base, conv: 18_300, rmdAmt: 48_100, headroomNominal: 18_300 };
+    it('fires (non-binding) when conv>1 and rmdTaxable>1', () => {
+      const ctx: YearDecisionContext = { ...base, conv: 18_300, rmdTaxable: 48_100, headroomNominal: 18_300 };
       const notes = buildYearDecisions(ctx);
       const n = notes.find(x => x.code === 'conv-during-rmd');
       expect(n).toBeDefined();
@@ -122,11 +122,39 @@ describe('buildYearDecisions', () => {
     });
 
     it('text contains RMD and conversion amounts', () => {
-      const ctx: YearDecisionContext = { ...base, conv: 18_300, rmdAmt: 48_100, headroomNominal: 18_300, gap: 92_000 };
+      const ctx: YearDecisionContext = { ...base, conv: 18_300, rmdTaxable: 48_100, headroomNominal: 18_300, gap: 92_000 };
       const { text } = buildYearDecisions(ctx).find(x => x.code === 'conv-during-rmd')!;
       expect(text).toContain(fmtUSD(48_100));
       expect(text).toContain(fmtUSD(18_300));
       expect(text).toContain(fmtUSD(92_000));
+    });
+  });
+
+  describe('qcd-rmd', () => {
+    it('fires (non-binding, info) when a QCD was paid, and explains the RMD split', () => {
+      const ctx: YearDecisionContext = { ...base, qcd: 25_000, qcdBeyondRmd: 0, rmdGross: 38_200, rmdTaxable: 13_200 };
+      const n = buildYearDecisions(ctx).find(x => x.code === 'qcd-rmd')!;
+      expect(n).toBeDefined();
+      expect(n.binding).toBe(false);
+      expect(n.severity).toBe('info');
+      expect(n.text).toContain(fmtUSD(25_000));
+      expect(n.text).toContain(fmtUSD(38_200));
+      expect(n.text).toContain(fmtUSD(13_200));
+    });
+
+    it('says no withdrawal was required when the QCD is entirely beyond the RMD', () => {
+      const ctx: YearDecisionContext = { ...base, qcd: 20_000, qcdBeyondRmd: 20_000, rmdGross: 0, rmdTaxable: 0 };
+      const n = buildYearDecisions(ctx).find(x => x.code === 'qcd-rmd')!;
+      expect(n.text).toContain('No withdrawal was required yet');
+    });
+
+    it('mentions the amount beyond the requirement when there is one', () => {
+      const ctx: YearDecisionContext = { ...base, qcd: 50_000, qcdBeyondRmd: 20_000, rmdGross: 30_000, rmdTaxable: 0 };
+      expect(buildYearDecisions(ctx).find(x => x.code === 'qcd-rmd')!.text).toContain(`a further ${fmtUSD(20_000)}`);
+    });
+
+    it('does not fire without a QCD', () => {
+      expect(buildYearDecisions(base).some(x => x.code === 'qcd-rmd')).toBe(false);
     });
   });
 
@@ -236,7 +264,7 @@ describe('buildYearDecisions', () => {
     });
 
     it('conv-during-rmd amounts match text', () => {
-      const ctx: YearDecisionContext = { ...base, conv: 18_300, rmdAmt: 48_100, headroomNominal: 18_300, gap: 92_000 };
+      const ctx: YearDecisionContext = { ...base, conv: 18_300, rmdTaxable: 48_100, headroomNominal: 18_300, gap: 92_000 };
       const n = buildYearDecisions(ctx).find(x => x.code === 'conv-during-rmd')!;
       for (const v of Object.values(n.amounts ?? {})) {
         if (v > 0) expect(n.text).toContain(fmtUSD(v));
