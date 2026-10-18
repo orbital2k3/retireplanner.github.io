@@ -178,3 +178,61 @@ export const arbPlan = (): fc.Arbitrary<Plan> =>
         goals: [],
       };
     });
+
+/** An optional HSA for one person: balance, contribution, coverage, receipts, retirement election. */
+const hsaPerson = () =>
+  fc.record({
+    hsa: fc.integer({ min: 0, max: 600_000 }),
+    hsaContribution: fc.integer({ min: 0, max: 12_000 }),
+    hsaCoverage: fc.constantFrom('self' as const, 'family' as const),
+    hsaContribInRetirement: fc.boolean(),
+    hsaReceipts: fc.integer({ min: 0, max: 100_000 }),
+  });
+
+const medicalExpense = () =>
+  fc.record({
+    annualAmount: fc.integer({ min: 2_000, max: 60_000 }),
+    startAge: fc.integer({ min: 50, max: 75 }),
+    rate: fc.double({ min: 0.02, max: 0.07, noNaN: true, noDefaultInfinity: true }),
+  }).map((m) => ({
+    id: 'exp-medical', description: 'Medical', whose: 'Household' as const, startAge: m.startAge,
+    end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: m.annualAmount,
+    inflationPct: { mode: 'fixed' as const, rate: m.rate }, category: 'medical' as const,
+  }));
+
+/** A generated plan layered with an HSA: optional per-person accounts, a household payment policy, an
+ *  hsaReturn, medical spending and ACA modeling (so retirement contributions hit the ACA lever).
+ *  Separate from `arbPlan` so the existing properties keep sampling the plans they always did. */
+export const arbHsaPlan = (): fc.Arbitrary<Plan> =>
+  fc.tuple(
+    arbPlan(),
+    fc.record({
+      a: fc.option(hsaPerson(), { nil: undefined }),
+      b: fc.option(hsaPerson(), { nil: undefined }),
+      policy: fc.constantFrom(undefined, 0, 55, 65, 70),
+      hsaReturn: fc.option(fc.double({ min: 0, max: 0.09, noNaN: true, noDefaultInfinity: true }), { nil: undefined }),
+      medical: fc.option(medicalExpense(), { nil: undefined }),
+      aca: fc.option(fc.integer({ min: 6_000, max: 28_000 }), { nil: undefined }),
+      // A quarter of the plans are cash-poor, so the other accounts run dry and the HSA is used as the last resort.
+      lean: fc.integer({ min: 0, max: 3 }).map((n) => n === 0),
+    }),
+  ).map(([plan, h]): Plan => {
+    const shrink = (p: Plan['portfolio']['personA']) => h.lean
+      ? { ...p, taxable: p.taxable * 0.03, taxableBasis: p.taxableBasis * 0.03, traditional: p.traditional * 0.03, roth: p.roth * 0.03 } : p;
+    const pf = { ...plan.portfolio, personA: shrink(plan.portfolio.personA), personB: plan.portfolio.personB ? shrink(plan.portfolio.personB) : undefined };
+    return {
+      ...plan,
+      assumptions: {
+        ...plan.assumptions,
+        ...(h.hsaReturn !== undefined ? { hsaReturn: h.hsaReturn } : {}),
+        ...(h.aca !== undefined ? { modelACA: true, acaBenchmarkPremium: h.aca, acaHouseholdSize: plan.personB ? 2 : 1 } : {}),
+      },
+      portfolio: {
+        ...pf,
+        personA: { ...pf.personA, ...h.a },
+        personB: pf.personB ? { ...pf.personB, ...h.b } : undefined,
+        ...(h.policy !== undefined ? { hsaPolicy: { payMedicalFromAge: h.policy } } : {}),
+      },
+      expenseStreams: h.medical ? [...plan.expenseStreams, h.medical] : plan.expenseStreams,
+    };
+  });
