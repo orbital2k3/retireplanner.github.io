@@ -184,6 +184,13 @@ export const ExpenseStreamSchema = z.object({
   survivorPct: z.number().min(0).max(1),
   annualAmount: z.number().nonnegative(),
   inflationPct: GrowthRateSchema,
+  // Spending tag. Absent === 'general' === pre-v36 behavior. 'medical' rows can be paid from an HSA;
+  // 'charitable' rows are QCD-eligible. Optional with no default so existing saved plans keep their
+  // optimizer key (a default would change every key and mark saved results stale).
+  category: z.enum(['general', 'medical', 'charitable']).optional(),
+  // Charitable rows only: false when the gift is not paid directly to a public charity (donor-advised
+  // fund, private foundation), which excludes it from QCD. Absent === true.
+  qcd: z.boolean().optional(),
 });
 export type ExpenseStream = z.infer<typeof ExpenseStreamSchema>;
 
