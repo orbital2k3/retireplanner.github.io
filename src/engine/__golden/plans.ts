@@ -495,3 +495,42 @@ export function planQ_qcdGiver(): Plan {
     state: 'NY',
   };
 }
+
+/** HSA early retiree: A is 55 and B is 53, both retired now, on an HSA-eligible ACA bronze plan (family
+ *  coverage). A holds a $150k HSA with $22k of past receipts and keeps contributing the family limit until
+ *  65 from the portfolio (a cash need that also lowers ACA income). Medical bills are tagged; the household
+ *  policy is the default (the HSA starts paying at 65, bills before that become receipts). IL, taxfirst,
+ *  ACA modeled. Exercises the retiree deduction, receipts, qualified payments of medical + IRMAA, and the
+ *  survivor merge (A dies at 88, B at 92). */
+export function planR_hsaEarlyRetiree(): Plan {
+  const p = goldenBase();
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1971-03-01', retirementAge: 55, planThroughAge: 88, ssPIA: 36000, ssClaimAge: 67 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1973-03-01', retirementAge: 53, planThroughAge: 92, ssPIA: 18000, ssClaimAge: 67 },
+    assumptions: { ...p.assumptions, modelACA: true, acaHouseholdSize: 2, acaBenchmarkPremium: 17000, acaNoSubsidy: false },
+    portfolio: {
+      personA: {
+        taxable: 450000, taxableBasis: 270000, traditional: 600000, roth: 160000, annualContribution: 0,
+        contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 },
+        hsa: 150000, hsaContribution: 8750, hsaCoverage: 'family', hsaContribInRetirement: true, hsaReceipts: 22000,
+      },
+      personB: {
+        taxable: 150000, taxableBasis: 90000, traditional: 250000, roth: 60000, annualContribution: 0,
+        contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 },
+      },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 88 }, survivorPct: 0, annualAmount: 36000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 92 }, survivorPct: 0, annualAmount: 18000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 55, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 78000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+      { id: 'medical', description: 'Out-of-pocket medical', whose: 'Household', startAge: 55, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 9000, inflationPct: { mode: 'fixed', rate: 0.045 }, category: 'medical' as const },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 55, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'IL',
+  };
+}

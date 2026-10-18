@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { runAndCompare } from './harness';
+import { runAndCompare, runAndCompareHsa } from './harness';
 import { runProjection } from '../projection';
 import {
   planA_simple, planB_largeTradSingle, planC_bracketFillConv,
   planD_singleFIRE, planE_allRothCouple, planF_allTradCouple,
   planG_californiaCouple, planH_survivorMidPlan,
   planI_multiStreamIncome, planJ_personBZeroBalance,
-  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver,
+  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver, planR_hsaEarlyRetiree,
 } from './plans';
 
 /**
@@ -95,5 +95,23 @@ describe('Golden projection snapshots', () => {
     expect(rows.some((r) => r.qcd > 0)).toBe(true);
     expect(rows.some((r) => r.filingStatus === 'Single')).toBe(true);
     expect(rows.filter((r) => r.qcd > 0).every((r) => r.qcd <= r.charitableSpend + 1e-6)).toBe(true);
+  });
+
+  it('Plan R — HSA early retiree: ACA bronze, $150k HSA, contributions in retirement, receipts', () => {
+    const r = runAndCompare('planR_hsaEarlyRetiree', planR_hsaEarlyRetiree());
+    expect(r.ok, r.message).toBe(true);
+    const h = runAndCompareHsa('planR_hsaEarlyRetiree', planR_hsaEarlyRetiree());
+    expect(h.ok, h.message).toBe(true);
+  });
+
+  it('Plan R really exercises the HSA: retiree contributions, receipts, qualified payments and the survivor merge', () => {
+    const rows = runProjection(planR_hsaEarlyRetiree()).rows;
+    expect(rows.filter((r) => r.hsaContribRet > 0).map((r) => r.ageA)).toEqual([55, 56, 57, 58, 59, 60, 61, 62, 63, 64]);
+    expect(rows.some((r) => r.hsaReceiptsBal > 22_000)).toBe(true);           // bills paid elsewhere before 65
+    expect(rows.find((r) => r.ageA === 64)!.hsaQualifiedWD).toBe(0);
+    expect(rows.find((r) => r.ageA === 65)!.hsaQualifiedWD).toBeGreaterThan(0);
+    expect(rows.some((r) => r.acaPremium > 0)).toBe(true);
+    expect(rows.some((r) => r.phase === 'Survivor' && r.endHSA > 0)).toBe(true);
+    expect(rows.every((r) => r.hsaNonQualWD === 0 && r.hsaPenalty === 0)).toBe(true);
   });
 });
