@@ -168,3 +168,82 @@ export const SINGLE_LIFE_TABLE: readonly number[] = [
   2.0, 2.0, 2.0, 1.9, 1.9, 1.8, 1.8, 1.6, 1.4, 1.1, // 110-119
   1.0, // 120-120
 ];
+
+// ---------------------------------------------------------------------------------------------
+// QCD / HSA / TIPS constants (verified 2026-10-17; see hsa-tips-qcd-plan.md P0-2).
+// Unused until the feature phases wire them in.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * QCD annual limit per IRA owner, 2026: $111,000 (2025: $108,000). IRC §408(d)(8)(A), indexed by
+ * SECURE 2.0 §307, so the engine scales it by inflationFactor.
+ * Source: IRS Notice 2025-67 (IRB 2025-49), "The aggregate amount of qualified charitable
+ * distributions … is increased from $108,000 to $111,000." Verified against the notice text.
+ * The one-time split-interest-entity election also rose, $54,000 → $55,000 (§408(d)(8)(F)); not modeled.
+ * Eligibility is age 70½ or older on the distribution date (§408(d)(8)(B)); the limit is per person,
+ * so a couple has two.
+ */
+export const QCD_LIMIT_2026 = 111_000;
+
+/**
+ * HSA annual contribution limits, 2026: $4,400 self-only, $8,750 family. IRC §223(b)(2).
+ * Source: IRS Rev. Proc. 2025-19 §2.01(1) (IRB 2025-18). Verified against the revenue procedure text.
+ * Both are inflation-indexed (2025: $4,300 / $8,550).
+ */
+export const HSA_LIMIT_SELF_2026 = 4_400;
+export const HSA_LIMIT_FAMILY_2026 = 8_750;
+
+/**
+ * HSA catch-up for an eligible individual age 55+ by year end: $1,000. IRC §223(b)(3).
+ * Set by statute, NOT indexed, and not listed in Rev. Proc. 2025-19 (which lists only the two
+ * limits above). Unlike the IRA catch-up, it must not be scaled by inflation.
+ */
+export const HSA_CATCHUP = 1_000;
+export const HSA_CATCHUP_AGE = 55;
+
+/**
+ * Additional tax on HSA distributions not used for qualified medical expenses: 20%. IRC §223(f)(4)(A).
+ * The penalty doesn't apply once the owner is 65+, disabled or deceased (§223(f)(4)); the amount is then
+ * ordinary income only. (Statutory rate; not re-fetched from IRS text in P0-2.)
+ */
+export const HSA_NONQUAL_PENALTY = 0.20;
+
+/**
+ * OBBBA charitable deduction for non-itemizers: IRC §170(p), added by Pub. L. 119-21 (OBBBA §70424, section number from a secondary source).
+ * $1,000 single / $2,000 joint, taxable years beginning after Dec 31, 2025. Cash gifts to public
+ * charities only (no donor-advised funds or supporting organizations); not subject to the 0.5%-of-AGI
+ * floor; permanent. NOT indexed: the amounts are fixed in the statute and §170(p) does not appear in
+ * the 2026 adjustment list in Rev. Proc. 2025-32. The engine must not scale them by inflationFactor.
+ * Verification: dollar amounts, start year and no-indexing rest on secondary summaries plus the
+ * absence of §170(p) from Rev. Proc. 2025-32 (checked against its text); the §170(p) statute text
+ * itself could not be retrieved in P0-2.
+ */
+export const OBBBA_NONITEMIZER_CHARITY = { single: 1_000, mfj: 2_000 } as const;
+export const OBBBA_NONITEMIZER_CHARITY_FIRST_YEAR = 2026;
+
+/**
+ * Bronze and catastrophic Exchange plans count as HDHPs for HSA eligibility for months beginning
+ * after Dec 31, 2025 (OBBBA §71307, IRC §223(c)(2)(H)). IRS Notice 2026-5 (Dec 9, 2025) Q&A-4:
+ * the plan must be available as individual coverage through an Exchange (off-Exchange purchase of
+ * the same plan also qualifies; SHOP plans do not). Verified against the notice text. Eligibility
+ * is a user-declared plan fact in the engine, so this is documentation only, with no numeric constant.
+ * The 2026 HDHP definition otherwise stays at $1,700 / $3,400 minimum deductible and
+ * $8,500 / $17,000 out-of-pocket maximum (Rev. Proc. 2025-19 §2.01(2)).
+ */
+
+/**
+ * TIPS tax treatment (for T-2 / T-3, `tipsLadder.ts`). Treas. Reg. §1.1275-7 (inflation-indexed debt
+ * instruments, coupon bond method) and IRS Pub. 550:
+ *  - Coupons are taxed as interest when paid, on indexed (adjusted) principal.
+ *  - The annual increase in adjusted principal is original issue discount (Form 1099-OID), taxed
+ *    federally each year with no cash received until maturity ("phantom income").
+ *  - A negative adjustment (deflation) first offsets that year's stated interest; any excess is an
+ *    ordinary loss limited to prior-year inflation income on the same bond (secondary-source
+ *    wording; confirm against §1.1275-7 before relying on the cap). Plan decision D12 only lets
+ *    negative accrual offset that year's coupons.
+ *  - At maturity the holder receives the greater of adjusted principal or original par (TreasuryDirect).
+ *  - Interest and OID are exempt from state and local income tax (31 U.S.C. §3124; statutory, not re-fetched in P0-2).
+ *  - Bond premium: IRS Notice 2011-21 (premium offsets stated interest first). Not modeled.
+ * Not verified in P0-2 against primary text: Reg. §1.1275-7 and Notice 2011-21 (confirmed through
+ * Treasury and Journal of Accountancy summaries and the IRS notice snippet only).
+ */

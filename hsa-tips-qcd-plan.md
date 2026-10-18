@@ -29,7 +29,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 ### Rollup
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
-| 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 1 | ◐ |
+| 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 2 | ◐ |
 | 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 0 | ☐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
@@ -39,8 +39,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 ### Activities
 | ID | Activity | Status | Date | Commit / PR | Notes |
 |---|---|---|---|---|---|
-| P0-1 | Copy plan into repo as tracker; mark analysis §6 answered | ☑ | 2026-10-17 | (this commit; hash backfilled in P0-2) | Plan copied verbatim; analysis §6 marked answered and linked. |
-| P0-2 | Verify IRS constants, cite sources | ☐ | | | |
+| P0-1 | Copy plan into repo as tracker; mark analysis §6 answered | ☑ | 2026-10-17 | e2cd7ac | Plan copied verbatim; analysis §6 marked answered and linked. |
+| P0-2 | Verify IRS constants, cite sources | ☑ | 2026-10-17 | (hash backfilled in P0-3) | All plan values confirmed, none differ. Flags: HSA catch-up $1,000 is statutory, NOT indexed (H-2 says 'indexed': scale only the base limit); OBBBA $1k/$2k NOT indexed; $170(p) statute text not retrievable, rests on secondary sources + absence from Rev. Proc. 2025-32; Reg. 1.1275-7 / Notice 2011-21 not read at source. Added HSA_CATCHUP_AGE, OBBBA first-year consts (unused). |
 | P0-3 | Record test and optimizer timing baselines | ☐ | | | |
 | P0-4 | Bit-exact snapshot harness (fast) + optimizer snapshot (opt) | ☐ | | | |
 | P0-5 | Hoist growth-rate consts in projection.ts | ☐ | | | |
@@ -191,7 +191,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 
 ## Phase 0: Setup (½–1 session)
 - [x] **P0-1** Copy this plan into the repo as `hsa-tips-qcd-plan.md` and use it as the tracker. Mark analysis §6 as answered and link to this plan. Commit on branch `chore/phase0`, which is merged by PR after P0-6. Pushing straight to `main` would deploy.
-- [ ] **P0-2** Verify constants against IRS sources and cite them in `taxConstants.ts` comments:
+- [x] **P0-2** Verify constants against IRS sources and cite them in `taxConstants.ts` comments:
   - QCD limit 2026: $111,000
   - HSA limits: $4,400 / $8,750, catch-up $1,000
   - OBBBA non-itemizer deduction $1k / $2k: start year, and whether it is indexed
@@ -433,6 +433,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | Date | Activities | Result / notes |
 |---|---|---|
 | 2026-10-17 | P0-1 | Branch `chore/phase0` cut from main (869e998). Plan copied into repo; analysis §6 marked answered. |
+| 2026-10-17 | P0-2 | Constants verified (Notice 2025-67, Rev. Proc. 2025-19, Notice 2026-5 read from IRS PDFs). No value differs; indexing flags recorded in Notes. Added as unused exports in `taxConstants.ts`. |
 
 ---
 
