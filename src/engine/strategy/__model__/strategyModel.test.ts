@@ -99,6 +99,8 @@ interface Model { resultKey: string | null; resultGoal: UserGoal | null; resultE
 const saved = () => usePlanStore.getState().plan;
 const opt = () => useOptimizerStore.getState();
 const end = (p: SavedPlan) => runProjection(enginePlan(p)).endTotalReal;
+/** What a spending edit must move: the end balance, or (once ruined) the unfunded shortfall. */
+const outcome = (p: SavedPlan) => { const r = runProjection(enginePlan(p)); return [r.endTotalReal, r.lifetimeShortfallReal]; };
 const withActive = (p: SavedPlan, active: 'manual' | 'optimizer'): SavedPlan => ({ ...p, strategy: { ...p.strategy, active } });
 /** Projection of the saved optimizer result, whichever tab is open. */
 const resultEnd = (p: SavedPlan) => end(withActive(p, 'optimizer'));
@@ -204,8 +206,11 @@ async function step(m: Model, c: Cmd): Promise<void> {
   }
 
   const after = saved();
-  // The saved result changes only when one is committed or the plan is reset.
-  if (after.strategy.result !== before.strategy.result && c.t !== 'ExportImport' && c.t !== 'Reload') recordSaved(m);
+  // The saved result changes only when one is committed or the plan is reset. A spending edit also swaps
+  // the object to clear solvedSpendingMultiplier, but keeps the policy and inputKey: that is no new result.
+  const ra = after.strategy.result, rb = before.strategy.result;
+  const newResult = ra !== rb && !(ra && rb && ra.policy === rb.policy && ra.inputKey === rb.inputKey && ra.goal === rb.goal);
+  if (newResult && c.t !== 'ExportImport' && c.t !== 'Reload') recordSaved(m);
 
   // I2: the result is fresh exactly when it was built for the current key and goal.
   const modelFresh = m.resultKey !== null && savedOptimizerKey(after) === m.resultKey
@@ -217,8 +222,9 @@ async function step(m: Model, c: Cmd): Promise<void> {
 
   // I4: optimizer-setting edits never move the result's charts.
   if (OPTIMIZER_EDITS.has(c.t) && beforeResultEnd !== null) expect(resultEnd(after)).toBe(beforeResultEnd);
-  // I4: a spending change always moves them.
-  if (c.t === 'EditFact' && c.what === 'expense') expect(end(after)).not.toBe(end(before));
+  // I4: a spending change always moves them. Once the portfolio is exhausted the end balance is only the
+  // post-ruin Social Security surplus and no longer depends on spending; the unfunded spend shows up as shortfall.
+  if (c.t === 'EditFact' && c.what === 'expense') expect(outcome(after)).not.toEqual(outcome(before));
 
   // I5: "Set it myself" edits and tab switches never reach the optimizer and never touch the result.
   if (MANUAL_EDITS.has(c.t) || c.t === 'SwitchTab') {
