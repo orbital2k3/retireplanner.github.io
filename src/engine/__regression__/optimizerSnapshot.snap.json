@@ -1,0 +1,670 @@
+{
+ "planF max-end-balance": {
+  "policy": {
+   "windows": [
+    {
+     "fromAge": 65,
+     "toAge": 66,
+     "pctTaxable": 1,
+     "pctTraditional": 0,
+     "pctRoth": 0,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 67,
+     "toAge": 67,
+     "pctTaxable": 0.84765625,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.02734375,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 68,
+     "toAge": 68,
+     "pctTaxable": 0.8203125,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.0546875,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 69,
+     "toAge": 69,
+     "pctTaxable": 0.9375,
+     "pctTraditional": 0,
+     "pctRoth": 0.0625,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 70,
+     "toAge": 71,
+     "pctTaxable": 0.90625,
+     "pctTraditional": 0,
+     "pctRoth": 0.09375,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 72,
+     "toAge": 73,
+     "pctTaxable": 0.9375,
+     "pctTraditional": 0,
+     "pctRoth": 0.0625,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 74,
+     "toAge": 74,
+     "pctTaxable": 0.96875,
+     "pctTraditional": 0,
+     "pctRoth": 0.03125,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 75,
+     "toAge": 94,
+     "pctTaxable": 1,
+     "pctTraditional": 0,
+     "pctRoth": 0,
+     "convAmt": "#undefined"
+    }
+   ],
+   "source": "optimizer",
+   "goal": "max-end-balance"
+  },
+  "perYearPolicyHash": "cbc529dd12336ea3",
+  "metric": "6877113.392315182",
+  "evaluations": 19211,
+  "ranOut": false,
+  "conversionsDisabled": null,
+  "conversionBaselineMetric": "6740290.537211265",
+  "solvedSpendingMultiplier": "\"#undefined\"",
+  "projection": {
+   "aggregates": {
+    "lifetimeFedTax": "3031497.024621656",
+    "lifetimeFedTaxReal": "1468901.4784027503",
+    "lifetimeRMD": "10896505.01386543",
+    "lifetimeRMDReal": "4827591.652939345",
+    "lifetimeConversion": "1246757.9200000002",
+    "lifetimeConversionReal": "841092.2834763661",
+    "endTotalNominal": "21222972.158606384",
+    "endTotalReal": "7711302.20268386",
+    "endTaxAdjustedNominal": "18927125.69426814",
+    "endTaxAdjustedReal": "6877113.392315182",
+    "yearsCovered": "42",
+    "lifetimeShortfallReal": "0",
+    "ranOut": "false",
+    "overrideEvents": "[]"
+   },
+   "rows": [
+    "a83f42cc72f0d04d",
+    "7e9717c255e86c4a",
+    "9cd1a53aeb788a90",
+    "2556fe8a7e91bd9e",
+    "4c92c831522006ab",
+    "f3d593ebb6eaae36",
+    "07bdfe9e064b4292",
+    "ee1fb7e300452f08",
+    "b809f67a17532b41",
+    "cd0529950a541e88",
+    "45f09aae6b3ce8b5",
+    "3388c31e1dca5617",
+    "3d6f665f4cc1a226",
+    "f266fb97566f8d57",
+    "951f460e2117a0db",
+    "eb83a00942be2d9c",
+    "17e5216920e68cc8",
+    "418cac22cb712fa0",
+    "f12ba9255d210b0a",
+    "93ddf8404272bc4a",
+    "a358a0356b743020",
+    "1d4599c1d7720354",
+    "d0ef359a1c0af9aa",
+    "2614e6348caed89f",
+    "47fbba719e78015d",
+    "356933c6da280de7",
+    "bdd76b523d57e3c6",
+    "f1a6a8db85dccb2f",
+    "cbc31b829f133d2e",
+    "2e1425aaffaa132b",
+    "4d57e1a0ad40f95d",
+    "2d6463a5c89c8ffe",
+    "a43608a50d313dd7",
+    "bc2fcd489936dd17",
+    "881b5412565fbf06",
+    "e0ec5e3fe4d1ad3a",
+    "d64757f1e6e28201",
+    "891c84da26e95826",
+    "e824d3198c342f61",
+    "e69775d8fee9428c",
+    "4e2954f2bac44221",
+    "a70569e3a271f658"
+   ]
+  }
+ },
+ "planG max-end-balance": {
+  "policy": {
+   "windows": [
+    {
+     "fromAge": 65,
+     "toAge": 65,
+     "pctTaxable": 0.5,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.375,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 66,
+     "toAge": 66,
+     "pctTaxable": 0,
+     "pctTraditional": 0.875,
+     "pctRoth": 0.125,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 67,
+     "toAge": 67,
+     "pctTaxable": 0.375,
+     "pctTraditional": 0.25,
+     "pctRoth": 0.375,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 68,
+     "toAge": 68,
+     "pctTaxable": 0,
+     "pctTraditional": 0.875,
+     "pctRoth": 0.125,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 69,
+     "toAge": 70,
+     "pctTaxable": 0.625,
+     "pctTraditional": 0,
+     "pctRoth": 0.375,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 71,
+     "toAge": 72,
+     "pctTaxable": 0.59375,
+     "pctTraditional": 0,
+     "pctRoth": 0.40625,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 73,
+     "toAge": 73,
+     "pctTaxable": 0.5625,
+     "pctTraditional": 0,
+     "pctRoth": 0.4375,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 74,
+     "toAge": 74,
+     "pctTaxable": 0.875,
+     "pctTraditional": 0.125,
+     "pctRoth": 0,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 75,
+     "toAge": 76,
+     "pctTaxable": 0,
+     "pctTraditional": 0.25,
+     "pctRoth": 0.75,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 77,
+     "toAge": 94,
+     "pctTaxable": 0,
+     "pctTraditional": 0,
+     "pctRoth": 1,
+     "convAmt": "#undefined"
+    }
+   ],
+   "source": "optimizer",
+   "goal": "max-end-balance"
+  },
+  "perYearPolicyHash": "966da1b62bba53ab",
+  "metric": "6177599.241918875",
+  "evaluations": 19260,
+  "ranOut": false,
+  "conversionsDisabled": null,
+  "conversionBaselineMetric": "6199547.231794494",
+  "solvedSpendingMultiplier": "\"#undefined\"",
+  "projection": {
+   "aggregates": {
+    "lifetimeFedTax": "1320709.1892108233",
+    "lifetimeFedTaxReal": "605805.1584172235",
+    "lifetimeRMD": "6152712.970944267",
+    "lifetimeRMDReal": "2723213.2156172115",
+    "lifetimeConversion": "441539.08",
+    "lifetimeConversionReal": "294475.1667990258",
+    "endTotalNominal": "19262553.338251226",
+    "endTotalReal": "6998990.003685041",
+    "endTaxAdjustedNominal": "17001929.540855158",
+    "endTaxAdjustedReal": "6177599.241918875",
+    "yearsCovered": "42",
+    "lifetimeShortfallReal": "0",
+    "ranOut": "false",
+    "overrideEvents": "[]"
+   },
+   "rows": [
+    "16a5c55b1fc26947",
+    "5a3c1f84b9a16e8c",
+    "c6c9aa9c5d82dd7a",
+    "770314f1627564b8",
+    "810f58c5eb656e4a",
+    "53007b742336eac8",
+    "9735c52ae81cd0e0",
+    "b67914e678fe24fd",
+    "9ea822b2aa5cf2a9",
+    "44008b36247b5dac",
+    "7d3cd65a15f5d810",
+    "4cfcac19249d03a2",
+    "f73f3589269aba82",
+    "f5093085445d0bac",
+    "95ab1f2c6c141732",
+    "a22e364c08b8e3b8",
+    "5a82b562609a61bc",
+    "bc3f39c8d97044c1",
+    "43cfb2ecb90d31b3",
+    "788773d7953de084",
+    "3a7f0566e595bd51",
+    "806d019482536695",
+    "a11789121c0f391d",
+    "e5024e5ae5d56aa7",
+    "315a6dc3ca74829f",
+    "3303138e6ace3196",
+    "4c8019264ca5c05c",
+    "54905d5f4777c7d0",
+    "889add8d7f53c3e3",
+    "8bb6cea5c651fff1",
+    "585c79d2ffb8e960",
+    "ed2f244704af10eb",
+    "0bb39b3bfaec864e",
+    "6d1693a67eab4f51",
+    "487ab7168d54755f",
+    "52873e279efcc7a4",
+    "cb69b469027cbc81",
+    "23c15b1ff2e7699e",
+    "bedc37865e81b7b4",
+    "9045b915bad53fa1",
+    "e0654e2658b421ba",
+    "6492439e75fa9916"
+   ]
+  }
+ },
+ "planP max-end-balance": {
+  "policy": {
+   "windows": [
+    {
+     "fromAge": 62,
+     "toAge": 95,
+     "pctTaxable": 0,
+     "pctTraditional": 1,
+     "pctRoth": 0,
+     "convAmt": "#undefined"
+    }
+   ],
+   "source": "optimizer",
+   "goal": "max-end-balance"
+  },
+  "perYearPolicyHash": "bb394906668e7f0a",
+  "metric": "0",
+  "evaluations": 9865,
+  "ranOut": true,
+  "conversionsDisabled": null,
+  "conversionBaselineMetric": "\"#undefined\"",
+  "solvedSpendingMultiplier": "\"#undefined\"",
+  "projection": {
+   "aggregates": {
+    "lifetimeFedTax": "125695.35693450391",
+    "lifetimeFedTaxReal": "104715.17495132054",
+    "lifetimeRMD": "0",
+    "lifetimeRMDReal": "0",
+    "lifetimeConversion": "0",
+    "lifetimeConversionReal": "0",
+    "endTotalNominal": "0",
+    "endTotalReal": "0",
+    "endTaxAdjustedNominal": "0",
+    "endTaxAdjustedReal": "0",
+    "yearsCovered": "38",
+    "lifetimeShortfallReal": "1468432.5277989306",
+    "ranOut": "true",
+    "overrideEvents": "[]"
+   },
+   "rows": [
+    "a39f3e4a98444625",
+    "575d1d8d7a61409e",
+    "a2032c6241e4108e",
+    "ad796d9babe81094",
+    "7da7247a1fd87ed2",
+    "c991f33f53320df5",
+    "84a8314e1efdbc06",
+    "7aeb5f838e5c12ab",
+    "e06c9e8c0b861a5d",
+    "a8aa0e23a65bbaa8",
+    "3cba0c1fa274b397",
+    "7eaa144afd21525c",
+    "81882c3d9e4857e1",
+    "623c1b447093378b",
+    "1d8cbbacf23653fc",
+    "091a14108807d16a",
+    "df0e091f1dcaf1bd",
+    "aefcb7a581f1a445",
+    "6ca0334caf5f33a9",
+    "c2961005bfcfe096",
+    "e2fb7ba0d6cbccf1",
+    "8dcd7e22d29c27c4",
+    "d9778ae51f63ffe4",
+    "1d99b8014c968a82",
+    "e3a36cea485c51a5",
+    "0b2918648aab78aa",
+    "ba4b0c4e44a3e226",
+    "b04b7d10fd5e5b99",
+    "c44a293e7bd51a41",
+    "b07086d3098ef929",
+    "88f5198c0e5a2140",
+    "3f38063c0423e80e",
+    "598c397703276d0f",
+    "b07709439eeaf244",
+    "fb4ae08088fad717",
+    "55f52f72ecf4c642",
+    "f788da27e872992e",
+    "e8d52a86857e5810"
+   ]
+  }
+ },
+ "planP max-sustainable-spending": {
+  "policy": {
+   "windows": [
+    {
+     "fromAge": 62,
+     "toAge": 66,
+     "pctTaxable": 0,
+     "pctTraditional": 1,
+     "pctRoth": 0,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 67,
+     "toAge": 67,
+     "pctTaxable": 0.3515625,
+     "pctTraditional": 0.375,
+     "pctRoth": 0.2734375,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 68,
+     "toAge": 68,
+     "pctTaxable": 0.37109375,
+     "pctTraditional": 0.375,
+     "pctRoth": 0.25390625,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 69,
+     "toAge": 69,
+     "pctTaxable": 0.07421875,
+     "pctTraditional": 0.875,
+     "pctRoth": 0.05078125,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 70,
+     "toAge": 71,
+     "pctTaxable": 0.3271484375,
+     "pctTraditional": 0.5,
+     "pctRoth": 0.1728515625,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 72,
+     "toAge": 72,
+     "pctTaxable": 0.43310546874999994,
+     "pctTraditional": 0.375,
+     "pctRoth": 0.19189453125000006,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 73,
+     "toAge": 73,
+     "pctTaxable": 0.3264485677083333,
+     "pctTraditional": 0.5,
+     "pctRoth": 0.1735514322916667,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 74,
+     "toAge": 74,
+     "pctTaxable": 0.30482759021577377,
+     "pctTraditional": 0.5,
+     "pctRoth": 0.19517240978422623,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 75,
+     "toAge": 75,
+     "pctTaxable": 0.45724138532366065,
+     "pctTraditional": 0.25,
+     "pctRoth": 0.29275861467633935,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 76,
+     "toAge": 76,
+     "pctTaxable": 0.47345450265066963,
+     "pctTraditional": 0.25,
+     "pctRoth": 0.27654549734933037,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 77,
+     "toAge": 77,
+     "pctTaxable": 0.519102042061942,
+     "pctTraditional": 0.25,
+     "pctRoth": 0.230897957938058,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 78,
+     "toAge": 78,
+     "pctTaxable": 0.6569787979125977,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.21802120208740228,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 79,
+     "toAge": 79,
+     "pctTaxable": 0.703911018371582,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.171088981628418,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 80,
+     "toAge": 81,
+     "pctTaxable": 0.745328140258789,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.12967185974121098,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 82,
+     "toAge": 82,
+     "pctTaxable": 0.786745262145996,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.08825473785400398,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 83,
+     "toAge": 83,
+     "pctTaxable": 0.7883728027343748,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.08662719726562515,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 84,
+     "toAge": 84,
+     "pctTaxable": 0.7467734813690184,
+     "pctTraditional": 0.125,
+     "pctRoth": 0.12822651863098153,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 85,
+     "toAge": 85,
+     "pctTaxable": 0.8534554072788783,
+     "pctTraditional": 0,
+     "pctRoth": 0.14654459272112175,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 86,
+     "toAge": 86,
+     "pctTaxable": 0.9029566628592355,
+     "pctTraditional": 0,
+     "pctRoth": 0.09704333714076452,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 87,
+     "toAge": 87,
+     "pctTaxable": 0.9514783314296178,
+     "pctTraditional": 0,
+     "pctRoth": 0.048521668570382204,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 88,
+     "toAge": 88,
+     "pctTaxable": 0.8724293742861067,
+     "pctTraditional": 0,
+     "pctRoth": 0.12757062571389333,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 89,
+     "toAge": 89,
+     "pctTaxable": 0.8159945828574044,
+     "pctTraditional": 0,
+     "pctRoth": 0.18400541714259555,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 90,
+     "toAge": 90,
+     "pctTaxable": 0.7619497392858778,
+     "pctTraditional": 0,
+     "pctRoth": 0.23805026071412216,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 91,
+     "toAge": 92,
+     "pctTaxable": 0,
+     "pctTraditional": 0.7220135935715267,
+     "pctRoth": 0.2779864064284733,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 93,
+     "toAge": 93,
+     "pctTaxable": 0,
+     "pctTraditional": 0.6820774478571756,
+     "pctRoth": 0.3179225521428244,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 94,
+     "toAge": 94,
+     "pctTaxable": 0,
+     "pctTraditional": 0.6696428571428572,
+     "pctRoth": 0.3303571428571428,
+     "convAmt": "#undefined"
+    },
+    {
+     "fromAge": 95,
+     "toAge": 95,
+     "pctTaxable": 0,
+     "pctTraditional": 0.7109375,
+     "pctRoth": 0.28906249999999994,
+     "convAmt": "#undefined"
+    }
+   ],
+   "source": "optimizer",
+   "goal": "max-sustainable-spending"
+  },
+  "perYearPolicyHash": "26ec8873f263ce1a",
+  "metric": "15416.731769408254",
+  "evaluations": 25854,
+  "ranOut": false,
+  "conversionsDisabled": null,
+  "conversionBaselineMetric": "\"#undefined\"",
+  "solvedSpendingMultiplier": "0.760147241886761",
+  "projection": {
+   "aggregates": {
+    "lifetimeFedTax": "155720.375277788",
+    "lifetimeFedTaxReal": "93274.97922468145",
+    "lifetimeRMD": "533230.8465879814",
+    "lifetimeRMDReal": "274823.8305679078",
+    "lifetimeConversion": "0",
+    "lifetimeConversionReal": "0",
+    "endTotalNominal": "38439.288094086456",
+    "endTotalReal": "15416.731769408254",
+    "endTaxAdjustedNominal": "38439.288094086456",
+    "endTaxAdjustedReal": "15416.731769408254",
+    "yearsCovered": "38",
+    "lifetimeShortfallReal": "0",
+    "ranOut": "false",
+    "overrideEvents": "[]"
+   },
+   "rows": [
+    "a39f3e4a98444625",
+    "575d1d8d7a61409e",
+    "a2032c6241e4108e",
+    "ad796d9babe81094",
+    "c2b8cee94460c9fc",
+    "a950ed643f03af83",
+    "d2b4732a73c1193c",
+    "5dace3c1eb053518",
+    "6f27eb0448523111",
+    "1fcdfaa7597bfc4d",
+    "fd583bbff159ee16",
+    "6077351981295b1e",
+    "af9f457ad3f439b3",
+    "f3151afcc36371e9",
+    "42b6b8dbf5892b4b",
+    "1c11f509dd310d19",
+    "19ff0d3152778fa9",
+    "87b37a1412f9fcbd",
+    "3133e96381d12aab",
+    "8a8090fa75fd107c",
+    "59ad43d1f9433daa",
+    "54bd7ad354bf99b9",
+    "aaf4c6259e67f0a3",
+    "90548d2519dd4f1d",
+    "cf3c3cbf3be1b23d",
+    "c872ae0f193a9b13",
+    "bf98a501003cd0da",
+    "daf299f235ffeae7",
+    "dbbdd24a190c8cd7",
+    "134395d5c5fc77e8",
+    "749117516c4ed00d",
+    "1cabdf18991d902b",
+    "7144eea4f566fdbe",
+    "ab54e37a249fc890",
+    "7b22cca68f0a926a",
+    "ba0e57d2859bb327",
+    "861cdbc95489760a",
+    "6bf9abdd61a2d277"
+   ]
+  }
+ }
+}

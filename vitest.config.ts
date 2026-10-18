@@ -21,6 +21,7 @@ const OPT_FILES = [
   'src/engine/conversionBenefit.test.ts',
   'src/engine/strategy/frozenSettings.test.ts',
   'src/engine/strategy/savedRoundTrip.test.ts',
+  'src/engine/__regression__/optimizerSnapshot.test.ts',
 ];
 
 const HEAVY_EXCLUDE = HEAVY ? [] : ['src/engine/__study__/**'];
