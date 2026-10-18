@@ -4,6 +4,7 @@ import { calendarYearAge } from '../lib/ageUtils';
 import { INHERITED_DEADLINE_YEARS } from './taxConstants';
 import { resolveStrategy } from './strategy/resultSettings';
 import { qcdEligible } from './qcd';
+import { hsaBaseLimit, hsaCatchUp, hsaLimit, HSA_MEDICARE_AGE } from './hsa';
 
 /**
  * Ages (Person A's frame) with a non-zero manual Roth conversion that will actually run before the
@@ -147,6 +148,57 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
         message: `Charitable giving "${s.description}" can't be paid as QCDs because ${who} empty. Gifts will be paid from other accounts.`,
       });
     }
+  }
+
+  // HSA checks. Amounts are today's dollars: the limit and the contribution both index with inflation.
+  const hsaWho = [
+    { name: plan.personA.name || 'Person A', age: currentAgeA, claim: plan.personA.ssClaimAge, pf: plan.portfolio.personA },
+    ...(plan.personB && plan.portfolio.personB && currentAgeB !== undefined
+      ? [{ name: plan.personB.name || 'Person B', age: currentAgeB, claim: plan.personB.ssClaimAge, pf: plan.portfolio.personB }]
+      : []),
+  ];
+  const taxYear = new Date().getFullYear();
+  const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  for (const o of hsaWho) {
+    const c = o.pf.hsaContribution ?? 0;
+    if (c <= 0) continue;
+    if (o.age >= Math.max(HSA_MEDICARE_AGE, o.claim)) {
+      warnings.push({
+        id: `hsa-medicare-${o.name}`,
+        severity: 'warn',
+        message: `${o.name}'s HSA contribution is ignored: contributions stop once you are on Medicare (65, or when you claim Social Security if later), and ${o.name} is already past that.`,
+      });
+      continue;
+    }
+    const limit = hsaLimit(o.pf.hsaCoverage, o.age, 1);
+    if (c > limit + 0.5) {
+      warnings.push({
+        id: `hsa-limit-${o.name}`,
+        severity: 'warn',
+        message: `${o.name}'s HSA contribution of ${money(c)} is above the ${taxYear} limit of ${money(limit)}. Capped at the limit.`,
+      });
+    }
+  }
+  // Spouses on family coverage share one family limit (each keeps their own catch-up).
+  if (hsaWho.length === 2 && hsaWho.every((o) => o.pf.hsaCoverage === 'family')) {
+    const pool = hsaBaseLimit('family', 1) + hsaWho.reduce((s, o) => s + hsaCatchUp(o.age), 0);
+    const asked = hsaWho.reduce((s, o) => s + (o.pf.hsaContribution ?? 0), 0);
+    const eachWithin = hsaWho.every((o) => (o.pf.hsaContribution ?? 0) <= hsaLimit('family', o.age, 1) + 0.5);
+    if (asked > pool + 0.5 && eachWithin) {
+      warnings.push({
+        id: 'hsa-family-pool',
+        severity: 'warn',
+        message: `${hsaWho[0].name} and ${hsaWho[1].name} are both on family coverage, so they share one limit: together they can put in ${money(pool)}, but ${money(asked)} is entered. The second contribution is capped.`,
+      });
+    }
+  }
+  const hasAnyHsa = hsaWho.some((o) => (o.pf.hsa ?? 0) > 0 || (o.pf.hsaContribution ?? 0) > 0);
+  if (hasAnyHsa && plan.state === 'CA') {
+    warnings.push({
+      id: 'hsa-ca-conformity',
+      severity: 'warn',
+      message: "California doesn't recognize HSAs: state tax on HSA growth isn't modeled.",
+    });
   }
 
   // Warn when conversions are active alongside a Roth-first withdrawal ordering. Bracket-fill

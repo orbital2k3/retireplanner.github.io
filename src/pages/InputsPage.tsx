@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { runOptimizer } from '../store/strategyActions';
 import ConversionPills from '../components/strategy/ConversionPills';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { usePlanStore, useEnginePlan } from '../store/usePlanStore';
 import { householdTotals, resolveGrowthRate } from '../schemas/plan';
 import type { IncomeStream, ExpenseStream, LumpSumEvent, PersonPortfolio, GrowthRate, EndRule } from '../schemas/plan';
 import { computePlanWarnings } from '../engine/planWarnings';
+import { computeHsaProjectionWarnings } from '../engine/hsaWarnings';
+import { runProjection } from '../engine/projection';
 import { NumberInput } from '../components/inputs/NumberInput';
 import { LegacyTargetInput } from '../components/inputs/LegacyTargetInput';
 import { listStates } from '../engine/stateTax';
@@ -289,7 +291,13 @@ export default function InputsPage() {
     && splitValidA && splitValidB;
   const retirementAge = A.retirementAge;
   const planThroughAge = A.planThroughAge;
-  const planWarnings = computePlanWarnings(flatPlan);
+  // Warnings that need the year-by-year numbers (early HSA draws, the ACA income floor) are only worth a
+  // projection when the plan has an HSA.
+  const hsaProjectionWarnings = useMemo(
+    () => (hasHsa ? computeHsaProjectionWarnings(flatPlan, runProjection(flatPlan).rows) : []),
+    [hasHsa, flatPlan],
+  );
+  const planWarnings = [...computePlanWarnings(flatPlan), ...hsaProjectionWarnings];
   const minStartAge = (whose: string) => {
     if (whose === 'B' && B) return B.retirementAge;
     if (whose === 'Household' && B) return Math.min(A.retirementAge, B.retirementAge);
