@@ -39,9 +39,11 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   const ownA = r.contribA - spA, ownB = r.contribB - spB;
   const spTradA = pfA.spousalTarget === 'roth' ? 0 : spA;
   const spTradB = pfB?.spousalTarget === 'roth' ? 0 : spB;
+  // TIPS coupons and maturities from IRA and Roth rungs return to those accounts like a contribution.
+  const tipsToTrad = r.tipsToTrad ?? 0, tipsToRoth = r.tipsToRoth ?? 0;
   const contribToTax = ownA * pfA.contribSplit.taxable + ownB * (pfB?.contribSplit.taxable ?? 0);
-  const contribToTrad = ownA * pfA.contribSplit.traditional + ownB * (pfB?.contribSplit.traditional ?? 0) + spTradA + spTradB;
-  const contribToRoth = ownA * pfA.contribSplit.roth + ownB * (pfB?.contribSplit.roth ?? 0) + (spA - spTradA) + (spB - spTradB);
+  const contribToTrad = ownA * pfA.contribSplit.traditional + ownB * (pfB?.contribSplit.traditional ?? 0) + spTradA + spTradB + tipsToTrad;
+  const contribToRoth = ownA * pfA.contribSplit.roth + ownB * (pfB?.contribSplit.roth ?? 0) + (spA - spTradA) + (spB - spTradB) + tipsToRoth;
 
   // 1. NO-OVERDRAW: total outflow per bucket must not exceed what's available (growth + contrib).
   //    Catches phantom withdrawals — bucket-A drained while withdrawal still claimed cash.
@@ -117,8 +119,38 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
     out.push(`HSA retiree contribution after Medicare: ${hsaRet} at ageA=${r.ageA}`);
   }
 
+  // 2d. TIPS sleeve. Principal only moves by indexation (and the deflation floor at maturity) and leaves
+  //     the sleeve only as a maturity payout; coupons and maturities go to taxable cash, an IRA or the
+  //     Roth, so every dollar paid is accounted for exactly once.
+  const tBeg = r.begTips ?? 0, tCoupon = r.tipsCoupon ?? 0, tAccrual = r.tipsAccrual ?? 0;
+  const tMat = r.tipsMaturity ?? 0, tFloor = r.tipsFloorBonus ?? 0, tCash = r.tipsCash ?? 0;
+  const tEnd = (r.endTipsTaxable ?? 0) + (r.endTipsTrad ?? 0) + (r.endTipsRoth ?? 0);
+  if (Math.abs(tBeg + tAccrual + tFloor - (tEnd + tMat)) > tol) {
+    out.push(`TIPS sleeve MASS BALANCE: beg $${tBeg.toFixed(2)} + accrual $${tAccrual.toFixed(2)} + floor $${tFloor.toFixed(2)} != end $${tEnd.toFixed(2)} + maturity $${tMat.toFixed(2)}`);
+  }
+  if (Math.abs(tCash + tipsToTrad + tipsToRoth - (tCoupon + tMat)) > tol) {
+    out.push(`TIPS cash split: taxable $${tCash.toFixed(2)} + IRA $${tipsToTrad.toFixed(2)} + Roth $${tipsToRoth.toFixed(2)} != coupons $${tCoupon.toFixed(2)} + maturities $${tMat.toFixed(2)}`);
+  }
+  if (tBeg < -tol || tEnd < -tol || tCoupon < -tol || tMat < -tol || tFloor < -tol || tCash < -tol || tipsToTrad < -tol || tipsToRoth < -tol
+    || (r.tipsOrdInc ?? 0) < -tol || (r.rmdUnmet ?? 0) < -tol) {
+    out.push(`TIPS negative field: beg=${tBeg}, end=${tEnd}, coupon=${tCoupon}, maturity=${tMat}, cash=${tCash}, ordInc=${r.tipsOrdInc}, rmdUnmet=${r.rmdUnmet}`);
+  }
+  if (tFloor > tMat + tol) out.push(`TIPS floor bonus $${tFloor.toFixed(2)} exceeds the maturity payout $${tMat.toFixed(2)}`);
+  // Taxable ladder income is coupons plus positive indexation plus the floor bonus; it can never be more,
+  // and it is zero when no cash or sleeve sits in taxable.
+  if ((r.tipsOrdInc ?? 0) > tCoupon + Math.max(0, tAccrual) + tFloor + tol) {
+    out.push(`TIPS ordinary income $${(r.tipsOrdInc ?? 0).toFixed(2)} exceeds coupons + indexation + floor`);
+  }
+  if ((r.tipsOrdInc ?? 0) > tol && tCash <= tol && (r.endTipsTaxable ?? 0) <= tol) {
+    out.push(`TIPS ordinary income $${(r.tipsOrdInc ?? 0).toFixed(2)} with no taxable rung`);
+  }
+  // An RMD is clamped to the liquid IRA money; when the clamp bound, the RMD paid cannot exceed it.
+  if ((r.rmdUnmet ?? 0) > tol && r.rmd > r.begTraditional * (1 + gRateTrad) + contribToTrad + tol) {
+    out.push(`RMD above the liquid IRA money while unmet is recorded: rmd=${r.rmd}, unmet=${r.rmdUnmet}`);
+  }
+
   // 3. endTotal consistency
-  const expectedEndTotal = r.endTaxable + r.endTraditional + r.endRoth + hsaEnd;
+  const expectedEndTotal = r.endTaxable + r.endTraditional + r.endRoth + hsaEnd + tEnd;
   if (Math.abs(r.endTotal - expectedEndTotal) > tol) {
     out.push(`endTotal MISMATCH: $${r.endTotal.toFixed(2)} != sum-of-buckets $${expectedEndTotal.toFixed(2)}`);
   }
@@ -155,7 +187,7 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
   //    In SemiRetire, working person's contributions offset expense draws, so the coverage
   //    check still holds. Allow 5% slack for gross-up convergence drift.
   if (semiRetired && r.endTotal > 1 && !opts.skipSpendingCoverage) {
-    const cashIn = r.wdTax + r.wdTrd + r.wdRth + r.totalSS + r.otherIncome + (r.distributedCash ?? 0) + r.rmd + (r.qcdBeyondRmd ?? 0) + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0) + hsaDraws;
+    const cashIn = r.wdTax + r.wdTrd + r.wdRth + r.totalSS + r.otherIncome + (r.distributedCash ?? 0) + r.rmd + (r.qcdBeyondRmd ?? 0) + (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0) + hsaDraws + tCash;
     // A retiree's HSA contribution is paid from the portfolio like spending.
     const cashOut = r.netSpend + r.fedTax + r.stateTaxAmt + r.irmaa + hsaPenalty + (r.hsaContribRet ?? 0);
     // 5% slack: pathological first-retirement-year scenarios (high marginal-bracket
@@ -227,7 +259,10 @@ export function assertPortfolioConservation(
     const grown = r.begTaxable * (1 + a.taxableReturn)
       + r.begTraditional * (1 + a.tradReturn)
       + r.begRoth * (1 + a.rothReturn)
-      + (r.begHSA ?? 0) * (1 + (a.hsaReturn ?? a.tradReturn));
+      + (r.begHSA ?? 0) * (1 + (a.hsaReturn ?? a.tradReturn))
+      // The TIPS sleeve does not earn the account return: it carries its own start value and gains only
+      // by coupons, indexation and (at maturity) the deflation floor, which are new money.
+      + (r.begTips ?? 0) + (r.tipsCoupon ?? 0) + (r.tipsAccrual ?? 0) + (r.tipsFloorBonus ?? 0);
     const acctInjects = (r.lumpSumInjectTaxable ?? 0) + (r.lumpSumInjectTrad ?? 0) + (r.lumpSumInjectRoth ?? 0);
     // Inherited-HSA lump sum (an event, not an owned account): external cash entering the household.
     const inheritedHsaCash = (r.lumpSumOrdinaryIncome ?? 0) - (r.lumpSumForcedTradDist ?? 0);
@@ -293,6 +328,15 @@ export function assertProjectionInvariants(
     const onFile = i === 0 ? seedReceipts : (proj.rows[i - 1].hsaReceiptsBal ?? 0);
     if ((proj.rows[i].hsaReimbursed ?? 0) > onFile + tol) {
       throw new Error(`HSA reimbursed $${proj.rows[i].hsaReimbursed} more than the receipts on file $${onFile} at year ${proj.rows[i].year}`);
+    }
+  }
+
+  // Cross-row: the sleeve carries over, so each year opens with what the last one closed with.
+  for (let i = 1; i < proj.rows.length; i++) {
+    const prev = proj.rows[i - 1], cur = proj.rows[i];
+    const prevEnd = (prev.endTipsTaxable ?? 0) + (prev.endTipsTrad ?? 0) + (prev.endTipsRoth ?? 0);
+    if (Math.abs((cur.begTips ?? 0) - prevEnd) > tol) {
+      throw new Error(`TIPS sleeve discontinuity at year ${cur.year}: begTips $${cur.begTips} != previous endTips $${prevEnd}`);
     }
   }
 
