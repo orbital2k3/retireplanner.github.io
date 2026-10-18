@@ -3,6 +3,7 @@ import type { ChartOptions, ChartData, Chart, TooltipModel } from 'chart.js';
 import { palette, fmtCompact, fmtFull } from './setup';
 import { useAgeAxis } from './useAgeAxis';
 import type { ProjectionResult } from '../../engine/projection';
+import { rmdCashOf } from '../../engine/qcd';
 
 interface Props {
   proj: ProjectionResult;
@@ -164,10 +165,21 @@ export default function CashFlowsBalanced({ proj, real = true, height = 280 }: P
         // so they need their own bar or the income side understates actual cash in.
         type: 'bar',
         label: 'RMDs',
-        data: rows.map((r) => scale(r.rmd, r.inflationFactor)),
+        data: rows.map((r) => scale(rmdCashOf(r), r.inflationFactor)),
         backgroundColor: palette.warning,
         stack: 'in',
       },
+      // QCDs leave the IRA straight for charity. Spending already includes that giving, so the
+      // bar sits on the income side to keep the year's cash in and out balanced.
+      ...(rows.some((r) => r.qcd > 0) ? [{
+        type: 'bar' as const,
+        label: 'QCDs (direct to charity)',
+        data: rows.map((r) => scale(r.qcd, r.inflationFactor)),
+        backgroundColor: palette.goldPale,
+        borderColor: palette.gold,
+        borderWidth: 1.5,
+        stack: 'in',
+      }] : []),
       {
         type: 'bar',
         label: 'Spending',

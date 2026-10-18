@@ -32,6 +32,12 @@ export function qcdAvailable(
   return Math.max(0, (trad - inheritedInTrad) * (1 + growthRate) + contribToTrad + tipsToTrad);
 }
 
+/** The part of the year's RMD that reached the household as taxable cash: the RMD less the QCD that
+ *  satisfied it (per person, summed). Equals `rmd` when there was no QCD. Charts and the Sankey use it
+ *  for the "RMDs" bar so a QCD isn't drawn as cash in the household's hands. */
+export const rmdCashOf = (r: { rmd: number; qcd: number; qcdBeyondRmd: number }): number =>
+  r.rmd - (r.qcd - r.qcdBeyondRmd);
+
 export interface QcdPerson {
   eligible: boolean;
   /** This year's RMD for the person (gross, before any QCD). */

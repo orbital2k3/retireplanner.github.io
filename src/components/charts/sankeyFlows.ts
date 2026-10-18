@@ -1,11 +1,12 @@
 import { palette } from './setup';
 import type { ProjectionRow } from '../../engine/projection';
+import { rmdCashOf } from '../../engine/qcd';
 
 /** Where a source's money may go.
  *  - general: pays its tax share, then spreads across spending, ACA, and savings
  *  - brokTax: pays tax first; anything left over joins the general pool
- *  - toRoth / deposit / spend / save: pinned to that single use */
-export type SankeyRoute = 'general' | 'brokTax' | 'toRoth' | 'deposit' | 'spend' | 'save';
+ *  - toRoth / deposit / spend / save / charity: pinned to that single use */
+export type SankeyRoute = 'general' | 'brokTax' | 'toRoth' | 'deposit' | 'spend' | 'save' | 'charity';
 
 /** A source of money on the left. `taxBase` is the slice of this source that lands in
  *  taxable income, and it is what the tax allocation is keyed off. */
@@ -42,7 +43,9 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   // ordIncome = taxable SS + taxable other income + pre-tax draws + RMD + conversion
   //             + inherited ordinary income + ordinary dividends. Back out taxable SS,
   //             which the row does not carry on its own.
-  const ordDriversExSS = row.otherIncomeTaxable + row.wdTrd + row.rmd + row.rothConv
+  // Only the RMD cash that reached the household is income; the QCD part went to charity untaxed.
+  const rmdCash = rmdCashOf(row);
+  const ordDriversExSS = row.otherIncomeTaxable + row.wdTrd + rmdCash + row.rothConv
     + row.lumpSumOrdinaryIncome + row.ordinaryDiv;
   const taxableSS = Math.max(0, row.ordIncome - ordDriversExSS);
   const realizedGains = Math.max(0, row.ltcg - row.qualifiedDiv);
@@ -64,8 +67,10 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
       taxBase: 0, route: 'brokTax' },
     { id: 'wdTrd', label: 'Withdrawal · Pre-tax', value: row.wdTrd - inhTrdFromWd, color: palette.bucketTrad,
       taxBase: row.wdTrd - inhTrdFromWd, route: 'general' },
-    { id: 'rmd', label: 'RMD · Pre-tax', value: row.rmd, color: palette.warning,
-      taxBase: row.rmd, route: 'general' },
+    { id: 'rmd', label: 'RMD · Pre-tax', value: rmdCash, color: palette.warning,
+      taxBase: rmdCash, route: 'general' },
+    { id: 'qcd', label: 'QCD · Pre-tax', value: row.qcd ?? 0, color: palette.goldLight,
+      taxBase: 0, route: 'charity' },
     { id: 'wdRth', label: 'Withdrawal · Roth', value: row.wdRth - inhRthFromWd, color: palette.bucketRoth,
       taxBase: 0, route: 'general' },
     { id: 'ss', label: 'Social Security', value: row.totalSS, color: palette.goldLight,
@@ -93,7 +98,9 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const fedTax = scale(row.fedTax);
   const otherTax = scale(row.stateTaxAmt + row.irmaa + row.niit);
   const aca = scale(row.acaPremium ?? 0);
-  const spending = scale(row.netSpend);
+  // QCD-funded giving is its own use (Pre-tax → Charity); the rest of net spending is paid from the pool.
+  const charity = scale(row.qcd ?? 0);
+  const spending = scale(row.netSpend - (row.qcd ?? 0));
   const taxPool = fedTax + otherTax;
   const fedShare = taxPool > 0 ? fedTax / taxPool : 0;
 
@@ -158,6 +165,7 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
 
   const uses: SankeyUse[] = [
     { id: 'spend', label: 'Net Spending', value: spending, color: palette.danger },
+    { id: 'charity', label: 'Charity (QCD)', value: charity, color: palette.goldLight },
     { id: 'fed', label: 'Federal Tax', value: fedTax, color: palette.warning },
     { id: 'state', label: 'State + IRMAA + NIIT', value: otherTax, color: palette.taxOther },
     { id: 'aca', label: 'ACA Premium', value: aca, color: palette.acaBar },

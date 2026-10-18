@@ -3,6 +3,7 @@ import type { ChartOptions, ChartData } from 'chart.js';
 import { palette, fmtCompact, fmtFull, indexInteraction } from './setup';
 import { useAgeAxis } from './useAgeAxis';
 import type { ProjectionResult } from '../../engine/projection';
+import { rmdCashOf } from '../../engine/qcd';
 
 interface Props {
   proj: ProjectionResult;
@@ -41,7 +42,7 @@ export default function IncomeSourcesArea({ proj, real = true, height = 240 }: P
       },
       {
         label: 'RMDs',
-        data: rows.map((r) => scale(r.rmd, r.inflationFactor)),
+        data: rows.map((r) => scale(rmdCashOf(r), r.inflationFactor)),
         backgroundColor: palette.warning + 'd0',
         borderColor: palette.warning,
         borderWidth: 0,
@@ -49,6 +50,16 @@ export default function IncomeSourcesArea({ proj, real = true, height = 240 }: P
         pointRadius: 0,
         tension: 0.2,
       },
+      ...(rows.some((r) => r.qcd > 0) ? [{
+        label: 'QCDs (direct to charity)',
+        data: rows.map((r) => scale(r.qcd, r.inflationFactor)),
+        backgroundColor: palette.goldPale,
+        borderColor: palette.gold,
+        borderWidth: 1,
+        fill: '-1',
+        pointRadius: 0,
+        tension: 0.2,
+      }] : []),
       ...(rows.some((r) => inheritedCash(r) > 0) ? [{
         label: 'Inherited Accounts',
         data: rows.map((r) => scale(inheritedCash(r), r.inflationFactor)),
