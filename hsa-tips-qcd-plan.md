@@ -40,7 +40,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | ID | Activity | Status | Date | Commit / PR | Notes |
 |---|---|---|---|---|---|
 | P0-1 | Copy plan into repo as tracker; mark analysis §6 answered | ☑ | 2026-10-17 | e2cd7ac | Plan copied verbatim; analysis §6 marked answered and linked. |
-| P0-2 | Verify IRS constants, cite sources | ☑ | 2026-10-17 | 7b4e8ea | All plan values confirmed, none differ. Flags: HSA catch-up $1,000 is statutory, NOT indexed (H-2 says 'indexed': scale only the base limit); OBBBA $1k/$2k NOT indexed; $170(p) statute text not retrievable, rests on secondary sources + absence from Rev. Proc. 2025-32; Reg. 1.1275-7 / Notice 2011-21 not read at source. Added HSA_CATCHUP_AGE, OBBBA first-year consts (unused). |
+| P0-2 | Verify IRS constants, cite sources | ☑ | 2026-10-17 | 7b4e8ea | All plan values confirmed, none differ. Flags: HSA catch-up $1,000 is statutory, NOT indexed (H-2 wording corrected: scale only the base limit); OBBBA $1k/$2k NOT indexed; $170(p) statute text not retrievable, rests on secondary sources + absence from Rev. Proc. 2025-32; Reg. 1.1275-7 / Notice 2011-21 not read at source. Added HSA_CATCHUP_AGE, OBBBA first-year consts (unused). |
 | P0-3 | Record test and optimizer timing baselines | ☑ | 2026-10-17 | 66d4e4d | Baselines in Session log. pnpm not installed on this machine: ran the same vitest commands via npx (`vitest run --project fast|opt`). |
 | P0-4 | Bit-exact snapshot harness (fast) + optimizer snapshot (opt) | ☑ | 2026-10-17 | d4f8609 | Fast: 27 tests in __regression__/bitExact.test.ts (A-P, samplePlan, CA+payTaxFromBrokerage, 2 seeded MC trials, 1966 cohort, MC/sweep hashes), ~0.5s. Opt: 5 tests in optimizerSnapshot.test.ts (planF/G/P max-end, planP max-spending), ~10s, added to OPT_FILES. Stored as per-row hashes (full values would be ~3MB); BITEXACT_DUMP=dir writes rows for diffing. Proven to catch a 1-ulp change. Gate run found the optimizer cases timing out at vitest's 5s default under parallel load; fixed with explicit 300s timeouts (see gate line). `__regression__/**` added to tsconfig.app.json exclude (uses node: imports, same as `__golden`). |
 | P0-5 | Hoist growth-rate consts in projection.ts | ☑ | 2026-10-17 | 4523572 | Pure move, 4 lines + comment; bit-exact snapshot and golden CSVs unchanged. Found pre-existing flake: strategyModel.test.ts 'holds I1-I10' (I4: spending edit must move end balance) fails ~1 in 12 fast runs; reproduced with seed -589645460 on the unmodified projection.ts, so not caused by this change. |
@@ -271,7 +271,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - `PortfolioSchema.hsaPolicy?` (D4)
   - `AssumptionsSchema.hsaReturn?`, absent = tradReturn, with its registry entry
   - `usePlanStore.addPersonB` unchanged
-- [ ] **H-2** New `src/engine/hsa.ts`: `hsaLimit` (self / shared family, catch-up at 55+, indexed), `hsaContribEligible` (D6), constants, and `hsa.test.ts`.
+- [ ] **H-2** New `src/engine/hsa.ts`: `hsaLimit` (self / shared family limit indexed by inflation; the $1,000 catch-up at 55+ is statutory and NOT indexed, so add it unscaled), `hsaContribEligible` (D6), constants, and `hsa.test.ts`.
 - [ ] **H-3** Projection core (A2):
   - `hsaA`/`hsaB` state; `gRateHsaYear` follows `returnOverrides`
   - working contributions are external (`hsaContribExtA/B`, kept out of `contribA/B`)
@@ -439,6 +439,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | P0-5 | `override` and `gRate*Year` hoisted above the RMD block in `projection.ts`. Bit-exact snapshot green, no golden CSV diff, tsc/lint clean. Pre-existing intermittent failure in `strategyModel.test.ts` I4 noted in P0-5 Notes (also fails on unmodified code with seed -589645460). |
 | 2026-10-17 | P0-6 | `ui-mockups/hsa-tips-qcd.html` built (M1-M5, real `clarity.css`) and confirmed rendering at `localhost:5173/ui-mockups/hsa-tips-qcd.html`. |
 | 2026-10-17 | Gate | `tsc -b --force` clean, `eslint .` clean, `test:fast` 575 pass / 1 skip (53 files), `test:opt` 70 pass (9 files, 3:23 wall vs 2:57 baseline; the extra file and load account for it), no golden CSV diff vs main, optimizer snapshot passes post-hoist. Fixed the snapshot test's default 5s timeout. Phase 0 complete; Phase 1 not started. Opened as [PR #2](https://github.com/retireoptimizer/retireoptimizer.github.io/pull/2) (not merged, awaiting review). |
+| 2026-10-17 | Plan fix | H-2 wording corrected: HSA catch-up is not indexed (flagged in P0-2). No code change. |
 
 ---
 
