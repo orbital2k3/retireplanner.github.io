@@ -3,6 +3,7 @@ import { firstRetirementAgeA } from './streamWindow';
 import { calendarYearAge } from '../lib/ageUtils';
 import { INHERITED_DEADLINE_YEARS } from './taxConstants';
 import { resolveStrategy } from './strategy/resultSettings';
+import { qcdEligible } from './qcd';
 
 /**
  * Ages (Person A's frame) with a non-zero manual Roth conversion that will actually run before the
@@ -23,7 +24,7 @@ export function preRetirementConversionAges(livePlan: Plan): number[] {
 
 export interface PlanWarning {
   id: string;
-  severity: 'error' | 'warn';
+  severity: 'error' | 'warn' | 'info';
   message: string;
 }
 
@@ -112,6 +113,39 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       warnings.push({ id: `lump-past-${ev.id}`, severity: 'warn', message: `"${ev.description}": age ${ev.age} is in the past, so this event is not counted. If you still have this money, include it in your Portfolio balances.` });
     } else if (ownerCurrentAge - ev.age > INHERITED_DEADLINE_YEARS) {
       warnings.push({ id: `lump-expired-${ev.id}`, severity: 'warn', message: `"${ev.description}": the 10-year deadline to empty this inherited account has passed, so it is not counted.` });
+    }
+  }
+
+  // QCD checks on charitable expense rows (see qcd.ts). A QCD pays gifts straight from the owner's IRA.
+  const ownIraEmpty = (pf: Plan['portfolio']['personA']) =>
+    pf.traditional <= 0
+    && pf.annualContribution * pf.contribSplit.traditional <= 0
+    && ((pf.spousalContribution ?? 0) <= 0 || pf.spousalTarget === 'roth');
+  const firstQcdAge = (dob: string) => (qcdEligible(dob, 70) ? 70 : 71);
+  for (const s of plan.expenseStreams) {
+    if (s.category !== 'charitable' || s.annualAmount <= 0) continue;
+    if (s.qcd === false) {
+      warnings.push({
+        id: `qcd-optout-${s.id}`,
+        severity: 'info',
+        message: `"${s.description}" is marked as not paid directly to a public charity, so it is paid from your other accounts and gets no QCD tax treatment.`,
+      });
+      continue;
+    }
+    // Owners whose IRA could pay this row: A, B, or both for a household row.
+    const owners = [
+      ...(s.whose !== 'B' ? [{ name: plan.personA.name || 'Person A', dob: plan.personA.dob, through: plan.personA.planThroughAge, pf: plan.portfolio.personA }] : []),
+      ...(s.whose !== 'A' && plan.personB && plan.portfolio.personB
+        ? [{ name: plan.personB.name || 'Person B', dob: plan.personB.dob, through: plan.personB.planThroughAge, pf: plan.portfolio.personB }]
+        : []),
+    ].filter((o) => calendarYearAge(o.dob) <= o.through && firstQcdAge(o.dob) <= o.through);
+    if (owners.length > 0 && owners.every((o) => ownIraEmpty(o.pf))) {
+      const who = owners.length === 1 ? `${owners[0].name}'s IRA is` : `${owners.map((o) => `${o.name}'s`).join(' and ')} IRAs are`;
+      warnings.push({
+        id: `qcd-no-ira-${s.id}`,
+        severity: 'warn',
+        message: `Charitable giving "${s.description}" can't be paid as QCDs because ${who} empty. Gifts will be paid from other accounts.`,
+      });
     }
   }
 

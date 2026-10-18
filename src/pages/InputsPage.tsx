@@ -338,7 +338,7 @@ export default function InputsPage() {
           <div className="plan-warnings-strip">
             {planWarnings.map((w) => (
               <div key={w.id} className={`plan-warning ${w.severity}`}>
-                {w.severity === 'error' ? '⚠' : '⚑'} {w.message}
+                {w.severity === 'error' ? '⚠' : w.severity === 'info' ? 'ⓘ' : '⚑'} {w.message}
               </div>
             ))}
           </div>
