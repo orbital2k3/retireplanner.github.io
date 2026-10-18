@@ -23,7 +23,7 @@ const stickyTd = (left: number, bg = '#fff', minWidth = 60): React.CSSProperties
 });
 
 type Row = ReturnType<typeof useProjection>['rows'][number];
-type GroupKey = 'income' | 'withdrawals' | 'spending' | 'taxes' | 'qcd' | 'balances' | 'decisions';
+type GroupKey = 'income' | 'withdrawals' | 'spending' | 'taxes' | 'qcd' | 'hsa' | 'balances' | 'decisions';
 
 interface Column {
   key: string;
@@ -43,6 +43,7 @@ const BG: Record<'identity' | GroupKey, string> = {
   spending:    '#e8d8ee',
   taxes:       '#ced7e2',
   qcd:         '#f5e9c8',
+  hsa:         '#e8f7f0',
   balances:    '#d3d6d9',
   decisions:   '#dce8e8',
 };
@@ -121,6 +122,15 @@ const COLUMNS: Column[] = [
   { key: 'qcd',              label: 'QCD',          group: 'qcd', essential: false, fmt: 'money', get: (r) => r.qcd, tooltip: (r) => r.qcd > 0 ? `Paid from your IRA straight to charity, so it is not taxed. ${fmtFull(r.qcd - r.qcdBeyondRmd)} of it counts toward your RMD.` : '', bg: BG.qcd },
   { key: 'charityDeduction', label: 'Charity ded.', group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charityDeduction, tooltip: (r) => r.charityDeduction > 0 ? 'Deduction for cash gifts to public charities when you don\'t itemize (from 2026: up to $1,000, or $2,000 joint). Included in the standard deduction total.' : '', bg: BG.qcd },
 
+  // HSA — opt-in through the column chooser (and the CSV). Shown to every plan, but all zero without an HSA.
+  { key: 'endHSA',          label: 'HSA Bal.',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.endHSA, tooltip: (r) => r.endHSA > 0 ? `Year-end HSA balance (included in End Total). Receipts on file: ${fmtFull(r.hsaReceiptsBal)}.` : '', bg: BG.hsa },
+  { key: 'hsaContrib',      label: 'HSA Contrib',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaContrib, tooltip: (r) => r.hsaContribRet > 0 ? `Includes ${fmtFull(r.hsaContribRet)} paid from your portfolio after retiring. That part is deducted from income, which lowers your ACA income.` : '', bg: BG.hsa },
+  { key: 'hsaQualifiedWD',  label: 'HSA Paid',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaQualifiedWD, tooltip: (r) => r.hsaQualifiedWD > 0 ? `Medical bills and Medicare surcharges paid tax-free from the HSA (medical bills this year: ${fmtFull(r.medicalSpend)}).` : '', bg: BG.hsa },
+  { key: 'hsaReimbursed',   label: 'HSA Reimb.',   group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReimbursed, tooltip: (r) => r.hsaReimbursed > 0 ? 'Past medical bills reimbursed from the HSA tax-free. Used only after your other accounts ran out.' : '', bg: BG.hsa },
+  { key: 'hsaNonQualWD',    label: 'HSA Non-qual', group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaNonQualWD, tooltip: (r) => r.hsaNonQualWD > 0 ? 'Taken from the HSA for non-medical spending: taxed as ordinary income, plus a 20% penalty before 65.' : '', bg: BG.hsa },
+  { key: 'hsaPenalty',      label: 'HSA Penalty',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaPenalty, bg: BG.hsa },
+  { key: 'hsaReceiptsBal',  label: 'Receipts',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReceiptsBal, tooltip: () => 'Medical bills you paid from other accounts. They can be reimbursed from the HSA later, tax-free.', bg: BG.hsa },
+
   // Balances — end-of-year portfolio state
   { key: 'endTotal',       label: 'End Total', group: 'balances', essential: true,  fmt: 'money', get: (r) => r.endTotal,       bg: BG.balances },
   { key: 'begTaxable',     label: 'Beg Tax',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.begTaxable,     bg: BG.balances },
@@ -141,6 +151,7 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   spending:    'Spending',
   taxes:       'Taxes',
   qcd:         'QCD',
+  hsa:         'HSA',
   balances:    'Balances',
   decisions:   'Decisions',
 };
@@ -151,6 +162,7 @@ const GROUP_COLORS: Record<GroupKey, { bg: string; text: string }> = {
   spending:    { bg: '#6a2d6a', text: '#fff' },
   taxes:       { bg: '#3b5e8a', text: '#fff' },
   qcd:         { bg: '#c9a84c', text: '#0d1b2e' },
+  hsa:         { bg: '#1f8f8c', text: '#fff' },
   balances:    { bg: '#0d1b2e', text: '#fff' },
   decisions:   { bg: '#2d6a6a', text: '#fff' },
 };
