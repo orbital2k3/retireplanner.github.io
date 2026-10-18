@@ -11,6 +11,10 @@ export interface TipsIssue {
   rungId?: string;
   /** Account the issue is about (overflow). */
   account?: TipsRung['account'];
+  /** Overflow only: where it sits ("Roth", "taxable", "Alex's pre-tax account"), the rung total and the balance. */
+  place?: string;
+  total?: number;
+  balance?: number;
 }
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -38,16 +42,16 @@ export function tipsLadderIssues(portfolio: Portfolio, startYear: number, names:
   const live = ladder.rungs.filter((r) => r.maturityYear >= startYear);
   const sum = (pick: (r: TipsRung) => boolean) => live.filter(pick).reduce((s, r) => s + r.adjustedPrincipal, 0);
   const a = portfolio.personA, b = portfolio.personB;
-  const checks: Array<{ account: TipsRung['account']; label: string; total: number; balance: number }> = [
-    { account: 'taxable', label: 'Taxable', total: sum((r) => r.account === 'taxable'), balance: a.taxable + (b?.taxable ?? 0) },
-    { account: 'roth', label: 'Roth', total: sum((r) => r.account === 'roth'), balance: a.roth + (b?.roth ?? 0) },
-    { account: 'traditional', label: `Pre-tax (${names.a ?? 'Person A'})`, total: sum((r) => r.account === 'traditional' && r.whose === 'A'), balance: a.traditional },
-    { account: 'traditional', label: `Pre-tax (${names.b ?? 'Person B'})`, total: sum((r) => r.account === 'traditional' && r.whose === 'B'), balance: b?.traditional ?? 0 },
+  const checks: Array<{ account: TipsRung['account']; label: string; place: string; total: number; balance: number }> = [
+    { account: 'taxable', label: 'Taxable', place: 'taxable', total: sum((r) => r.account === 'taxable'), balance: a.taxable + (b?.taxable ?? 0) },
+    { account: 'roth', label: 'Roth', place: 'Roth', total: sum((r) => r.account === 'roth'), balance: a.roth + (b?.roth ?? 0) },
+    { account: 'traditional', label: `Pre-tax (${names.a ?? 'Person A'})`, place: `${names.a ?? 'Person A'}'s pre-tax account`, total: sum((r) => r.account === 'traditional' && r.whose === 'A'), balance: a.traditional },
+    { account: 'traditional', label: `Pre-tax (${names.b ?? 'Person B'})`, place: `${names.b ?? 'Person B'}'s pre-tax account`, total: sum((r) => r.account === 'traditional' && r.whose === 'B'), balance: b?.traditional ?? 0 },
   ];
   for (const c of checks) {
     if (c.total > c.balance + 0.005) {
       issues.push({
-        code: 'overflow', account: c.account,
+        code: 'overflow', account: c.account, place: c.place, total: c.total, balance: c.balance,
         message: `${c.label} rungs total ${money(c.total)} but that balance is ${money(c.balance)}.`,
       });
     }

@@ -7,6 +7,7 @@ import { householdTotals, resolveGrowthRate } from '../schemas/plan';
 import type { IncomeStream, ExpenseStream, LumpSumEvent, PersonPortfolio, GrowthRate, EndRule } from '../schemas/plan';
 import { computePlanWarnings } from '../engine/planWarnings';
 import { computeHsaProjectionWarnings } from '../engine/hsaWarnings';
+import { computeTipsProjectionWarnings } from '../engine/tipsWarnings';
 import { runProjection } from '../engine/projection';
 import { NumberInput } from '../components/inputs/NumberInput';
 import { LegacyTargetInput } from '../components/inputs/LegacyTargetInput';
@@ -299,7 +300,12 @@ export default function InputsPage() {
     () => (hasHsa ? computeHsaProjectionWarnings(flatPlan, runProjection(flatPlan).rows) : []),
     [hasHsa, flatPlan],
   );
-  const planWarnings = [...computePlanWarnings(flatPlan), ...hsaProjectionWarnings];
+  const hasTips = (flatPlan.portfolio.tipsLadder?.rungs.length ?? 0) > 0;
+  const tipsProjectionWarnings = useMemo(
+    () => (hasTips ? computeTipsProjectionWarnings(runProjection(flatPlan).rows) : []),
+    [hasTips, flatPlan],
+  );
+  const planWarnings = [...computePlanWarnings(flatPlan), ...hsaProjectionWarnings, ...tipsProjectionWarnings];
   const minStartAge = (whose: string) => {
     if (whose === 'B' && B) return B.retirementAge;
     if (whose === 'Household' && B) return Math.min(A.retirementAge, B.retirementAge);

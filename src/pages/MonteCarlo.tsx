@@ -19,6 +19,7 @@ import type { SavedPlan } from '../schemas/savedPlan';
 import LearnMoreModal from '../components/LearnMoreModal';
 import { MC_SIMULATE_HELP, MC_OPTIMIZE_HELP, type HelpTopic } from '../components/learnMoreTopics';
 import { type McPosture } from '../engine/goalLabels';
+import { resolveTipsLadder } from '../engine/tipsLadder';
 import { loadEquityPct, saveEquityPct } from '../lib/mcPrefs';
 import StalePlanBanner from '../components/StalePlanBanner';
 
@@ -323,6 +324,11 @@ export default function MonteCarlo() {
                   </div>
                 </div>
 
+                {resolveTipsLadder(mcFlat.portfolio, new Date().getFullYear()) !== null && (
+                  <div className="plan-warning info" style={{ marginBottom: 12 }}>
+                    Your TIPS ladder pays the same real amounts in every market scenario, so the years it funds don't depend on returns. That is where its value shows up here. Because it stands in for bonds, consider raising Equity % for the rest of your portfolio.
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <button className="btn btn-gold" onClick={run} disabled={running || optimizingRobust}>
                     {running ? 'Running…' : '▶ Run Simulation'}

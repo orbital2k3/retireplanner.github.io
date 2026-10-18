@@ -5,6 +5,7 @@ import { INHERITED_DEADLINE_YEARS } from './taxConstants';
 import { resolveStrategy } from './strategy/resultSettings';
 import { qcdEligible } from './qcd';
 import { hsaBaseLimit, hsaCatchUp, hsaLimit, HSA_MEDICARE_AGE } from './hsa';
+import { tipsLadderIssues } from './tipsValidation';
 
 /**
  * Ages (Person A's frame) with a non-zero manual Roth conversion that will actually run before the
@@ -198,6 +199,35 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       id: 'hsa-ca-conformity',
       severity: 'warn',
       message: "California doesn't recognize HSAs: state tax on HSA growth isn't modeled.",
+    });
+  }
+
+  // TIPS ladder: rungs bigger than their account are an error (the plan caps them at the balance, so the
+  // numbers would be wrong); stale rungs are ignored; taxable rungs owe tax on money they haven't paid out.
+  const tipsYear = new Date().getFullYear();
+  const tipsIssues = tipsLadderIssues(plan.portfolio, tipsYear, { a: plan.personA.name, b: plan.personB?.name });
+  for (const i of tipsIssues) {
+    if (i.code === 'overflow') {
+      const bal = i.account === 'traditional' ? 'pre-tax balance' : `${i.place} balance`;
+      warnings.push({
+        id: `tips-overflow-${i.place}`,
+        severity: 'error',
+        message: `TIPS rungs in ${i.place} (${money(i.total ?? 0)}) exceed the ${bal} (${money(i.balance ?? 0)}). The plan caps them at the balance.`,
+      });
+    } else if (i.code === 'matured') {
+      warnings.push({ id: `tips-matured-${i.rungId}`, severity: 'warn', message: `${i.message} Remove it or update its maturity year.` });
+    } else {
+      warnings.push({ id: `tips-owner-${i.rungId}`, severity: 'warn', message: `${i.message} Pick whose IRA holds it.` });
+    }
+  }
+  const taxableTips = (plan.portfolio.tipsLadder?.rungs ?? [])
+    .filter((r) => r.account === 'taxable' && r.maturityYear >= tipsYear)
+    .reduce((s, r) => s + r.adjustedPrincipal, 0);
+  if (taxableTips > 0) {
+    warnings.push({
+      id: 'tips-phantom-income',
+      severity: 'info',
+      message: `Taxable TIPS rungs (${money(taxableTips)}) owe federal tax each year on the inflation increase, before you get any cash. An IRA is often a better home for them. The plan counts this income from the first year either of you has retired.`,
     });
   }
 
