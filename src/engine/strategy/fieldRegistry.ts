@@ -24,6 +24,7 @@ const ASSUMPTIONS: Record<keyof Assumptions, FieldClass> = {
   legacyTargetTaxAdjReal: 'optimizerSetting',
   tradReturn: 'fact',
   rothReturn: 'fact',
+  hsaReturn: 'fact',
   inflation: 'fact',
   modelACA: 'fact',
   acaHouseholdSize: 'fact',

@@ -79,6 +79,9 @@ export const AssumptionsSchema = z.object({
   legacyTargetTaxAdjReal: z.number().nonnegative().default(0),
   tradReturn: z.number().default(0.055),
   rothReturn: z.number().default(0.055),
+  /** Expected annual growth of owned HSA balances. Absent = tradReturn.
+   *  Optional (not .default) so old saved plans keep their optimizer key. */
+  hsaReturn: z.number().optional(),
   inflation: z.number(),
   // ACA marketplace premium modeling (pre-Medicare gap years)
   modelACA: z.boolean().default(false),
@@ -125,12 +128,34 @@ export const PersonPortfolioSchema = z.object({
   // behavior, so old persisted plans parse unchanged and need no data migration.
   spousalContribution: z.number().nonnegative().optional(),
   spousalTarget: z.enum(['traditional', 'roth']).optional(),
+  // Owned health savings account (HSA). HSAs are individual, so these sit per person. All
+  // optional for the same reason as spousalContribution: absent is exactly the pre-existing
+  // behavior and old plans need no migration.
+  /** HSA balance at plan start. */
+  hsa: z.number().nonnegative().optional(),
+  /** Annual contribution in today's dollars; the engine caps it at the legal limit. */
+  hsaContribution: z.number().nonnegative().optional(),
+  /** Coverage tier. Absent = 'self'. The family limit is shared by spouses. */
+  hsaCoverage: z.enum(['self', 'family']).optional(),
+  /** Keep contributing after retiring (before 65) on an HSA-eligible ACA plan. */
+  hsaContribInRetirement: z.boolean().optional(),
+  /** Unreimbursed past qualified medical expenses (shoebox receipts), claimable tax-free. */
+  hsaReceipts: z.number().nonnegative().optional(),
 });
 export type PersonPortfolio = z.infer<typeof PersonPortfolioSchema>;
+
+export const HsaPolicySchema = z.object({
+  /** Owner's age from which the HSA pays medical-tagged spending (and IRMAA at 65+).
+   *  0 = always pay. Absent policy = 65. Before this age medical bills are paid from other
+   *  accounts and logged as receipts. */
+  payMedicalFromAge: z.number().int().min(0).max(120),
+});
+export type HsaPolicy = z.infer<typeof HsaPolicySchema>;
 
 export const PortfolioSchema = z.object({
   personA: PersonPortfolioSchema,
   personB: PersonPortfolioSchema.optional(),
+  hsaPolicy: HsaPolicySchema.optional(),
 });
 export type Portfolio = z.infer<typeof PortfolioSchema>;
 
