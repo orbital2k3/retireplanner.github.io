@@ -12,6 +12,7 @@ import {
 import { filingStatusForYear, type FilingStatus } from './filingStatus';
 import { rmdDivisor, rmdStartAgeForDob, inheritedRmdDivisor } from './rmd';
 import { allocateQcd, qcdAvailable, qcdEligible, qcdLimit } from './qcd';
+import { allocateHsaContribution, hsaContribEligible } from './hsa';
 import { householdSS } from './socialSecurity';
 import { yearFederalTax, standardDeduction, taxableSocialSecurity, seniorBonusDeduction } from './tax';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS, OBBBA_NONITEMIZER_CHARITY, OBBBA_NONITEMIZER_CHARITY_FIRST_YEAR } from './taxConstants';
@@ -115,6 +116,10 @@ export interface ProjectionRow {
   qcd: number;
   qcdBeyondRmd: number;
   charityDeduction: number;   // OBBBA non-itemizer deduction included in stdDeduction
+  // Owned HSA (both persons combined). Zero on plans without one; kept out of the bit-exact whitelist.
+  begHSA: number;
+  endHSA: number;             // included in endTotal
+  hsaContrib: number;         // contributions this year (working, paid from outside the portfolio)
 }
 
 export interface ProjectionResult {
@@ -315,6 +320,11 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
   const pfA = plan.portfolio.personA;
   const pfB = plan.portfolio.personB;
   let taxableBasis = (pfA.taxableBasis ?? 0) + (pfB?.taxableBasis ?? 0);
+  // Owned HSAs, one per person. hasHSA gates every HSA step so a plan without one skips them all
+  // and its arithmetic is untouched.
+  let hsaA = pfA.hsa ?? 0;
+  let hsaB = pfB?.hsa ?? 0;
+  const hasHSA = hsaA > 0 || hsaB > 0 || (pfA.hsaContribution ?? 0) > 0 || (pfB?.hsaContribution ?? 0) > 0;
 
   const rows: ProjectionRow[] = [];
   const decisionNotes: YearDecision[] = [];
@@ -420,6 +430,25 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const contribToTrad = cA.trad + cB.trad;
     const contribToRoth = cA.roth + cB.roth;
 
+    // HSA contributions. A working person (still under Medicare) adds them from outside the
+    // portfolio like a payroll deduction, so they never pass through contribA/B or contribSplit.
+    // The household shares one family limit when both spouses are on family coverage.
+    let hsaContribExtA = 0, hsaContribExtB = 0;
+    if (hasHSA) {
+      const hsaAsk = (pf: PersonPortfolio | undefined, age: number | undefined, claimAge: number | undefined, alive: boolean, retired: boolean) =>
+        pf && alive && age !== undefined && claimAge !== undefined && !retired
+          && hsaContribEligible({ age, retired, ssClaimAge: claimAge, contribInRetirement: pf.hsaContribInRetirement ?? false })
+          ? (pf.hsaContribution ?? 0) * inflationFactor : 0;
+      const alloc = allocateHsaContribution(
+        inflationFactor,
+        { ask: hsaAsk(pfA, ageA, plan.personA.ssClaimAge, aliveA, retiredA), coverage: pfA.hsaCoverage, age: ageA },
+        pfB && ageB !== undefined
+          ? { ask: hsaAsk(pfB, ageB, plan.personB?.ssClaimAge, aliveB, retiredB), coverage: pfB.hsaCoverage, age: ageB }
+          : undefined,
+      );
+      hsaContribExtA = alloc.a; hsaContribExtB = alloc.b;
+    }
+
     // Social Security. If the user has SS-typed income streams, they override
     // the PIA-based actuarial calc per person/year (so editing the stream's
     // annualAmount on the Income page moves the projection).
@@ -459,6 +488,11 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     if (!aliveA && tradA > 0) { tradB += tradA; tradA = 0; }
     if (plan.personB && !aliveB && tradB > 0) { tradA += tradB; tradB = 0; }
     const trad = tradA + tradB;
+    // An HSA passes to a surviving spouse as their own account.
+    if (hasHSA) {
+      if (!aliveA && hsaA > 0) { hsaB += hsaA; hsaA = 0; }
+      if (plan.personB && !aliveB && hsaB > 0) { hsaA += hsaB; hsaB = 0; }
+    }
 
     // Inherited pre-tax balances still being tracked sit inside tradA/tradB but follow the
     // inherited-account rules, so they are excluded from the owner's own RMD base. A/Household
@@ -479,6 +513,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const gRateTaxYear  = override ?? plan.assumptions.taxableReturn;
     const gRateTradYear = override ?? plan.assumptions.tradReturn;
     const gRateRothYear = override ?? plan.assumptions.rothReturn;
+    const gRateHsaYear  = override ?? (plan.assumptions.hsaReturn ?? plan.assumptions.tradReturn);
 
     // Per-person RMD — each governed by their own age and SECURE 2.0 start age.
     const rmdA = (aliveA && ageA >= rmdStartAgeA) ? Math.max(0, tradA - inheritedInTradA) / rmdDivisor(ageA) : 0;
@@ -909,6 +944,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Per-bucket contribution amounts (cA/cB, contribToTax/Trad/Roth) were computed at the top
     // of the year — they already account for the spousal-IRA routing.
     const begTaxable = taxable, begTrad = trad, begRoth = roth;
+    const begHSA = hsaA + hsaB;
 
     taxable = Math.max(0, taxable * (1 + gRateTaxYear) + contribToTax - wdTax - distributedCash);
     // Split withdrawals and conversions pro-rata by each person's trad balance.
@@ -922,6 +958,10 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     tradA = tradCombined > 0 ? Math.max(0, Math.min(tradCombined, tradANext)) : 0;
     tradB = tradCombined - tradA;
     roth  = Math.max(0, roth  * (1 + gRateRothYear) + contribToRoth - wdRth + conv);
+    if (hasHSA) {
+      hsaA = Math.max(0, hsaA * (1 + gRateHsaYear) + hsaContribExtA);
+      hsaB = Math.max(0, hsaB * (1 + gRateHsaYear) + hsaContribExtB);
+    }
     taxableBasis = Math.max(0, taxableBasis + contribToTax + (annualDivForBasis - divDistributed) + (exemptIntForBasis - exemptDistributed) - wdTax * (1 - gainFraction));
 
     // One-time income events: inject directly into target account.
@@ -1116,7 +1156,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       taxableBasis += cashSurplus;
     }
 
-    const endTotal = taxable + tradA + tradB + roth;
+    const endTotal = taxable + tradA + tradB + roth + hsaA + hsaB;
     // Depletion is "could not fund the year's spending need from the portfolio", NOT just
     // "endTotal reached exactly zero". Each bucket's update is max(0, bal*g - wd), and wd is
     // capped at bal, so residuals decay geometrically toward zero but never quite hit it —
@@ -1204,6 +1244,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       qcd: qcdTotal,
       qcdBeyondRmd: qcdTotal > 0 ? trdForced - rmdAmt : 0,
       charityDeduction: charDed,
+      begHSA,
+      endHSA: hsaA + hsaB,
+      hsaContrib: hsaContribExtA + hsaContribExtB,
     });
   }
 

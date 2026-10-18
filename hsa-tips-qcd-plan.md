@@ -31,7 +31,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 |---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
 | 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
-| 2 HSA | 2.4.0 / v37 | 20 | 2 | ◐ |
+| 2 HSA | 2.4.0 / v37 | 20 | 3 | ◐ |
 | 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
 | Housekeeping | none | 2 | 0 | ☐ |
@@ -67,8 +67,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | QU-7 | QCD E2E + v35 freshness | ☑ | 2026-10-17 | 2eb2d33 | 3 e2e tests (QCD column + Taxes card, QCD checkbox saved, v35 plan with a result opens with no stale banner and unchanged numbers); seedPlan gained a version arg and qcdGiver fixture. Includes the v36 store bump and planMigrationV36.test.ts (41 tests on 18 plans captured on the v35 code at 869e998 via a worktree: key, status and projection bit-identical), so the freshness check is real, not self-referential. |
 | Q-REL | v36 migration + release gate | ☑ | 2026-10-17 | b36447b | 2.3.0 / store v36, no-op migration. Gate: cold tsc and eslint clean; test:fast 698 pass; test:opt 72 pass (10 files, 3:41 wall); e2e 18/18; golden CSVs: only planQ_qcdGiver added vs 869e998; bit-exact + optimizer snapshots unchanged; legacy exports import with identical status, key and numbers (new v35-legacy-imports.json). Optimizer timing: first re-time read ~11% over the P0-3 baseline on samplePlan, but a same-session A/B against the Phase 0 end (cdfa26e) shows no slowdown (26.7s vs 25.5s mean, machine noise ~10%). Not pushed (work is on local main, so nothing deployed). Not done: side-by-side mockup pass was done piece by piece in the browser while building, not as a final pass; legacy-export UI import is covered by exact unit tests, not a browser run. |
 | H-1 | HSA schema (+ `hsaReturn` registry) | ☑ | 2026-10-17 | 26ab6e6 | Optional fields only, no default, no migration: per-person hsa/hsaContribution/hsaCoverage/hsaContribInRetirement/hsaReceipts, portfolio.hsaPolicy ({ payMedicalFromAge }), assumptions.hsaReturn ('fact' registry entry). 3 schema tests; fast tier 701 pass, bit-exact unchanged. |
-| H-2 | `hsa.ts` limits, eligibility + tests | ☑ | 2026-10-17 | PENDING-COMMIT | hsa.ts: hsaLimit (indexed base + unindexed $1,000 catch-up at 55), hsaContribEligible (D6), allocateHsaContribution (shared family pool, A first, own catch-ups), hsaPayAge. Beyond spec: allocateHsaContribution and hsaPayAge. hsa.test.ts: 11 tests. Not wired yet. |
-| H-3 | HSA projection core | ☐ | | | |
+| H-2 | `hsa.ts` limits, eligibility + tests | ☑ | 2026-10-17 | e884361 | hsa.ts: hsaLimit (indexed base + unindexed $1,000 catch-up at 55), hsaContribEligible (D6), allocateHsaContribution (shared family pool, A first, own catch-ups), hsaPayAge. Beyond spec: allocateHsaContribution and hsaPayAge. hsa.test.ts: 11 tests. Not wired yet. |
+| H-3 | HSA projection core | ☑ | 2026-10-17 | PENDING-COMMIT | HSA core in runProjection: hsaA/hsaB state gated by hasHSA, working contributions external (never in contribA/B) via allocateHsaContribution, spousal merge, balance update at hsaReturn (follows returnOverrides), endTotal appends HSA, rows begHSA/endHSA/hsaContrib. Retired-person contributions deliberately not wired (H-8). 10 tests; testutil __testutil__/hsaPlans.ts. Bit-exact unchanged; fast tier 722 pass. |
 | H-4 | Qualified spending + receipts | ☐ | | | |
 | H-5 | Last-resort draws + penalty | ☐ | | | |
 | H-6 | `taxAdjustedValue` extras + seed + breakdown | ☐ | | | |
@@ -272,7 +272,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - `AssumptionsSchema.hsaReturn?`, absent = tradReturn, with its registry entry
   - `usePlanStore.addPersonB` unchanged
 - [x] **H-2** New `src/engine/hsa.ts`: `hsaLimit` (self / shared family limit indexed by inflation; the $1,000 catch-up at 55+ is statutory and NOT indexed, so add it unscaled), `hsaContribEligible` (D6), constants, and `hsa.test.ts`.
-- [ ] **H-3** Projection core (A2):
+- [x] **H-3** Projection core (A2):
   - `hsaA`/`hsaB` state; `gRateHsaYear` follows `returnOverrides`
   - working contributions are external (`hsaContribExtA/B`, kept out of `contribA/B`)
   - spousal merge after L432
@@ -462,6 +462,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | Q-REL / Gate | v2.3.0 gate run: see Q-REL Notes. Phase 1 (Foundation + QCD) complete on local `main`; not pushed. |
 | 2026-10-17 | H-1 | HSA schema fields and registry entry added (Phase 2 started). |
 | 2026-10-17 | H-2 | hsa.ts limits, eligibility and household allocation with 11 unit tests. |
+| 2026-10-17 | H-3 | HSA balance/growth/contributions/merge wired into runProjection. |
 
 ---
 
