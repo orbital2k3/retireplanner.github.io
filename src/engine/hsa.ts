@@ -73,3 +73,14 @@ export function allocateHsaContribution(
   }
   return { a: cA, b: Math.min(Math.max(0, b.ask), Math.max(0, capB)) };
 }
+
+/** Split a payment between the two owners in proportion to what each can supply. The total is
+ *  capped at what both have. Used for qualified-expense payments, where either spouse's HSA may
+ *  pay the household's medical bills. */
+export function splitHsaPayment(amount: number, availA: number, availB: number): { a: number; b: number } {
+  const total = availA + availB;
+  if (total <= 0 || amount <= 0) return { a: 0, b: 0 };
+  const pay = Math.min(amount, total);
+  const a = pay * (availA / total);
+  return { a, b: pay - a };
+}

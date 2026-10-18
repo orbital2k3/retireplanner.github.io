@@ -95,3 +95,85 @@ describe('HSA core: balance, growth and contributions (H-3)', () => {
     expect(rows[1].endHSA).toBeCloseTo(108_000, 6);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// H-4: qualified spending, policy age and receipts
+// ---------------------------------------------------------------------------------------------
+import type { Plan } from '../schemas/plan';
+import { medicalRow, withExpenses } from './__testutil__/hsaPlans';
+
+/** planA retiring at 58 with 40k of medical spending starting then. A is 53 in 2026. */
+function medicalPlan(over: Parameters<typeof withHsa>[1], medical = 40_000): Plan {
+  const p = base();
+  const retired = { ...p, personA: { ...p.personA, retirementAge: 58 }, personB: { ...p.personB!, retirementAge: 55 } };
+  return withExpenses(
+    withHsa(retired, over),
+    [
+      { ...p.expenseStreams[0], startAge: 58 },
+      medicalRow({ id: 'med', startAge: 58, annualAmount: medical, inflationPct: { mode: 'fixed', rate: 0.03 } }),
+    ],
+  );
+}
+
+describe('HSA qualified spending (H-4)', () => {
+  it('pays medical from the HSA once the owner reaches the policy age (always = 0)', () => {
+    const rows = runProjection(medicalPlan({ a: { hsa: 400_000 }, policyAge: 0 })).rows;
+    const first = rows.find((r) => r.medicalSpend > 0)!;
+    expect(first.hsaQualifiedWD).toBeCloseTo(first.medicalSpend + first.irmaa, 6);
+    expect(first.endHSA).toBeCloseTo(first.begHSA * 1.065 - first.hsaQualifiedWD, 4);
+    expect(first.hsaReceiptsBal).toBe(0);
+  });
+
+  it('reduces the portfolio draw by the amount the HSA pays', () => {
+    const noHsa = runProjection(medicalPlan({}, 40_000)).rows;
+    const withH = runProjection(medicalPlan({ a: { hsa: 400_000 }, policyAge: 0 })).rows;
+    const k = noHsa.findIndex((r) => r.medicalSpend > 0);
+    // first year spending exists: the draw (before taxes feedback) is lower by about the medical bill
+    expect(noHsa[k].totalWD - withH[k].totalWD).toBeGreaterThan(0.8 * noHsa[k].medicalSpend);
+    expect(withH[k].shortfall).toBe(0);
+  });
+
+  it('pays nothing before the policy age and logs the bills as receipts instead', () => {
+    const rows = runProjection(medicalPlan({ a: { hsa: 200_000, hsaReceipts: 5_000 } })).rows; // default policy 65
+    const pre = rows.filter((r) => r.medicalSpend > 0 && r.ageA < 65);
+    expect(pre.length).toBeGreaterThan(3);
+    for (const r of pre) expect(r.hsaQualifiedWD).toBe(0);
+    // receipts = seed + every bill paid elsewhere so far
+    let expected = 5_000;
+    for (const r of rows) {
+      if (r.ageA < 65) expected += r.medicalSpend;
+      if (r.ageA >= 65) break;
+      expect(r.hsaReceiptsBal).toBeCloseTo(expected, 6);
+    }
+    const at65 = rows.find((r) => r.ageA === 65)!;
+    expect(at65.hsaQualifiedWD).toBeGreaterThan(0);
+    // paying from the HSA at 65 leaves the pool alone
+    expect(at65.hsaReceiptsBal).toBeCloseTo(rows.find((r) => r.ageA === 64)!.hsaReceiptsBal, 6);
+  });
+
+  it('lets the HSA pay the IRMAA surcharge at 65 and later', () => {
+    // large pre-tax balances make IRMAA likely; any year with a surcharge is checked
+    const p = medicalPlan({ a: { hsa: 900_000, traditional: 3_000_000 }, b: { traditional: 2_000_000 }, policyAge: 0 });
+    const rows = runProjection(p).rows;
+    const withIrmaa = rows.filter((r) => r.irmaa > 0 && r.begHSA > 200_000);
+    expect(withIrmaa.length).toBeGreaterThan(0);
+    for (const r of withIrmaa) expect(r.hsaQualifiedWD).toBeCloseTo(r.medicalSpend + r.irmaa, 4);
+  });
+
+  it('never pays more than it holds and never goes negative', () => {
+    const rows = runProjection(medicalPlan({ a: { hsa: 30_000 }, policyAge: 0 })).rows;
+    for (const r of rows) {
+      expect(r.endHSA).toBeGreaterThanOrEqual(0);
+      expect(r.hsaQualifiedWD).toBeLessThanOrEqual(r.begHSA * 1.065 + r.hsaContrib + 1e-6);
+    }
+    // the small HSA runs dry and the rest of the bill falls back on the portfolio
+    expect(rows.some((r) => r.endHSA === 0 && r.medicalSpend > r.hsaQualifiedWD)).toBe(true);
+  });
+
+  it('pays from both spouses accounts in proportion to their balances', () => {
+    const rows = runProjection(medicalPlan({ a: { hsa: 100_000 }, b: { hsa: 300_000 }, policyAge: 0 })).rows;
+    const r = rows.find((x) => x.medicalSpend > 0)!;
+    const grown = r.begHSA * 1.065;
+    expect(r.endHSA).toBeCloseTo(grown - r.hsaQualifiedWD, 4);
+  });
+});

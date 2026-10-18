@@ -31,7 +31,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 |---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
 | 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
-| 2 HSA | 2.4.0 / v37 | 20 | 3 | ◐ |
+| 2 HSA | 2.4.0 / v37 | 20 | 4 | ◐ |
 | 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
 | Housekeeping | none | 2 | 0 | ☐ |
@@ -68,8 +68,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Q-REL | v36 migration + release gate | ☑ | 2026-10-17 | b36447b | 2.3.0 / store v36, no-op migration. Gate: cold tsc and eslint clean; test:fast 698 pass; test:opt 72 pass (10 files, 3:41 wall); e2e 18/18; golden CSVs: only planQ_qcdGiver added vs 869e998; bit-exact + optimizer snapshots unchanged; legacy exports import with identical status, key and numbers (new v35-legacy-imports.json). Optimizer timing: first re-time read ~11% over the P0-3 baseline on samplePlan, but a same-session A/B against the Phase 0 end (cdfa26e) shows no slowdown (26.7s vs 25.5s mean, machine noise ~10%). Not pushed (work is on local main, so nothing deployed). Not done: side-by-side mockup pass was done piece by piece in the browser while building, not as a final pass; legacy-export UI import is covered by exact unit tests, not a browser run. |
 | H-1 | HSA schema (+ `hsaReturn` registry) | ☑ | 2026-10-17 | 26ab6e6 | Optional fields only, no default, no migration: per-person hsa/hsaContribution/hsaCoverage/hsaContribInRetirement/hsaReceipts, portfolio.hsaPolicy ({ payMedicalFromAge }), assumptions.hsaReturn ('fact' registry entry). 3 schema tests; fast tier 701 pass, bit-exact unchanged. |
 | H-2 | `hsa.ts` limits, eligibility + tests | ☑ | 2026-10-17 | e884361 | hsa.ts: hsaLimit (indexed base + unindexed $1,000 catch-up at 55), hsaContribEligible (D6), allocateHsaContribution (shared family pool, A first, own catch-ups), hsaPayAge. Beyond spec: allocateHsaContribution and hsaPayAge. hsa.test.ts: 11 tests. Not wired yet. |
-| H-3 | HSA projection core | ☑ | 2026-10-17 | PENDING-COMMIT | HSA core in runProjection: hsaA/hsaB state gated by hasHSA, working contributions external (never in contribA/B) via allocateHsaContribution, spousal merge, balance update at hsaReturn (follows returnOverrides), endTotal appends HSA, rows begHSA/endHSA/hsaContrib. Retired-person contributions deliberately not wired (H-8). 10 tests; testutil __testutil__/hsaPlans.ts. Bit-exact unchanged; fast tier 722 pass. |
-| H-4 | Qualified spending + receipts | ☐ | | | |
+| H-3 | HSA projection core | ☑ | 2026-10-17 | 4870bec | HSA core in runProjection: hsaA/hsaB state gated by hasHSA, working contributions external (never in contribA/B) via allocateHsaContribution, spousal merge, balance update at hsaReturn (follows returnOverrides), endTotal appends HSA, rows begHSA/endHSA/hsaContrib. Retired-person contributions deliberately not wired (H-8). 10 tests; testutil __testutil__/hsaPlans.ts. Bit-exact unchanged; fast tier 722 pass. |
+| H-4 | Qualified spending + receipts | ☑ | 2026-10-17 | PENDING-COMMIT | Qualified spending: availability per owner (balance after growth + contribution, from the policy age), pre-loop hsaQualEst in spendingGapEst, in-loop hsaQual=min(avail, medical+prevIRMAA) in gap and incomeAvailForTax, final value (medical first, then converged IRMAA) in cashIn and the balance debit (pro-rata split across owners via splitHsaPayment). Receipts: seeded from hsaReceipts, accrue medical not paid by the HSA, rows hsaQualifiedWD/hsaReceiptsBal. 6 new tests (16 in file). Bit-exact unchanged; fast tier green. |
 | H-5 | Last-resort draws + penalty | ☐ | | | |
 | H-6 | `taxAdjustedValue` extras + seed + breakdown | ☐ | | | |
 | H-7 | HSA invariants | ☐ | | | |
@@ -279,7 +279,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - balance update after L861
   - `endTotal` appends HSA
   - rows get `begHSA`, `endHSA`, `hsaContrib`
-- [ ] **H-4** Qualified spending (D4):
+- [x] **H-4** Qualified spending (D4):
   - pre-loop estimate at L484/L710
   - in-loop `hsaQual = min(avail, medical + prevIRMAA)` reduces the gap
   - final value goes into `cashIn`
@@ -463,6 +463,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | H-1 | HSA schema fields and registry entry added (Phase 2 started). |
 | 2026-10-17 | H-2 | hsa.ts limits, eligibility and household allocation with 11 unit tests. |
 | 2026-10-17 | H-3 | HSA balance/growth/contributions/merge wired into runProjection. |
+| 2026-10-17 | H-4 | HSA qualified spending and receipts wired in. |
 
 ---
 

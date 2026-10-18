@@ -12,7 +12,7 @@ import {
 import { filingStatusForYear, type FilingStatus } from './filingStatus';
 import { rmdDivisor, rmdStartAgeForDob, inheritedRmdDivisor } from './rmd';
 import { allocateQcd, qcdAvailable, qcdEligible, qcdLimit } from './qcd';
-import { allocateHsaContribution, hsaContribEligible } from './hsa';
+import { allocateHsaContribution, hsaContribEligible, hsaPayAge, splitHsaPayment } from './hsa';
 import { householdSS } from './socialSecurity';
 import { yearFederalTax, standardDeduction, taxableSocialSecurity, seniorBonusDeduction } from './tax';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS, OBBBA_NONITEMIZER_CHARITY, OBBBA_NONITEMIZER_CHARITY_FIRST_YEAR } from './taxConstants';
@@ -120,6 +120,8 @@ export interface ProjectionRow {
   begHSA: number;
   endHSA: number;             // included in endTotal
   hsaContrib: number;         // contributions this year (working, paid from outside the portfolio)
+  hsaQualifiedWD: number;     // paid tax-free to qualified medical spending and IRMAA; counts as cash in
+  hsaReceiptsBal: number;     // household pool of medical bills paid elsewhere, still claimable tax-free
 }
 
 export interface ProjectionResult {
@@ -325,6 +327,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
   let hsaA = pfA.hsa ?? 0;
   let hsaB = pfB?.hsa ?? 0;
   const hasHSA = hsaA > 0 || hsaB > 0 || (pfA.hsaContribution ?? 0) > 0 || (pfB?.hsaContribution ?? 0) > 0;
+  // Medical bills the HSA did not pay are kept as receipts: reimbursable tax-free later (D4).
+  let hsaReceipts = hasHSA ? (pfA.hsaReceipts ?? 0) + (pfB?.hsaReceipts ?? 0) : 0;
+  const hsaPayFromAge = hasHSA ? hsaPayAge(plan.portfolio) : 0;
 
   const rows: ProjectionRow[] = [];
   const decisionNotes: YearDecision[] = [];
@@ -545,6 +550,13 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const forcedA = qcdTotal > 0 ? Math.max(rmdA, qcdA) : rmdA;
     const trdForced = qcdTotal > 0 ? forcedA + Math.max(rmdB, qcdB) : rmdAmt;
 
+    // HSA money available this year to pay qualified spending: each owner's balance after growth and
+    // this year's contribution, but only once that owner reaches the policy age (D4).
+    const hsaAvailA = hasHSA && aliveA && ageA >= hsaPayFromAge ? Math.max(0, hsaA * (1 + gRateHsaYear) + hsaContribExtA) : 0;
+    const hsaAvailB = hasHSA && plan.personB && aliveB && ageB !== undefined && ageB >= hsaPayFromAge
+      ? Math.max(0, hsaB * (1 + gRateHsaYear) + hsaContribExtB) : 0;
+    const hsaAvail = hsaAvailA + hsaAvailB;
+
     // Standard deduction this year. For Single filers where B is the survivor, use B's age.
     const filerAge = (filingStatus === 'Single' && !aliveA && aliveB && ageB !== undefined) ? ageB : ageA;
     const stdD = standardDeduction(filingStatus, filerAge, ageB, inflationFactor);
@@ -580,7 +592,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const annualDivEstForDist = (retiredA || retiredB) ? taxable * taxableDivYield : 0;
     const exemptIntEstForDist = (retiredA || retiredB) ? taxable * taxableExemptYield : 0;
     const distributedCashEst  = (annualDivEstForDist + exemptIntEstForDist) * distributePct;
-    const spendingGapEst = Math.max(0, netSpend - ss.total - other.gross - trdForced - distributedCashEst);
+    // Estimate of what the HSA will pay (medical only; IRMAA is not known until the loop runs).
+    const hsaQualEst = hasHSA ? Math.min(hsaAvail, spend.medical) : 0;
+    const spendingGapEst = Math.max(0, netSpend - ss.total - other.gross - trdForced - distributedCashEst - hsaQualEst);
     // Ordinary dividends from the taxable account are ordinary income (eat bracket space) but are
     // reinvested — not a spending resource. Estimate them here so baseOrdIncForConv is complete.
     const annualDivEst = (retiredA || retiredB) ? taxable * taxableDivYield : 0;
@@ -801,14 +815,17 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       // When payTaxFromBrokerage is on, only pull the tax shortfall that income surplus cannot
       // cover. Pulling the full burden when income already covers taxes generates unnecessary
       // LTCG on the brokerage draw, which then increases the tax bill (NIIT, fed).
+      // Qualified HSA payments cover medical bills and (at 65+) the IRMAA surcharge, so they reduce
+      // the cash the rest of the portfolio has to produce.
+      const hsaQualIter = hasHSA ? Math.min(hsaAvail, spend.medical + prevIRMAA) : 0;
       const incomeAvailForTax = Math.max(0,
-        ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncomeEst + lumpSumTaxFreeEst - netSpend
+        ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncomeEst + lumpSumTaxFreeEst - netSpend + hsaQualIter
       );
       const taxFromBrok = (plan.payTaxFromBrokerage ?? false)
         ? Math.min(Math.max(0, taxBurden - incomeAvailForTax), taxAvail)
         : 0;
       taxFromBrokFinal = taxFromBrok;
-      gap = Math.max(0, netSpend - ss.total - other.gross - distributedCash - trdForced - lumpSumOrdIncomeEst - lumpSumTaxFreeEst + taxBurden - taxFromBrok);
+      gap = Math.max(0, netSpend - ss.total - other.gross - distributedCash - trdForced - lumpSumOrdIncomeEst - lumpSumTaxFreeEst + taxBurden - taxFromBrok - hsaQualIter);
       const w = activePolicy
         ? applyBlendPolicy({ policy: activePolicy, ageA, gap, taxable: taxAvail - taxFromBrok, traditional: tradAvail, roth: rothAvail })
         : applyWithdrawalOrder({
@@ -894,6 +911,11 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       if (bw && bw.pctTraditional === 0 && wdTrd > 0 && wdTrd < 100) { wdTrd = 0; trdClamped = true; }
     }
 
+    // What the HSA actually pays this year: medical first, then the converged IRMAA surcharge.
+    const hsaQualFinal = hasHSA ? Math.min(hsaAvail, spend.medical + irmaa) : 0;
+    const hsaQualMed = Math.min(hsaQualFinal, spend.medical);
+    const hsaPay = splitHsaPayment(hsaQualFinal, hsaAvailA, hsaAvailB);
+
     // Per-year decision attribution (gated on opts.explain so the optimizer never pays for it).
     // Build after the de-minimis clamp so notes cite the same values that appear in the row.
     if (opts?.explain) {
@@ -959,8 +981,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     tradB = tradCombined - tradA;
     roth  = Math.max(0, roth  * (1 + gRateRothYear) + contribToRoth - wdRth + conv);
     if (hasHSA) {
-      hsaA = Math.max(0, hsaA * (1 + gRateHsaYear) + hsaContribExtA);
-      hsaB = Math.max(0, hsaB * (1 + gRateHsaYear) + hsaContribExtB);
+      hsaA = Math.max(0, hsaA * (1 + gRateHsaYear) + hsaContribExtA - hsaPay.a);
+      hsaB = Math.max(0, hsaB * (1 + gRateHsaYear) + hsaContribExtB - hsaPay.b);
     }
     taxableBasis = Math.max(0, taxableBasis + contribToTax + (annualDivForBasis - divDistributed) + (exemptIntForBasis - exemptDistributed) - wdTax * (1 - gainFraction));
 
@@ -1073,7 +1095,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // adds income. Each round leaves a deficit of roughly need x marginal rate, so the loop
     // converges geometrically; 40 rounds clears it even at very high combined rates.
     // Whatever the portfolio still cannot cover is the shortfall.
-    const cashIn = ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncome + lumpSumTaxFreeCash;
+    const cashIn = ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncome + lumpSumTaxFreeCash + hsaQualFinal;
     const residualOf = () => cashIn + wdTax + wdTrd + wdRth
       - netSpend - fedTax - stateAmt - irmaa - niit - acaPremiumYear;
     let residual = residualOf();
@@ -1156,6 +1178,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       taxableBasis += cashSurplus;
     }
 
+    // Medical bills paid from other accounts become receipts the HSA can reimburse later.
+    if (hasHSA) hsaReceipts += Math.max(0, spend.medical - hsaQualMed);
     const endTotal = taxable + tradA + tradB + roth + hsaA + hsaB;
     // Depletion is "could not fund the year's spending need from the portfolio", NOT just
     // "endTotal reached exactly zero". Each bucket's update is max(0, bal*g - wd), and wd is
@@ -1247,6 +1271,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       begHSA,
       endHSA: hsaA + hsaB,
       hsaContrib: hsaContribExtA + hsaContribExtB,
+      hsaQualifiedWD: hsaQualFinal,
+      hsaReceiptsBal: hsaReceipts,
     });
   }
 
