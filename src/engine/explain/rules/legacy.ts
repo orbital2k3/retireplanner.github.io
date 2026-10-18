@@ -9,7 +9,8 @@ export function legacyRule(ctx: InsightContext): Insight | null {
   const { proj } = ctx;
   if (proj.rows.length === 0 || proj.ranOut) return null;
   const last = proj.rows[proj.rows.length - 1];
-  const endRothReal = last.endRoth / last.inflationFactor;
+  // Ladder bonds held in a Roth are Roth money too.
+  const endRothReal = (last.endRoth + last.endTipsRoth) / last.inflationFactor;
   const endTotalReal = proj.endTotalReal;
   if (endTotalReal < 100_000) return null;
   // HSA money backed by receipts can be reimbursed tax-free, so it counts with the Roth money.

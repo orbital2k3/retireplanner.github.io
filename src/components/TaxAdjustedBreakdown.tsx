@@ -67,6 +67,22 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
     );
   }
 
+  // TIPS ladder rows appear only when the plan ends with bonds still held. Pre-tax ones owe ordinary tax
+  // when drawn; taxable ones have paid tax on their inflation increase each year, so their basis is their value.
+  const tipsTrad = last?.endTipsTrad ?? 0;
+  const tipsClean = (last?.endTipsTaxable ?? 0) + (last?.endTipsRoth ?? 0);
+  if (tipsTrad > 0) {
+    rows.push({
+      label: 'TIPS ladder in pre-tax accounts',
+      balance: tipsTrad,
+      rateLabel: `${(ordRate * 100).toFixed(0)}% blended effective rate`,
+      result: tipsTrad * (1 - ordRate),
+    });
+  }
+  if (tipsClean > 0) {
+    rows.push({ label: 'TIPS ladder in taxable / Roth', balance: tipsClean, rateLabel: '0% (already taxed or tax-free)', result: tipsClean });
+  }
+
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(13,27,46,0.55)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}

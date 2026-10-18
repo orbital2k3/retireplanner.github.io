@@ -1,6 +1,6 @@
 import { Bar } from 'react-chartjs-2';
 import type { ChartOptions, ChartData, Chart, TooltipModel } from 'chart.js';
-import { palette, bucketColors, fmtCompact, fmtFull } from './setup';
+import { palette, bucketColors, fmtCompact, fmtFull, hatch } from './setup';
 import { useAgeAxis } from './useAgeAxis';
 import type { ProjectionResult } from '../../engine/projection';
 import { rmdCashOf } from '../../engine/qcd';
@@ -64,7 +64,10 @@ function cashFlowTooltip(ctx: { chart: Chart; tooltip: TooltipModel<'bar'> }) {
        <span style="font-variant-numeric:tabular-nums;color:${color};">${fmtFull(value)}</span>
      </div>`;
 
-  const bg = (d: typeof dps[number]) => String(d.dataset.backgroundColor ?? palette.navy);
+  // A hatched series has a pattern fill, which is not a CSS color: use its border color for the swatch.
+  const bg = (d: typeof dps[number]) => typeof d.dataset.backgroundColor === 'string'
+    ? d.dataset.backgroundColor
+    : String(d.dataset.borderColor ?? palette.navy);
 
   let html = `<div style="font-weight:600;color:#f5e9c8;margin-bottom:4px;">${tooltip.title?.[0] ?? ''}</div>`;
   if (income.length) {
@@ -178,6 +181,17 @@ export default function CashFlowsBalanced({ proj, real = true, height = 280 }: P
         backgroundColor: palette.goldPale,
         borderColor: palette.gold,
         borderWidth: 1.5,
+        stack: 'in',
+      }] : []),
+      // Cash from taxable TIPS rungs (coupons and maturities): hatched taxable green. IRA and Roth rungs pay
+      // back into their own accounts, so they are not household cash and are not drawn here.
+      ...(rows.some((r) => r.tipsCash > 0) ? [{
+        type: 'bar' as const,
+        label: 'TIPS ladder (coupons & maturities)',
+        data: rows.map((r) => scale(r.tipsCash, r.inflationFactor)),
+        backgroundColor: hatch(bucketColors.taxable),
+        borderColor: bucketColors.taxable,
+        borderWidth: 1,
         stack: 'in',
       }] : []),
       // HSA money that reached the household as cash: qualified payments, reimbursed receipts and any

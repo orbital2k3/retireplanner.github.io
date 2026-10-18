@@ -148,8 +148,8 @@ function buildOrdRateSensitivity(
   if (!lastC || !lastB) return null;
 
   // Real end-traditional balances: score(o) = K − T·o, so T = endTrad / inflF
-  // The HSA above its receipts is haircut at the same rate, so it counts toward T too.
-  const exposure = (r: typeof lastC) => (r.endTraditional + hsaTaxableBalance(r.endHSA, r.hsaReceiptsBal)) / r.inflationFactor;
+  // The HSA above its receipts and ladder bonds held in IRAs are haircut at the same rate, so they count toward T too.
+  const exposure = (r: typeof lastC) => (r.endTraditional + hsaTaxableBalance(r.endHSA, r.hsaReceiptsBal) + r.endTipsTrad) / r.inflationFactor;
   const tC = exposure(lastC);
   const tB = exposure(lastB);
   const deltaTrad = tC - tB;  // typically negative (chosen has less trad, having converted some)

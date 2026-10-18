@@ -23,7 +23,7 @@ const stickyTd = (left: number, bg = '#fff', minWidth = 60): React.CSSProperties
 });
 
 type Row = ReturnType<typeof useProjection>['rows'][number];
-type GroupKey = 'income' | 'withdrawals' | 'spending' | 'taxes' | 'qcd' | 'hsa' | 'balances' | 'decisions';
+type GroupKey = 'income' | 'withdrawals' | 'spending' | 'taxes' | 'qcd' | 'hsa' | 'tips' | 'balances' | 'decisions';
 
 interface Column {
   key: string;
@@ -44,6 +44,7 @@ const BG: Record<'identity' | GroupKey, string> = {
   taxes:       '#ced7e2',
   qcd:         '#f5e9c8',
   hsa:         '#e8f7f0',
+  tips:        '#efeaf6',
   balances:    '#d3d6d9',
   decisions:   '#dce8e8',
 };
@@ -131,6 +132,14 @@ const COLUMNS: Column[] = [
   { key: 'hsaPenalty',      label: 'HSA Penalty',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaPenalty, bg: BG.hsa },
   { key: 'hsaReceiptsBal',  label: 'Receipts',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReceiptsBal, tooltip: () => 'Medical bills you paid from other accounts. They can be reimbursed from the HSA later, tax-free.', bg: BG.hsa },
 
+  // TIPS ladder — opt-in through the column chooser (and the CSV); all zero without a ladder.
+  { key: 'endTips',        label: 'Ladder Bal.',  group: 'tips', essential: false, fmt: 'money', get: (r) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth, tooltip: (r) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth > 0 ? `Indexed value of the bonds still held (included in End Total): taxable ${fmtFull(r.endTipsTaxable)}, pre-tax ${fmtFull(r.endTipsTrad)}, Roth ${fmtFull(r.endTipsRoth)}. It follows inflation, not market returns.` : '', bg: BG.tips },
+  { key: 'tipsCoupon',     label: 'TIPS Coupon',  group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsCoupon, tooltip: (r) => r.tipsCoupon > 0 ? `Interest paid by the bonds this year. Taxable rungs pay it to you as cash; pre-tax and Roth rungs pay it back into the account.` : '', bg: BG.tips },
+  { key: 'tipsAccrual',    label: 'TIPS Accrual', group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsAccrual, tooltip: (r) => r.tipsAccrual !== 0 ? 'Inflation increase in the bonds\' principal. On taxable rungs it is taxable income with no cash until maturity ("phantom income"); inside an IRA or Roth it is not taxed.' : '', bg: BG.tips },
+  { key: 'tipsMaturity',   label: 'TIPS Maturity',group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsMaturity, tooltip: (r) => r.tipsMaturity > 0 ? `Principal paid out by bonds maturing this year${r.tipsFloorBonus > 0 ? ` (includes ${fmtFull(r.tipsFloorBonus)} from the deflation floor)` : ''}.` : '', bg: BG.tips },
+  { key: 'tipsOrdInc',     label: 'TIPS Taxable', group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsOrdInc, tooltip: (r) => r.tipsOrdInc > 0 ? 'Federal ordinary income from taxable rungs (coupons plus inflation increase). Not taxed by your state. Counted from the first year either of you has retired.' : '', bg: BG.tips },
+  { key: 'rmdUnmet',       label: 'RMD Unmet',    group: 'tips', essential: false, fmt: 'money', get: (r) => r.rmdUnmet, tooltip: (r) => r.rmdUnmet > 0 ? 'Part of the required withdrawal the plan could not take because the IRA money left is tied up in ladder bonds. The plan holds bonds to maturity and does not model taking them out in kind; in real life the shortfall would be taken in kind or risk a penalty.' : '', bg: BG.tips },
+
   // Balances — end-of-year portfolio state
   { key: 'endTotal',       label: 'End Total', group: 'balances', essential: true,  fmt: 'money', get: (r) => r.endTotal,       bg: BG.balances },
   { key: 'begTaxable',     label: 'Beg Tax',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.begTaxable,     bg: BG.balances },
@@ -152,6 +161,7 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   taxes:       'Taxes',
   qcd:         'QCD',
   hsa:         'HSA',
+  tips:        'TIPS',
   balances:    'Balances',
   decisions:   'Decisions',
 };
@@ -163,6 +173,7 @@ const GROUP_COLORS: Record<GroupKey, { bg: string; text: string }> = {
   taxes:       { bg: '#3b5e8a', text: '#fff' },
   qcd:         { bg: '#c9a84c', text: '#0d1b2e' },
   hsa:         { bg: '#1f8f8c', text: '#fff' },
+  tips:        { bg: '#6b4f96', text: '#fff' },
   balances:    { bg: '#0d1b2e', text: '#fff' },
   decisions:   { bg: '#2d6a6a', text: '#fff' },
 };

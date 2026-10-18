@@ -1,6 +1,6 @@
 import { Line } from 'react-chartjs-2';
 import type { ChartOptions, ChartData } from 'chart.js';
-import { bucketColors, palette } from './setup';
+import { bucketColors, palette, hatch } from './setup';
 import { useAgeAxis } from './useAgeAxis';
 import type { ProjectionResult } from '../../engine/projection';
 import { fmtM } from '../../lib/format';
@@ -32,6 +32,20 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
     total: rows.map((r) => scale(r.endTotal, r.inflationFactor)),
   };
 
+  // TIPS ladder sleeves: hatched in their account's color, placed beside it, drawn only when held.
+  const tipsSeries = (label: string, color: string, pick: (r: (typeof rows)[number]) => number) =>
+    rows.some((r) => pick(r) > 0) ? [{
+      label,
+      data: rows.map((r) => +pct(pick(r), r.endTotal).toFixed(2)),
+      rawDollars: rows.map((r) => scale(pick(r), r.inflationFactor)),
+      backgroundColor: hatch(color),
+      borderColor: color,
+      borderWidth: 1,
+      fill: '-1' as const,
+      pointRadius: 0,
+      tension: 0.25,
+    }] : [];
+
   const data: ChartData<'line'> = {
     labels,
     datasets: [
@@ -47,6 +61,7 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
         pointRadius: 0,
         tension: 0.25,
       },
+      ...tipsSeries('TIPS ladder · taxable', bucketColors.taxable, (r) => r.endTipsTaxable),
       {
         label: 'Pre-tax 401(k)/IRA',
         data: rows.map((r) => +pct(ownTrad(r), r.endTotal).toFixed(2)),
@@ -59,6 +74,7 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
         pointRadius: 0,
         tension: 0.25,
       },
+      ...tipsSeries('TIPS ladder · pre-tax', palette.warning, (r) => r.endTipsTrad),
       {
         label: 'Roth',
         data: rows.map((r) => +pct(ownRoth(r), r.endTotal).toFixed(2)),
@@ -71,6 +87,7 @@ export default function BucketCompositionStacked({ proj, real = true, height = 2
         pointRadius: 0,
         tension: 0.25,
       },
+      ...tipsSeries('TIPS ladder · Roth', bucketColors.roth, (r) => r.endTipsRoth),
       ...(hasInherited ? [{
         label: 'Inherited IRA/Roth',
         data: rows.map((r) => +pct(r.inheritedBal, r.endTotal).toFixed(2)),

@@ -1,6 +1,6 @@
 import { Line } from 'react-chartjs-2';
 import type { ChartOptions, ChartData, Plugin } from 'chart.js';
-import { bucketColors, fmtCompact, fmtFull, palette, indexInteraction } from './setup';
+import { bucketColors, fmtCompact, fmtFull, palette, indexInteraction, hatch } from './setup';
 import { useAgeAxis } from './useAgeAxis';
 import type { ProjectionResult } from '../../engine/projection';
 
@@ -69,6 +69,19 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
   if (ageRMD !== undefined) markers.push({ age: ageRMD, label: 'RMDs', color: palette.warning });
   if (ageDeplete !== undefined) markers.push({ age: ageDeplete, label: 'Depleted', color: palette.danger });
 
+  // TIPS ladder sleeves, hatched in their account's color and stacked beside it. Only drawn when held.
+  const tipsSeries = (label: string, color: string, pick: (r: (typeof rows)[number]) => number) =>
+    rows.some((r) => pick(r) > 0) ? [{
+      label,
+      data: rows.map((r) => scale(pick(r), r.inflationFactor)),
+      backgroundColor: hatch(color),
+      borderColor: color,
+      borderWidth: 1,
+      fill: '-1' as const,
+      pointRadius: 0,
+      tension: 0.2,
+    }] : [];
+
   const data: ChartData<'line'> = {
     labels,
     datasets: [
@@ -82,6 +95,7 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
         pointRadius: 0,
         tension: 0.2,
       },
+      ...tipsSeries('TIPS ladder · taxable', bucketColors.taxable, (r) => r.endTipsTaxable),
       {
         label: 'Pre-tax 401(k)/IRA',
         data: rows.map((r) => scale(r.endTraditional - (r.inheritedBal - r.inheritedRothBal), r.inflationFactor)),
@@ -92,6 +106,7 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
         pointRadius: 0,
         tension: 0.2,
       },
+      ...tipsSeries('TIPS ladder · pre-tax', bucketColors.traditional, (r) => r.endTipsTrad),
       {
         label: 'Roth',
         data: rows.map((r) => scale(r.endRoth - r.inheritedRothBal, r.inflationFactor)),
@@ -102,6 +117,7 @@ export default function PortfolioTrajectory({ proj, real = true, height = 320 }:
         pointRadius: 0,
         tension: 0.2,
       },
+      ...tipsSeries('TIPS ladder · Roth', bucketColors.roth, (r) => r.endTipsRoth),
       ...(rows.some((r) => r.inheritedBal > 0) ? [{
         label: 'Inherited IRA/Roth',
         data: rows.map((r) => scale(r.inheritedBal, r.inflationFactor)),

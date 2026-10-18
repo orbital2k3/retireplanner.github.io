@@ -84,6 +84,32 @@ export const bucketColors = {
   hsa: palette.bucketHSA,
 };
 
+const hatchCache = new Map<string, CanvasPattern | string>();
+
+/** A diagonal-stripe fill in `color` on white: how a TIPS ladder is drawn inside its account's color
+ *  (no new solid color). Falls back to the plain color where there is no canvas (tests, SSR). */
+export function hatch(color: string): CanvasPattern | string {
+  const hit = hatchCache.get(color);
+  if (hit) return hit;
+  if (typeof document === 'undefined' || (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent))) return color;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 8;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return color;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 8, 8);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-2, 10); ctx.lineTo(10, -2);
+  ctx.moveTo(-2, 2); ctx.lineTo(2, -2);
+  ctx.moveTo(6, 10); ctx.lineTo(10, 6);
+  ctx.stroke();
+  const pattern = ctx.createPattern(cv, 'repeat') ?? color;
+  hatchCache.set(color, pattern);
+  return pattern;
+}
+
 export const fmtCompact = (n: number): string => {
   if (!isFinite(n)) return '';
   const abs = Math.abs(n);
