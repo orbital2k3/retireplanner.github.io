@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { runAndCompare } from './harness';
+import { runProjection } from '../projection';
 import {
   planA_simple, planB_largeTradSingle, planC_bracketFillConv,
   planD_singleFIRE, planE_allRothCouple, planF_allTradCouple,
   planG_californiaCouple, planH_survivorMidPlan,
   planI_multiStreamIncome, planJ_personBZeroBalance,
-  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD,
+  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver,
 } from './plans';
 
 /**
@@ -82,5 +83,17 @@ describe('Golden projection snapshots', () => {
   it('Plan M — Survivor: B dies at 78, A continues RMDs on merged balance', () => {
     const r = runAndCompare('planM_survivorBRMD', planM_survivorBRMD());
     expect(r.ok, r.message).toBe(true);
+  });
+
+  it('Plan Q — QCD giver: 72+ NY couple gives $30k/yr straight from their IRAs', () => {
+    const r = runAndCompare('planQ_qcdGiver', planQ_qcdGiver());
+    expect(r.ok, r.message).toBe(true);
+  });
+
+  it('Plan Q really exercises QCDs and the Single-filer deduction path', () => {
+    const rows = runProjection(planQ_qcdGiver()).rows;
+    expect(rows.some((r) => r.qcd > 0)).toBe(true);
+    expect(rows.some((r) => r.filingStatus === 'Single')).toBe(true);
+    expect(rows.filter((r) => r.qcd > 0).every((r) => r.qcd <= r.charitableSpend + 1e-6)).toBe(true);
   });
 });

@@ -466,3 +466,32 @@ export function planP_tightPlan(): Plan {
     state: 'IL',
   };
 }
+
+/** QCD giver: a 72+ couple in NY with large pre-tax balances and $30k a year of charitable giving.
+ *  The giving is paid straight from the IRAs as QCDs (A turns 74, B 72, so both are QCD-eligible
+ *  from year 0, and both have RMDs from 73). Exercises the RMD split into taxable income and charity,
+ *  NY taxing IRA income, and the Single-filer transition after B's death at 90. Taxfirst, no conversions. */
+export function planQ_qcdGiver(): Plan {
+  const p = goldenBase();
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1952-03-01', retirementAge: 65, planThroughAge: 95, ssPIA: 40000, ssClaimAge: 67 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1954-03-01', retirementAge: 65, planThroughAge: 90, ssPIA: 24000, ssClaimAge: 67 },
+    portfolio: {
+      personA: { taxable: 250000, taxableBasis: 150000, traditional: 1_200_000, roth: 100000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      personB: { taxable: 100000, taxableBasis: 60000, traditional: 800_000, roth: 50000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 95 }, survivorPct: 0, annualAmount: 40000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 90 }, survivorPct: 0, annualAmount: 24000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 65, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 90000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+      { id: 'giving', description: 'Charitable giving', whose: 'Household', startAge: 65, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 30000, inflationPct: { mode: 'fixed', rate: 0.025 }, category: 'charitable' as const },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 65, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'NY',
+  };
+}
