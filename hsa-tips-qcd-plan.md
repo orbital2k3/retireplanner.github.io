@@ -31,7 +31,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 |---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
 | 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
-| 2 HSA | 2.4.0 / v37 | 20 | 18 | ◐ |
+| 2 HSA | 2.4.0 / v37 | 20 | 19 | ◐ |
 | 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
 | Housekeeping | none | 2 | 0 | ☐ |
@@ -83,8 +83,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | HU-3 | [M4-A] HSA Projections columns | ☑ | 2026-10-17 | c530ab6 | New 'HSA' column group (green, header teal): HSA Bal., HSA Contrib, HSA Paid, HSA Reimb., HSA Non-qual, HSA Penalty, Receipts, all opt-in through the chooser and the CSV (not auto-shown, per M4-A), with tooltips (contrib tooltip explains the deduction/ACA effect, paid names the medical bill). Verified in the browser: the chooser lists the group and its 7 columns; no new console errors. |
 | HU-4 | [M4-C] HSA warnings | ☑ | 2026-10-17 | e8360d4 | Plan-based (planWarnings.ts): contribution over the limit (mockup wording, catch-up aware), contributing on Medicare (age >= max(65, claim age): 'ignored'), two family-coverage spouses over one shared limit, CA non-conformity notice (only CA + an HSA). Projection-based (hsaWarnings.ts, only computed when the plan has an HSA, memoized in InputsPage): ACA income dropped below 100% FPL by the contribution (from H-8) and early non-medical draws with the 20% penalty. All severity warn (no error). 7 tests in hsa.warnings.test.ts. Verified in the browser strip (Medicare warning shows for a 76-year-old with a contribution). |
 | HU-5 | [M4-B] HSA insights | ☑ | 2026-10-17 | e3368d9 | hsaBenefit.ts: computeHsaBenefit (qualified total in today's $, IRMAA part, first paying age; for a retiree contributor a counterfactual re-run with hsaContribInRetirement off gives per-year ACA MAGI lowered and subsidy raised; null without an HSA, skipped entirely when the plan has none) + hsaBenefitCopy (every clause appears only if its number exists). Taxes > Federal card (.insight-card.success, mockup M4-B). explain rule rules/hsa.ts ('Your HSA covers ... medical bills from N', taxes + strategy surfaces). Copy deviation from the mockup: 'Medicare surcharges' (IRMAA) rather than 'premiums', since base Medicare premiums are not modeled (D8). 5 tests; verified card in the browser; fast 816 pass. |
-| HU-6 | HSA docs, Learn More, release notes, sensitivity | ☑ | 2026-10-17 | PENDING-COMMIT | HowToGuide: new 'Health savings account (HSA)' subsection in Portfolio (6-row field table + last-resort tip), HSA Return row in the returns table, Medical category row rewritten (no longer 'no effect yet'). learnMoreTopics.HSA_HELP (6 sections) opened from 'Learn more about HSAs' in the HSA block and from the Taxes HSA card. releases.ts 2.4.0 entry (package.json version bump is at H-REL). fieldSensitivity: 7 HSA cases (balance, contribution, coverage, receipts [only the after-tax end value moves, so that case asserts endTaxAdjustedReal], retirement election via the ACA fixture, policy age, hsaReturn). Line numbers in the plan (~L505/~L564) were stale; sites found by content. Learn More modal verified in the browser. |
-| HU-7 | HSA E2E + v36 freshness | ☐ | | | |
+| HU-6 | HSA docs, Learn More, release notes, sensitivity | ☑ | 2026-10-17 | 844baa2 | HowToGuide: new 'Health savings account (HSA)' subsection in Portfolio (6-row field table + last-resort tip), HSA Return row in the returns table, Medical category row rewritten (no longer 'no effect yet'). learnMoreTopics.HSA_HELP (6 sections) opened from 'Learn more about HSAs' in the HSA block and from the Taxes HSA card. releases.ts 2.4.0 entry (package.json version bump is at H-REL). fieldSensitivity: 7 HSA cases (balance, contribution, coverage, receipts [only the after-tax end value moves, so that case asserts endTaxAdjustedReal], retirement election via the ACA fixture, policy age, hsaReturn). Line numbers in the plan (~L505/~L564) were stale; sites found by content. Learn More modal verified in the browser. |
+| HU-7 | HSA E2E + v36 freshness | ☑ | 2026-10-17 | PENDING-COMMIT | 3 e2e tests: (1) planR seeded: HSA columns hidden until the chooser group is ticked, then 'HSA Bal.' shows a non-zero value; Dashboard Sankey at age 55 shows 'Contributed to HSA' and at 65 'Medical & IRMAA (HSA)'; Taxes shows the HSA card; (2) entering an HSA on Inputs is saved, the payment-policy row appears, policy 70 is saved and the default 65 is stored as absent; (3) a v36 plan with a current result opens with no stale banner and unchanged numbers. Chart.js canvas series can't be read from the DOM, so 'chart series' is covered through the SVG Sankey plus unit tests of the dataset builders' inputs. Includes the v37 store bump (PLAN_STORE_VERSION 37, no-op migration) and planMigrationV37.test.ts: 19 plans captured on the v36 release commit b36447b via a worktree (v36-baselines.json), store migration, export/import, and the 3 legacy exports against v35-legacy-imports.json (v36 reproduced them exactly): keys, statuses and projections bit-identical; no HSA key appears. FINDING fixed in copy: in planR (taxfirst) the retiree contribution does NOT lower ACA MAGI, because the withdrawals that fund it (gains, then pre-tax money) cancel the deduction; the HSA card now says so instead of promising a subsidy (Roth-funded plans still show the lever); Learn More and the guide carry the same caveat. |
 | H-REL | v37 migration + release gate | ☐ | | | |
 | T-1 | TIPS schema + validation | ☐ | | | |
 | T-2 | `tipsLadder.ts` pure functions + tests | ☐ | | | |
@@ -348,7 +348,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - ACA MAGI below FPL
 - [x] **HU-5** [M4-B] Insights: "HSA covers Medicare premiums from 65"; "Contributing $X lowers ACA MAGI by $X and raises your subsidy by $Y" (counterfactual, like `qcdBenefit.ts`).
 - [x] **HU-6** Docs: HowToGuide account types (~L505) and Portfolio (~L564), a Learn More HSA topic, `releases.ts` 2.4.0, and `fieldSensitivity` entries for the HSA fields.
-- [ ] **HU-7** E2E: enter an HSA and see the column and chart series. A seeded v36 plan with a result stays fresh.
+- [x] **HU-7** E2E: enter an HSA and see the column and chart series. A seeded v36 plan with a result stays fresh.
 - [ ] **H-REL** No-op migration v37 and upgrade-freshness test. Run the **release gate**.
 
 ## Phase 3: TIPS core → 2.5.0 / store v38
@@ -478,6 +478,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | HU-4 | HSA warnings added to the strip. |
 | 2026-10-17 | HU-5 | HSA benefit card and insight rule. |
 | 2026-10-17 | HU-6 | HSA docs, Learn More topic, 2.4.0 release entry and sensitivity cases. |
+| 2026-10-17 | HU-7 | HSA e2e tests, v37 store bump and v36->v37 freshness test. |
 
 ---
 

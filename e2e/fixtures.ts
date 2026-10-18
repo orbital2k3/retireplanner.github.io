@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { planA_simple, planQ_qcdGiver } from '../src/engine/__golden/plans';
+import { planA_simple, planQ_qcdGiver, planR_hsaEarlyRetiree } from '../src/engine/__golden/plans';
 import { optimizeStrategy } from '../src/engine/optimizer';
 import { fromFlat, optimizerView, applyResult } from '../src/engine/strategy/savedPlan';
 import { PLAN_STORE_KEY, PLAN_STORE_VERSION } from '../src/store/planStoreVersion';
@@ -37,6 +37,9 @@ export function optimizedPlanABracketFill(): SavedPlan {
 
 /** A couple in their 70s whose giving is paid as QCDs (planQ_qcdGiver). */
 export const qcdGiver = (): SavedPlan => saved(planQ_qcdGiver());
+
+/** A 55-year-old early retiree on an ACA plan with a $150k HSA and retirement contributions (planR_hsaEarlyRetiree). */
+export const hsaRetiree = (): SavedPlan => saved(planR_hsaEarlyRetiree());
 
 /** Seeds the persisted plan store once per tab, so later reloads keep changes made in the UI. */
 export async function seedPlan(page: Page, plan: SavedPlan, displayMode: 'real' | 'nominal' = 'real', version: number = PLAN_STORE_VERSION) {

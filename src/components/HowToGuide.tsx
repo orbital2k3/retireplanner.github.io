@@ -682,7 +682,7 @@ export function GuideContent() {
         ["Annual contribution", "What you put in each year, in today's dollars, while you work. The tool caps it at the legal limit ($4,400 self-only or $8,750 family in 2026, plus $1,000 from 55). Contributions stop at 65, or when you claim Social Security if that is later.", "$4,400"],
         ["Coverage", "Self or Family. Spouses on family coverage share one limit.", "Family"],
         ["Unreimbursed receipts", "Past medical bills you paid out of pocket and have not been repaid for. They can be claimed tax-free later.", "$18,000"],
-        ["Keep contributing after I retire", "Shown if you retire before 65. You keep paying in from your portfolio on an HSA-eligible plan until 65. The contribution is deducted from your income, which lowers your ACA income and can raise your subsidy.", "Ticked"],
+        ["Keep contributing after I retire", "Shown if you retire before 65. You keep paying in from your portfolio on an HSA-eligible plan until 65. The contribution is deducted from your income, which can lower your ACA income and raise your subsidy. That works best when the money comes from Roth or cash, since pre-tax withdrawals add back the income.", "Ticked"],
         ["HSA pays medical expenses from age", "One setting for the household. From that age, the HSA pays your Medical-tagged expenses and any Medicare surcharge before your other accounts. Before it, those bills are paid elsewhere and kept as receipts.", "65"],
       ]} />
       <Tip>

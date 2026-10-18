@@ -16,7 +16,10 @@ export interface HsaBenefit {
   contribution?: {
     years: number;
     perYear: number;
-    /** How much the contribution lowers ACA income per year (0 when ACA isn't modeled). */
+    /** Whether the plan models ACA premiums (the ACA figures below mean nothing otherwise). */
+    acaModeled: boolean;
+    /** How much the contribution lowers ACA income per year, floored at 0. It is net of the extra income from
+     *  the withdrawals that fund the contribution: paid from pre-tax money it can cancel out entirely. */
     acaMagiLowered: number;
     /** How much it lowers the net ACA premium per year. */
     subsidyRaised: number;
@@ -64,6 +67,7 @@ export function computeHsaBenefit(livePlan: Plan): HsaBenefit | null {
     out.contribution = {
       years,
       perYear: sum(contributing, (r) => r.hsaContribRet) / years,
+      acaModeled: plan.assumptions.modelACA,
       acaMagiLowered: plan.assumptions.modelACA ? Math.max(0, magi / years) : 0,
       subsidyRaised: plan.assumptions.modelACA ? Math.max(0, premium / years) : 0,
     };
@@ -90,6 +94,10 @@ export function hsaBenefitCopy(b: HsaBenefit): { title: string; body: string } {
       parts.push(`${gives} lowers your ACA income by about ${fmtFull(round100(c.acaMagiLowered))} and raises your subsidy by about ${fmtFull(round100(c.subsidyRaised))} a year.`);
     } else if (c.acaMagiLowered >= 1) {
       parts.push(`${gives} lowers your ACA income by about ${fmtFull(round100(c.acaMagiLowered))} a year.`);
+    } else if (c.acaModeled) {
+      // The deduction is real, but the withdrawals that pay for it count as income too (pre-tax money
+      // cancels it exactly; brokerage gains cancel part). Say so rather than promise a subsidy.
+      parts.push(`${gives} doesn't lower your ACA income in this plan, because the money comes from withdrawals that count as income. Paying it from Roth money would.`);
     } else {
       parts.push(`${gives} is deducted from your taxable income.`);
     }

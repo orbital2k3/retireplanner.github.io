@@ -185,7 +185,7 @@ export const HSA_HELP: HelpTopic = {
     {
       heading: 'What it does for your ACA subsidy',
       paras: [
-        'If you retire before 65 and keep contributing, the contribution is deducted from your income. That lowers the income used for your marketplace subsidy, so the subsidy goes up. The Taxes page shows the effect. Be careful near the bottom of the range: under 100% of the poverty level there is no subsidy at all, and the plan warns you if a contribution pushes you there.',
+        'If you retire before 65 and keep contributing, the contribution is deducted from your income. That lowers the income used for your marketplace subsidy, so the subsidy goes up. The catch is where the contribution money comes from: if it comes from withdrawals that count as income (pre-tax money, or brokerage gains), those cancel part or all of the deduction. Paying it from Roth money or cash gets the full effect. The Taxes page shows what your plan actually gets. Be careful near the bottom of the range: under 100% of the poverty level there is no subsidy at all, and the plan warns you if a contribution pushes you there.',
       ],
     },
     {
