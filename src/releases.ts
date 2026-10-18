@@ -16,6 +16,25 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.5.0',
+    date: '2026-10-18',
+    summary: 'Add a TIPS ladder. Each rung pays a fixed real amount in its year whatever the market does, with the tax on inflation increases handled for you.',
+    changes: [
+      {
+        kind: 'feature',
+        title: 'TIPS ladder',
+        text: 'Enter your inflation-protected bonds as rungs in Portfolio (or paste them from a spreadsheet): maturity year, adjusted principal, coupon, par, and the account that holds them. The bonds follow inflation rather than market returns, so the years they cover are the same in every market scenario. Taxable rungs owe federal tax each year on the inflation increase, even though you get no cash until maturity, and that income is exempt from state tax. Rungs in an IRA count toward your required withdrawals, and rungs in a Roth are never taxed.',
+        bullets: [
+          'Your balances are assumed to already include the bonds, so the tool sets them apart to avoid counting them twice. Untick the box if they are on top.',
+          'Bonds are held to maturity and never sold early. At maturity a bond pays at least its par value.',
+          'The ladder shows as a hatched band inside its account\u2019s color on the charts, and the Projections table has a TIPS column group (balance, coupon, inflation accrual, maturity, taxable income, unmet RMD).',
+          'Monte Carlo runs and historical stress tests carry the ladder, so its value shows there. The Monte Carlo page suggests raising Equity % for the rest of your portfolio.',
+          'New plan notes cover rungs larger than their account, taxable rungs and phantom income, an IRA that cannot pay its required withdrawal because it is held in bonds, and running short while bonds are still held.',
+        ],
+      },
+    ],
+  },
+  {
     version: '2.4.0',
     date: '2026-10-18',
     summary: 'Add your health savings account. It pays medical bills and Medicare surcharges tax-free, keeps receipts, and can lower your ACA income when you retire early.',

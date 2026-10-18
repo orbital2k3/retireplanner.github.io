@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import LearnMoreModal from '../LearnMoreModal';
+import { TIPS_HELP } from '../learnMoreTopics';
 import type { Portfolio, TipsLadder, TipsRung } from '../../schemas/plan';
 import { NumberInput } from './NumberInput';
 import { fmtFull } from '../../lib/format';
@@ -32,11 +34,22 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, onChange }:
   const rungs = ladder?.rungs ?? [];
   const include = ladderInBalances(portfolio);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [csvErrors, setCsvErrors] = useState<TipsCsvError[]>([]);
 
   const write = (next: TipsRung[], inc = include) => onChange(normalize(next, inc));
   const update = (id: string, patch: Partial<TipsRung>) => write(rungs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const helpLink = (
+    <button
+      type="button"
+      onClick={() => setHelpOpen(true)}
+      style={{ background: 'transparent', border: 'none', padding: 0, margin: '0 0 8px', cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2, display: 'block' }}
+    >
+      ⓘ Learn more about TIPS ladders
+    </button>
+  );
 
   if (rungs.length === 0 && !csvOpen) {
     return (
@@ -50,6 +63,8 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, onChange }:
           Paste from CSV
         </button>
         <div className="helper-text">Treasury inflation-protected bonds you hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.</div>
+        {helpLink}
+        {helpOpen && <LearnMoreModal topic={TIPS_HELP} onClose={() => setHelpOpen(false)} />}
       </div>
     );
   }
@@ -88,6 +103,9 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, onChange }:
       <div className="helper-text" style={{ marginBottom: 8 }}>
         Treasury inflation-protected bonds you hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.
       </div>
+
+      {helpLink}
+      {helpOpen && <LearnMoreModal topic={TIPS_HELP} onClose={() => setHelpOpen(false)} />}
 
       {csvOpen && (
         <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 10, background: 'var(--cream)' }}>

@@ -614,7 +614,7 @@ export function GuideContent() {
         <strong>Muni bonds in portfolio vs. as a stream:</strong> use Tax-Exempt Yield for bonds
         whose principal is already included in your brokerage balance. Use a <em>Muni Bond</em>{' '}
         income stream (Income &amp; Expenses section) for a separate bond ladder whose principal is
-        outside your tracked portfolio, such as a bond you plan to hold to maturity. Entering
+        outside your tracked portfolio, such as a bond you plan to hold to maturity. (For TIPS bonds you hold, use the TIPS ladder card in Portfolio instead.) Entering
         the same income in both places double-counts it; a warning appears in both sections if
         you do.
       </Tip>
@@ -689,6 +689,36 @@ export function GuideContent() {
         <strong>The HSA is used after everything else only when you run out.</strong> If your other accounts
         are empty, the tool draws on the HSA: first for unpaid medical bills, then to reimburse receipts, then
         for anything else, which is taxed and carries a 20% penalty before 65. The plan shows a note if that happens.
+      </Tip>
+
+      <H3>TIPS ladder</H3>
+      <P>
+        If you hold Treasury inflation-protected bonds (TIPS) to maturity, click <strong>+ Add TIPS ladder</strong>
+        under your balances. Each rung is one bond. A rung pays a fixed real amount in its year, so the years it
+        covers do not depend on the market. The ladder card appears only once you add a rung.
+      </P>
+      <FieldTable rows={[
+        ["Matures", "The calendar year the bond matures.", "2031"],
+        ["Adj. principal", "Today's inflation-adjusted principal, as shown on your brokerage statement.", "$48,000"],
+        ["Face (par)", "The original par value. It sets the floor at maturity (a TIPS never pays less than par). Leave it equal to the principal if you are unsure.", "$45,000"],
+        ["Coupon", "The fixed real interest rate, paid on the inflation-adjusted principal.", "1.25%"],
+        ["Account", "Taxable, Pre-tax or Roth. Taxable rungs owe federal tax each year on the inflation increase even though you get no cash until maturity (\"phantom income\"). Treasury interest is exempt from state tax.", "Pre-tax"],
+        ["Whose", "For a pre-tax rung, whose IRA holds it. It counts in that person's required withdrawal, and passes to the survivor if they die first.", "Alex"],
+      ]} />
+      <P>
+        <strong>Paste from CSV</strong> adds many rungs at once: one per line with maturity, adjusted principal, coupon,
+        account, owner and par (the last two optional). You can paste straight from a spreadsheet.
+      </P>
+      <Tip>
+        <strong>My balances already include these bonds.</strong> This box is ticked by default, because a brokerage
+        statement shows one total for the account. The tool then sets the bonds apart from your balance so nothing is
+        counted twice. If the rungs add up to more than the account holds, you get an error and the plan caps them at the balance.
+      </Tip>
+      <Tip>
+        <strong>Bonds are held to maturity.</strong> The plan never sells a bond early, so a ladder cannot cover a year
+        that comes before its rung. In an IRA, bonds count toward your required withdrawal, but it can be paid only from
+        cash in the IRA; the plan shows any part it could not pay as RMD unmet.
+        Ladder income is counted for tax from the first year either of you has retired. See Learn more on the card for the details.
       </Tip>
 
       <H3>Annual Contributions (before retirement)</H3>

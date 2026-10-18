@@ -203,3 +203,55 @@ export const HSA_HELP: HelpTopic = {
     },
   ],
 };
+
+export const TIPS_HELP: HelpTopic = {
+  eyebrow: 'Learn more',
+  title: 'Your TIPS ladder',
+  sections: [
+    {
+      heading: 'What a ladder does',
+      paras: [
+        'TIPS are Treasury bonds whose principal rises with inflation. A ladder is a row of them, one maturing in each year you want covered. Each rung pays a fixed real amount in its year, whatever the stock market does. That is the point: those years no longer depend on returns.',
+        'Enter each bond as a rung: the year it matures, the principal shown on your statement (the inflation-adjusted figure), its coupon, and which account holds it. Par value is optional and only sets a floor: at maturity a TIPS pays at least par.',
+      ],
+    },
+    {
+      heading: 'Do my balances already include it?',
+      paras: [
+        'Usually yes: your brokerage statement shows one total for the account, bonds included. Leave the box ticked and the tool sets the bonds apart from that balance, so nothing is counted twice. Untick it only if the bonds are in addition to the balances you entered. If the rungs add up to more than the account holds, the plan shows an error and caps them at the balance.',
+      ],
+    },
+    {
+      heading: 'Where the bonds sit changes the tax',
+      paras: [
+        'In a taxable account you owe federal tax every year on the coupon and on the inflation increase of the principal, even though the increase is paid out only at maturity. That is "phantom income". It also counts toward Social Security taxation, Medicare surcharges and ACA income. Treasury interest is exempt from state income tax. The tool counts this income from the first year either of you has retired.',
+        'In an IRA there is no tax while the bonds are held; the coupons and maturities are added to the IRA and taxed when you take the money out. In a Roth they are never taxed. An IRA or Roth is often the better home for a TIPS ladder.',
+      ],
+    },
+    {
+      heading: 'IRA bonds and required withdrawals',
+      paras: [
+        'Bonds in an IRA count when your required withdrawal is figured, but the tool can only pay that withdrawal from cash in the IRA. If most of the IRA is tied up in bonds, the plan shows the part it could not pay as "RMD unmet" and warns you. Taking the bonds out in kind is not modeled. The bonds themselves are not converted to Roth; cash the bonds pay into the IRA can be.',
+      ],
+    },
+    {
+      heading: 'How the tool models it',
+      paras: [
+        'The ladder follows inflation, not market returns: in Monte Carlo runs and historical stress tests the rungs pay the same real amounts in every scenario. Each bond is held to maturity. The plan never sells early, so a ladder cannot rescue a year that comes before its rung, and the plan warns you if you would run short while still holding bonds.',
+        'Every flow in a year is figured at the year-end price level. If prices fall over the life of a bond, the principal falls too, but at maturity it is never worth less than par, and a deflation adjustment can only offset that year\'s coupons, never your other income.',
+      ],
+    },
+    {
+      heading: 'Seeing it',
+      paras: [
+        'On the charts the ladder is the hatched band inside its account\'s color. The Projections table has a TIPS column group (balance, coupon, inflation accrual, maturity, taxable income and unmet RMD) that you can switch on in the column chooser.',
+      ],
+    },
+    {
+      heading: 'What it leaves out',
+      paras: [
+        'Selling bonds before maturity, price changes from interest rates, reinvesting coupons into new bonds, I bonds, CDs and ladders of ordinary bonds. A tool that builds a ladder from the income you want is planned for a later release.',
+      ],
+    },
+  ],
+};

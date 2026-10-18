@@ -3,6 +3,8 @@ import { runProjection } from './projection';
 import { samplePlan as defaultPlan } from '../schemas/plan';
 import type { Plan, IncomeStream } from '../schemas/plan';
 import { acaRetireePlan, medicalRow, withExpenses, withHsa } from './__testutil__/hsaPlans';
+import { ladderRungs, rung, thisYear, tipsRetireePlan, withTips } from './__testutil__/tipsPlans';
+import { planL_survivorARMD } from './__golden/plans';
 
 /** Sensitivity contract: every UI-editable field that the projection consumes
  *  must move at least one observable output metric (endBalance or lifetimeFedTax)
@@ -193,6 +195,64 @@ describe('Field sensitivity — UI-editable fields must affect the projection', 
     it('assumptions.hsaReturn', () => {
       const d = sensitivity(base(), (p) => withHsa(p, { hsaReturn: p.assumptions.tradReturn + 0.03 }));
       expect(d.endDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+  });
+
+  describe('TIPS ladder fields', () => {
+    const Y = thisYear();
+    const rungs = () => [
+      ...ladderRungs({ firstYear: Y + 1, years: 4, principal: 40_000, couponRate: 0.012, account: 'taxable' }),
+      ...ladderRungs({ firstYear: Y + 5, years: 3, principal: 50_000, couponRate: 0.015, account: 'traditional', whose: 'A' }),
+    ];
+    const base = () => withTips(tipsRetireePlan(), rungs());
+    const mapRungs = (p: Plan, fn: (r: NonNullable<Plan['portfolio']['tipsLadder']>['rungs'][number], i: number) => Partial<NonNullable<Plan['portfolio']['tipsLadder']>['rungs'][number]>): Plan =>
+      withTips(p, p.portfolio.tipsLadder!.rungs.map((r, i) => ({ ...r, ...fn(r, i) })), p.portfolio.tipsLadder!.balancesIncludeLadder);
+
+    it('rung adjustedPrincipal', () => {
+      const d = sensitivity(base(), (p) => mapRungs(p, (r, i) => (i === 0 ? { adjustedPrincipal: r.adjustedPrincipal + 100_000 } : {})));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('rung couponRate', () => {
+      const d = sensitivity(base(), (p) => mapRungs(p, () => ({ couponRate: 0.04 })));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('rung maturityYear', () => {
+      const d = sensitivity(base(), (p) => mapRungs(p, (r) => ({ maturityYear: r.maturityYear + 6 })));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('rung account (taxable to Roth removes the phantom income tax)', () => {
+      const d = sensitivity(base(), (p) => mapRungs(p, (r) => (r.account === 'taxable' ? { account: 'roth' as const } : {})));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('rung faceValue (par above the indexed principal sets the maturity payout)', () => {
+      // Par only changes anything when it is above the indexed principal (deflation, or a mismatch in the data).
+      const d = sensitivity(base(), (p) => mapRungs(p, (r, i) => (i === 0 ? { faceValue: r.adjustedPrincipal * 3 } : {})));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
+    });
+
+    it('rung whose (decides which IRA the bonds are carved from, so whose cash can pay the required withdrawal)', () => {
+      // Person B's whole IRA is one rung: owned by B it leaves B no cash for the RMD (clamped, unmet); owned by A it
+      // comes out of A's IRA and B's cash is untouched. A person's RMD base is the same either way, which is why
+      // this needs an IRA that the rung empties.
+      const l = (who: 'A' | 'B') => {
+        const b = planL_survivorARMD();
+        const small = { ...b, portfolio: { ...b.portfolio, personB: { ...b.portfolio.personB!, traditional: 300_000 } } };
+        return withTips(small, [rung({ maturityYear: Y + 30, adjustedPrincipal: 300_000, couponRate: 0.015, account: 'traditional', whose: who })]);
+      };
+      // The spending draw is the same pre-tax cash either way, so end value and tax barely move; what changes is how
+      // much of it counts as a required withdrawal (and how much of the RMD goes unmet), which is lifetime RMD.
+      const a = runProjection(l('A')), b = runProjection(l('B'));
+      expect(Math.abs(a.lifetimeRMD - b.lifetimeRMD)).toBeGreaterThan(DELTA_THRESHOLD);
+      expect(b.rows.some((r) => r.rmdUnmet > 0)).toBe(true);
+    });
+
+    it('tipsLadder.balancesIncludeLadder (on top of the balances is extra money)', () => {
+      const d = sensitivity(base(), (p) => withTips(p, p.portfolio.tipsLadder!.rungs, false));
+      expect(d.endDelta + d.taxDelta).toBeGreaterThan(DELTA_THRESHOLD);
     });
   });
 
