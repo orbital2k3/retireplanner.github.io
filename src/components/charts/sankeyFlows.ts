@@ -47,7 +47,7 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const rmdCash = rmdCashOf(row);
   // A non-qualified HSA draw is ordinary income; a retiree's HSA contribution is deducted from it.
   const ordDriversExSS = row.otherIncomeTaxable + row.wdTrd + rmdCash + row.rothConv
-    + row.lumpSumOrdinaryIncome + row.ordinaryDiv + row.hsaNonQualWD - row.hsaContribRet;
+    + row.lumpSumOrdinaryIncome + row.ordinaryDiv + row.hsaNonQualWD - row.hsaContribRet + (row.tipsOrdInc ?? 0);
   const taxableSS = Math.max(0, row.ordIncome - ordDriversExSS);
   const realizedGains = Math.max(0, row.ltcg - row.qualifiedDiv);
 
@@ -79,6 +79,11 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
       taxBase: 0, route: 'medical' },
     { id: 'hsaCash', label: 'HSA · Reimbursed / withdrawn', value: row.hsaReimbursed + row.hsaNonQualWD, color: palette.bucketHSA,
       taxBase: row.hsaNonQualWD, route: 'general' },
+    // Taxable TIPS rungs: coupons and maturities are household cash. The taxable base also holds the
+    // indexation (phantom income), which brings no cash, so tax is allocated by it but capped at the cash.
+    // IRA and Roth rungs pay back into their own accounts, so they are not household cash.
+    { id: 'tips', label: 'TIPS · Coupons & maturities', value: row.tipsCash ?? 0, color: palette.bucketTaxable,
+      taxBase: row.tipsOrdInc ?? 0, route: 'general' },
     { id: 'wdRth', label: 'Withdrawal · Roth', value: row.wdRth - inhRthFromWd, color: palette.bucketRoth,
       taxBase: 0, route: 'general' },
     { id: 'ss', label: 'Social Security', value: row.totalSS, color: palette.goldLight,

@@ -4,6 +4,7 @@ import { runProjection, type ProjectionRow } from '../../engine/projection';
 import type { Plan, LumpSumEvent } from '../../schemas/plan';
 import * as G from '../../engine/__golden/plans';
 import { acaRetireePlan, hsaOnlyPlan, medicalPlan } from '../../engine/__testutil__/hsaPlans';
+import { ladderRungs, rung, thisYear, tipsRetireePlan, withTips } from '../../engine/__testutil__/tipsPlans';
 
 const golden = (Object.entries(G).filter(([, f]) => typeof f === 'function') as [string, () => Plan][])
   .map(([name, make]) => [name, make()] as [string, Plan]);
@@ -37,6 +38,15 @@ const qcdGiver = (born: string): Plan => {
   return p;
 };
 
+function mixedTips(): Plan {
+  const Y = thisYear();
+  return withTips(tipsRetireePlan(), [
+    ...ladderRungs({ firstYear: Y + 1, years: 5, principal: 25_000, couponRate: 0.012, account: 'taxable' }),
+    ...ladderRungs({ firstYear: Y + 3, years: 4, principal: 30_000, couponRate: 0.01, account: 'traditional', whose: 'A' }),
+    rung({ maturityYear: Y + 2, adjustedPrincipal: 15_000, couponRate: 0.0125, account: 'roth' }),
+  ]);
+}
+
 const extra: [string, Plan][] = [
   ['inherited HSA', withEvents([inherit('inheritedHSA', 50_000)])],
   ['inherited IRA taxfirst', withEvents([inherit('inheritedPreTaxIRA', 100_000)])],
@@ -49,6 +59,8 @@ const extra: [string, Plan][] = [
   ['HSA pays medical + IRMAA', medicalPlan({ a: { hsa: 400_000 }, policyAge: 0 })],
   ['HSA last resort with penalty', hsaOnlyPlan(20_000)],
   ['HSA retiree contribution (ACA)', acaRetireePlan()],
+  ['TIPS ladder in all three accounts', mixedTips()],
+  ['TIPS taxable ladder, balances on top', withTips(tipsRetireePlan(), ladderRungs({ firstYear: thisYear(), years: 6, principal: 40_000, couponRate: 0.02 }), false)],
 ];
 
 const TAX = new Set(['fed', 'state']);
@@ -169,6 +181,29 @@ describe('buildSankeyFlows', () => {
     for (const row of runProjection(G.planA_simple()).rows) {
       const f = buildSankeyFlows(row);
       expect([...f.sources, ...f.uses].some((n) => /hsa|medical/i.test(n.id))).toBe(false);
+    }
+  });
+
+  it('taxable TIPS cash is a general source taxed by the ladder income; IRA and Roth rungs are not household cash', () => {
+    const rows = runProjection(mixedTips()).rows;
+    const hit = rows.filter((r) => r.tipsCash > 0);
+    expect(hit.length).toBeGreaterThanOrEqual(5);
+    for (const row of hit) {
+      const f = buildSankeyFlows(row, false);
+      const src = f.sources.find((x) => x.id === 'tips')!;
+      expect(src.value).toBeCloseTo(row.tipsCash, 6);
+      expect(src.taxBase).toBeCloseTo(row.tipsOrdInc, 6);
+      expect(src.route).toBe('general');
+    }
+    // IRA / Roth-only years have no TIPS source even though the sleeve pays into the accounts
+    const iraOnly = rows.find((r) => r.tipsToTrad > 0 && r.tipsCash === 0);
+    expect(iraOnly).toBeDefined();
+    expect(buildSankeyFlows(iraOnly!, false).sources.some((x) => x.id === 'tips')).toBe(false);
+  });
+
+  it('a plan without a ladder has no TIPS source', () => {
+    for (const row of runProjection(G.planA_simple()).rows) {
+      expect(buildSankeyFlows(row).sources.some((x) => x.id === 'tips')).toBe(false);
     }
   });
 });

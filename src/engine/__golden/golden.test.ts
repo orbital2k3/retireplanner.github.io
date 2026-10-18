@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { runAndCompare, runAndCompareHsa } from './harness';
+import { runAndCompare, runAndCompareHsa, runAndCompareTips } from './harness';
 import { runProjection } from '../projection';
 import {
   planA_simple, planB_largeTradSingle, planC_bracketFillConv,
   planD_singleFIRE, planE_allRothCouple, planF_allTradCouple,
   planG_californiaCouple, planH_survivorMidPlan,
   planI_multiStreamIncome, planJ_personBZeroBalance,
-  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver, planR_hsaEarlyRetiree,
+  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver, planR_hsaEarlyRetiree, planS_tipsLadder,
 } from './plans';
 
 /**
@@ -113,5 +113,33 @@ describe('Golden projection snapshots', () => {
     expect(rows.some((r) => r.acaPremium > 0)).toBe(true);
     expect(rows.some((r) => r.phase === 'Survivor' && r.endHSA > 0)).toBe(true);
     expect(rows.every((r) => r.hsaNonQualWD === 0 && r.hsaPenalty === 0)).toBe(true);
+  });
+
+  it('Plan S — TIPS ladder: taxable bridge rungs, IRA and Roth rungs, ACA, survivor rung', () => {
+    const r = runAndCompare('planS_tipsLadder', planS_tipsLadder());
+    expect(r.ok, r.message).toBe(true);
+    const t = runAndCompareTips('planS_tipsLadder', planS_tipsLadder());
+    expect(t.ok, t.message).toBe(true);
+  });
+
+  it('Plan S really exercises the ladder: phantom income, IRA and Roth cash, the RMD base and the survivor rung', () => {
+    const rows = runProjection(planS_tipsLadder()).rows;
+    const byYear = (y: number) => rows[y - 2026];
+    // taxable rungs: indexation and coupons are taxed (federal only), and the ACA income carries them
+    expect(rows.filter((r) => r.tipsOrdInc > 0 && r.tipsCash > 0).length).toBeGreaterThanOrEqual(6);
+    expect(rows.some((r) => r.acaPremium > 0 && r.tipsOrdInc > 0)).toBe(true);
+    // the 2027 rung pays out at maturity: 40,000 x (1.025)^2 above its 36,500 par, so no floor bonus
+    expect(byYear(2027).tipsMaturity).toBeGreaterThan(40_000);
+    expect(byYear(2027).tipsFloorBonus).toBe(0);
+    // IRA and Roth rungs pay back into their accounts
+    expect(byYear(2033).tipsToTrad).toBeGreaterThan(50_000);
+    expect(byYear(2030).tipsToRoth).toBeGreaterThan(25_000);
+    // A dies at 85 (2051); the 2055 rung is then held in B's IRA and counts in B's RMD base
+    const survivor = rows.filter((r) => r.phase === 'Survivor' && r.year + 2025 < 2055);
+    expect(survivor.length).toBeGreaterThan(0);
+    expect(survivor.every((r) => r.endTipsTrad > 0)).toBe(true);
+    expect(rows.some((r) => r.rmd > 0)).toBe(true);
+    expect(rows.every((r) => r.rmdUnmet === 0)).toBe(true);
+    expect(rows[rows.length - 1].begTips).toBe(0);                     // everything has matured by the end
   });
 });

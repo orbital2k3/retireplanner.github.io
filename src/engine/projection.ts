@@ -141,7 +141,7 @@ export interface ProjectionRow {
   tipsCash: number;           // coupons + maturities from taxable rungs: cash to the household
   tipsToTrad: number;         // coupons + maturities from pre-tax rungs, returned to the IRAs
   tipsToRoth: number;         // coupons + maturities from Roth rungs, returned to the Roth
-  tipsOrdInc: number;         // federal ordinary income from taxable rungs (state-exempt)
+  tipsOrdInc: number;         // federal ordinary income from taxable rungs (state-exempt); counted once someone has retired
   rmdUnmet: number;           // RMD that the liquid IRA balance could not cover (ladder rungs are illiquid)
 }
 
@@ -479,6 +479,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       ? tipsLadderYear(tipsLadder, startYear + i, inflationFactor,
           inflationFactor * (1 + (opts?.inflationOverrides?.[i] ?? plan.assumptions.inflation)), aliveA, aliveB)
       : NO_TIPS;
+    // Ladder income is taxed once someone has retired, the same rule as portfolio dividends: the engine
+    // models no working-year income taxes, and the phantom (non-cash) part has nothing to pay the tax from.
+    const tipsTaxed = (retiredA || retiredB) ? tips.ordInc : 0;
     const contribToTax  = cA.tax  + cB.tax;
     const contribToTrad = cA.trad + cB.trad + tips.toTradA + tips.toTradB;
     const contribToRoth = cA.roth + cB.roth + tips.toRoth;
@@ -698,8 +701,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Pass 1 — wdTrd estimate ignoring conversion taxes on taxable
     const wdTrdEst1  = _wdTrdEst(spendingGapEst, taxAvailEst);
     const wdRthEst1  = _wdRthEst(spendingGapEst, taxAvailEst);
-    const piEst1     = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEst1 + annualDivEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
-    const baseOrdEst1 = hsaDed(taxableSocialSecurity(piEst1, ss.total, filingStatus) + rmdTaxable + other.taxableAmt + wdTrdEst1 + wdRthEst1 + ordDivEst + tips.ordInc);
+    const piEst1     = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEst1 + annualDivEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
+    const baseOrdEst1 = hsaDed(taxableSocialSecurity(piEst1, ss.total, filingStatus) + rmdTaxable + other.taxableAmt + wdTrdEst1 + wdRthEst1 + ordDivEst + tipsTaxed);
     const ceilForConv = effectiveBracketCeiling(plan.conversion.bracketCeiling, filingStatus) * inflationFactor;
     // Inherited pre-tax IRAs cannot be converted to Roth — exclude their tracked balance.
     const inheritedTradBal = inheritedState
@@ -727,14 +730,14 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const taxAvailForSpendingEst = Math.max(0, taxAvailEst - convTaxFromBrok);
     const wdTrdEstForConv = _wdTrdEst(spendingGapEst, taxAvailForSpendingEst);
     const wdRthEstForConv = _wdRthEst(spendingGapEst, taxAvailForSpendingEst);
-    const piForConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + annualDivEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
+    const piForConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + annualDivEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
     const taxableSSForConv = taxableSocialSecurity(piForConv, ss.total, filingStatus);
-    const baseOrdIncForConv0 = hsaDed(taxableSSForConv + rmdTaxable + other.taxableAmt + wdTrdEstForConv + wdRthEstForConv + ordDivEst + tips.ordInc);
+    const baseOrdIncForConv0 = hsaDed(taxableSSForConv + rmdTaxable + other.taxableAmt + wdTrdEstForConv + wdRthEstForConv + ordDivEst + tipsTaxed);
     // Pass 3 — SS taxability feedback: if the conversion itself pushes PI above the 85% tier,
     // SS becomes more taxable, adding to ordIncome. Compute SS gain at full headroom and absorb
     // it into the base so rothConversion sizes conv to stay within the ceiling after the flip.
     const headroomNominal = Math.max(0, ceilForConv - (baseOrdIncForConv0 - stdDEff - seniorBonusEst));
-    const piWithFullConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + headroomNominal + annualDivEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
+    const piWithFullConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + headroomNominal + annualDivEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
     const taxableSSWithFullConv = taxableSocialSecurity(piWithFullConv, ss.total, filingStatus);
     const ssGain = Math.max(0, taxableSSWithFullConv - taxableSSForConv);
     const baseOrdIncForConv = baseOrdIncForConv0 + ssGain;
@@ -808,11 +811,11 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const lumpSumOrdIncomeEst = lumpSumHSAIncomeEst + lumpSumForcedTradDistEst;
 
     // Base ordinary income for withdrawal bracket-fill sizing (conv now known; wdTrd unknown).
-    const piForWd = other.taxableAmt + exemptIncomeEst + rmdTaxable + conv + lumpSumOrdIncomeEst + 0.5 * ss.total - hsaContribRet + tips.ordInc;
+    const piForWd = other.taxableAmt + exemptIncomeEst + rmdTaxable + conv + lumpSumOrdIncomeEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
     const taxableSSForWd = taxableSocialSecurity(piForWd, ss.total, filingStatus);
     // Include ordinary dividends so bracketfill withdrawal sees the correct pre-wdTrd taxable income.
     const baseOrdIncForWd = hsaDed(taxableSSForWd + rmdTaxable + conv + other.taxableAmt + lumpSumOrdIncomeEst
-      + (eitherRetired ? taxable * taxableDivYield * (1 - taxableQualifiedPct) : 0) + tips.ordInc);
+      + (eitherRetired ? taxable * taxableDivYield * (1 - taxableQualifiedPct) : 0) + tipsTaxed);
 
     // Per-bucket "available to withdraw" caps. All three buckets are debited by the
     // end-of-year update `bucket = max(0, bucket*(1+g) + contrib +/- credits - withdrawal)`,
@@ -910,10 +913,10 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       const ltcg = wdTax * gainFraction + qualifiedDiv;
       // SS taxability via IRC §86 provisional-income tiers (replaces flat 0.85).
       // annualDiv and §103 exempt interest count toward provisional income per IRC §86.
-      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDiv + 0.5 * ss.total - hsaContribRet + tips.ordInc;
+      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDiv + 0.5 * ss.total - hsaContribRet + tipsTaxed;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
       // ordinaryDiv is ordinary income; qualifiedDiv is captured in ltcg (LTCG stack path).
-      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + ordinaryDiv + tips.ordInc);
+      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + ordinaryDiv + tipsTaxed);
       const magi = ordIncome + ltcg;  // NIIT + OBBBA senior bonus: exempt interest excluded
       const surchargeMAGI = magi + exemptIncome;  // IRMAA (§1395r(i)(4)) + ACA (§36B(d)(2)(B))
       seniorBonus = seniorBonusDeduction(filingStatus, filerAge, ageB, magi, calYear);
@@ -932,7 +935,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       irmaaMAGIFinal = irmaaMAGI;
       const irmaaFS = i >= 2 ? filingStatusHistory[i - 2] : filingStatus;
       irmaa = numAt65Plus > 0 ? annualIRMAACost(irmaaMAGI, inflationFactor, numAt65Plus, irmaaFS) : 0;
-      niit = annualNIIT(magi, ltcg + ordinaryDiv + tips.ordInc, filingStatus);
+      niit = annualNIIT(magi, ltcg + ordinaryDiv + tipsTaxed, filingStatus);
 
       // Refine state tax to include retirement distributions for states that tax them.
       // Include stateAmt in the convergence check — for CA/NY plans, state tax is a
@@ -1125,9 +1128,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Mirrors one pass of the gross-up loop body.
     const resolveYearTaxes = () => {
       const ltcg = wdTax * gainFraction + qualifiedDiv;
-      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + annualDiv + 0.5 * ss.total + hsaNonQual - hsaContribRet + tips.ordInc;
+      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + annualDiv + 0.5 * ss.total + hsaNonQual - hsaContribRet + tipsTaxed;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
-      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + ordinaryDiv + hsaNonQual + tips.ordInc);
+      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + ordinaryDiv + hsaNonQual + tipsTaxed);
       const magi = ordIncome + ltcg;
       const surchargeMAGI = magi + exemptIncome;
       seniorBonus = seniorBonusDeduction(filingStatus, filerAge, ageB, magi, calYear);
@@ -1137,7 +1140,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       irmaaMAGIFinal = i >= 2 ? surchargeMagiHistory[i - 2] : surchargeMAGI;
       const irmaaFS = i >= 2 ? filingStatusHistory[i - 2] : filingStatus;
       irmaa = numAt65Plus > 0 ? annualIRMAACost(irmaaMAGIFinal, inflationFactor, numAt65Plus, irmaaFS) : 0;
-      niit = annualNIIT(magi, ltcg + ordinaryDiv + tips.ordInc, filingStatus);
+      niit = annualNIIT(magi, ltcg + ordinaryDiv + tipsTaxed, filingStatus);
       stateAmt = stateTax(
         plan.state,
         other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + ltcg + lumpSumHSAIncome + hsaNonQual,
@@ -1381,7 +1384,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       tipsCash: tips.cash,
       tipsToTrad: tips.toTradA + tips.toTradB,
       tipsToRoth: tips.toRoth,
-      tipsOrdInc: tips.ordInc,
+      tipsOrdInc: tipsTaxed,
       rmdUnmet,
     });
   }

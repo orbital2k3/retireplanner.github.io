@@ -534,3 +534,56 @@ export function planR_hsaEarlyRetiree(): Plan {
     state: 'IL',
   };
 }
+
+/** TIPS ladder: A (60) and B (58) are retired now with a four-part ladder carved out of their balances (IL,
+ *  taxfirst, ACA modeled until 65). Six taxable rungs (2027-2032) bridge to Social Security at 67 and owe
+ *  federal tax on their indexation each year (no state tax, and the extra income feeds ACA income); four of
+ *  A's pre-tax rungs (2033-2036) and two of B's (2035-2036) pay back into the IRAs, and one more A rung
+ *  (2055) outlives A, who dies at 85, so it stays in B's RMD base; two Roth rungs (2030-2031) pay tax-free.
+ *  The 2027 rung has a par value below its adjusted principal. Maturity years are fixed, like the ages in
+ *  every other golden plan, so the CSV belongs to the 2026 calendar. */
+export function planS_tipsLadder(): Plan {
+  const p = goldenBase();
+  const r = (id: string, maturityYear: number, adjustedPrincipal: number, couponRate: number, account: 'taxable' | 'traditional' | 'roth', whose: 'A' | 'B' | 'Household', faceValue?: number) =>
+    ({ id, maturityYear, adjustedPrincipal, couponRate, account, whose, ...(faceValue !== undefined ? { faceValue } : {}) });
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1966-03-01', retirementAge: 60, planThroughAge: 85, ssPIA: 36000, ssClaimAge: 67 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1968-03-01', retirementAge: 58, planThroughAge: 95, ssPIA: 20000, ssClaimAge: 67 },
+    assumptions: { ...p.assumptions, modelACA: true, acaHouseholdSize: 2, acaBenchmarkPremium: 15000, acaNoSubsidy: false },
+    portfolio: {
+      personA: { taxable: 400000, taxableBasis: 260000, traditional: 900000, roth: 100000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      personB: { taxable: 200000, taxableBasis: 140000, traditional: 300000, roth: 60000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      tipsLadder: {
+        rungs: [
+          r('s1', 2027, 40000, 0.0125, 'taxable', 'Household', 36500),
+          r('s2', 2028, 40000, 0.0125, 'taxable', 'Household'),
+          r('s3', 2029, 40000, 0.0125, 'taxable', 'Household'),
+          r('s4', 2030, 40000, 0.0125, 'taxable', 'Household'),
+          r('s5', 2031, 40000, 0.0125, 'taxable', 'Household'),
+          r('s6', 2032, 40000, 0.0125, 'taxable', 'Household'),
+          r('a1', 2033, 50000, 0.015, 'traditional', 'A'),
+          r('a2', 2034, 50000, 0.015, 'traditional', 'A'),
+          r('a3', 2035, 50000, 0.015, 'traditional', 'A'),
+          r('a4', 2036, 50000, 0.015, 'traditional', 'A'),
+          r('a5', 2055, 60000, 0.02, 'traditional', 'A'),
+          r('b1', 2035, 40000, 0.01, 'traditional', 'B'),
+          r('b2', 2036, 40000, 0.01, 'traditional', 'B'),
+          r('r1', 2030, 25000, 0.0175, 'roth', 'Household'),
+          r('r2', 2031, 25000, 0.0175, 'roth', 'Household'),
+        ],
+      },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 85 }, survivorPct: 0, annualAmount: 36000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 95 }, survivorPct: 0, annualAmount: 20000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 60, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 85000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 60, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'IL',
+  };
+}

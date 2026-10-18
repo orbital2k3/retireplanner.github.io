@@ -159,3 +159,21 @@ describe('TIPS projection: roth rung', () => {
     expect(rows[1].endTipsRoth).toBe(0);
   });
 });
+
+describe('TIPS projection: working years', () => {
+  it('ladder income is not taxed (and brings no withdrawals) until someone has retired, like dividends', () => {
+    // planA: A works to 65, B to 63. A taxable rung from year 0; the coupon cash is saved.
+    const plan = withTips(planA_simple(), [rung({ maturityYear: thisYear() + 20, adjustedPrincipal: 200_000, couponRate: 0.02 })]);
+    const rows = runProjection(plan).rows;
+    const working = rows.filter((r) => r.phase === 'Accum.');
+    expect(working.length).toBeGreaterThan(5);
+    for (const r of working) {
+      expect(r.tipsOrdInc).toBe(0);
+      expect(r.fedTax).toBe(0);
+      expect(r.totalWD).toBe(0);
+      expect(r.tipsCash).toBeGreaterThan(0);               // the coupon still arrives, and is saved
+    }
+    const retired = rows.find((r) => r.phase !== 'Accum.')!;
+    expect(retired.tipsOrdInc).toBeGreaterThan(0);          // taxed from the first year someone retires
+  });
+});

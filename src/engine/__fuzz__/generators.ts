@@ -1,5 +1,5 @@
 import fc from 'fast-check';
-import type { Plan } from '../../schemas/plan';
+import type { Plan, TipsRung } from '../../schemas/plan';
 
 /**
  * Plan-shape generators for property-based testing. The goal is to produce *valid*
@@ -234,5 +234,67 @@ export const arbHsaPlan = (): fc.Arbitrary<Plan> =>
         ...(h.policy !== undefined ? { hsaPolicy: { payMedicalFromAge: h.policy } } : {}),
       },
       expenseStreams: h.medical ? [...plan.expenseStreams, h.medical] : plan.expenseStreams,
+    };
+  });
+
+/** One generated rung: when it matures, how big, its coupon and par, and where it sits. */
+const tipsRungSpec = () =>
+  fc.record({
+    matureIn: fc.integer({ min: 0, max: 45 }),
+    principal: fc.integer({ min: 1_000, max: 400_000 }),
+    coupon: fc.double({ min: 0, max: 0.04, noNaN: true, noDefaultInfinity: true }),
+    account: fc.constantFrom('taxable' as const, 'traditional' as const, 'roth' as const),
+    ownerB: fc.boolean(),
+    par: fc.option(fc.double({ min: 0.5, max: 1.2, noNaN: true, noDefaultInfinity: true }), { nil: undefined }),
+  });
+
+/** A generated plan layered with a TIPS ladder of 1-8 rungs. A quarter of the plans are cash-poor (balances
+ *  shrunk, so rungs outgrow their accounts and get scaled down, and IRAs run dry under RMDs) and a quarter are
+ *  survivor plans (A dies early with an A-owned pre-tax rung still outstanding). One in five leaves the
+ *  balances excluding the ladder. Separate from `arbPlan` so the existing properties keep their samples. */
+export const arbTipsPlan = (): fc.Arbitrary<Plan> =>
+  fc.tuple(
+    arbPlan(),
+    fc.record({
+      rungs: fc.array(tipsRungSpec(), { minLength: 1, maxLength: 8 }),
+      excluded: fc.integer({ min: 0, max: 4 }).map((n) => n === 0),
+      lean: fc.integer({ min: 0, max: 3 }).map((n) => n === 0),
+      survivor: fc.integer({ min: 0, max: 3 }).map((n) => n === 0),
+      deathIn: fc.integer({ min: 3, max: 15 }),
+      // ACA modeling on in a third of the plans, so ladder income reaches the subsidy calculation.
+      aca: fc.option(fc.integer({ min: 6_000, max: 28_000 }), { nil: undefined }),
+    }),
+  ).map(([plan, t]): Plan => {
+    const year = new Date().getFullYear();
+    const startAgeA = year - Number(plan.personA.dob.slice(0, 4));
+    const shrink = (p: Plan['portfolio']['personA']) => t.lean
+      ? { ...p, taxable: p.taxable * 0.03, taxableBasis: p.taxableBasis * 0.03, traditional: p.traditional * 0.03, roth: p.roth * 0.03 } : p;
+    const survivor = t.survivor && plan.personB !== undefined;
+    const rungs: TipsRung[] = t.rungs.map((r, i) => ({
+      id: `tips-${i}`,
+      maturityYear: year + r.matureIn,
+      adjustedPrincipal: r.principal,
+      couponRate: r.coupon,
+      account: r.account,
+      whose: r.account === 'traditional' ? (r.ownerB && plan.personB ? 'B' : 'A') : 'Household',
+      ...(r.par !== undefined ? { faceValue: Math.round(r.principal * r.par) } : {}),
+    }));
+    if (survivor) {
+      // an A-owned pre-tax rung that matures well after A's death
+      rungs.push({ id: 'tips-survivor', maturityYear: year + t.deathIn + 6, adjustedPrincipal: 50_000, couponRate: 0.015, account: 'traditional', whose: 'A' });
+    }
+    return {
+      ...plan,
+      assumptions: t.aca !== undefined
+        ? { ...plan.assumptions, modelACA: true, acaBenchmarkPremium: t.aca, acaHouseholdSize: plan.personB ? 2 : 1 }
+        : plan.assumptions,
+      personA: survivor ? { ...plan.personA, planThroughAge: startAgeA + t.deathIn } : plan.personA,
+      personB: survivor && plan.personB ? { ...plan.personB, planThroughAge: Math.max(plan.personB.planThroughAge, startAgeA + t.deathIn + 20) } : plan.personB,
+      portfolio: {
+        ...plan.portfolio,
+        personA: shrink(plan.portfolio.personA),
+        personB: plan.portfolio.personB ? shrink(plan.portfolio.personB) : undefined,
+        tipsLadder: { rungs, ...(t.excluded ? { balancesIncludeLadder: false } : {}) },
+      },
     };
   });
