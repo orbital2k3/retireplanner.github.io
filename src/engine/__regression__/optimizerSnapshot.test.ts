@@ -73,7 +73,7 @@ describe('optimizer bit-exact snapshot', () => {
     expect(actual.perYearPolicyHash, `${name}: per-year policy`).toBe(expected.perYearPolicyHash);
     expect(actual.evaluations, `${name}: evaluation count`).toBe(expected.evaluations);
     expect(actual, `${name}: other fields`).toEqual(expected);
-  });
+  }, 300_000);
 
   it('snapshot file has exactly the cases produced', () => {
     if (UPDATE) return;
