@@ -7,7 +7,7 @@
 - The store is at **v35**, not v32. Features therefore take **v36 (QCD), v37 (HSA), v38 (TIPS)**. The app is at 2.2.3, so the releases are 2.3.0, 2.4.0, 2.5.0 and 2.6.0 (builder).
 - Golden plans A–P already exist. Only A–M have CSVs; N/O/P are optimizer fixtures. New goldens start at **Q**: `planQ_qcdGiver`, `planR_hsaEarlyRetiree`, `planS_tipsLadder`.
 - There are 19 balance consumers, not 27: 14 read rows directly and 5 read aggregates. `sankeyFlows.ts` reads flows only. More UI reads `row.rmd` as cash and must split out QCD: `CashFlowsBalanced`, `sankeyFlows`, `IncomeSourcesArea`, `RothVsRmd`, `Projections`.
-- **Every push to `main` deploys** (`deploy-pages.yml`, `deploy-firebase.yml`). Each release is built on its own feature branch and merged by PR only after its release gate passes.
+- **Every push to `main` deploys** (`deploy-pages.yml`, `deploy-firebase.yml`). Work is committed directly on local `main` (no feature branches). Push `main` only after a release gate passes, and only when you intend to deploy.
 - `optimizerKey` drops undefined values. A new `.default()` field, or a migration that writes a default, would change the key of every saved plan and mark its optimizer result stale. **All new fields are `.optional()` and migrations are true no-ops.**
 - The golden harness tolerance is ±$2, which is too loose to prove "unchanged". A bit-exact snapshot is added first (P0-4).
 - The projection uses `new Date().getFullYear()`. Calendar-dependent tests (QCD age, OBBBA from 2026, `maturityYear`) must use `vi.setSystemTime` or DOBs relative to the current year.
@@ -17,27 +17,27 @@
 1. When you start an activity, set its Status to ◐ and fill in the date.
 2. When you finish:
    - set Status to ☑
-   - add the commit hash or PR link
+   - add the commit hash
    - add a one-line note: deviations, follow-ups, test counts
    - tick its checkbox in the phase section below
    - add a line to the Session log
-3. Commit the tracker change together with the activity's code (same commit). Feature branches carry their own tracker edits, so `main` gets the final state when the PR merges.
+3. Commit the tracker change together with the activity's code (same commit). A commit can't contain its own hash, so fill it in with the next commit's tracker edit.
 4. Use ⊘ for skipped or blocked work, with the reason in Notes. Never delete a row.
 
 Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 
 ### Rollup
-| Phase | Release / store | Branch | Activities | Done | Status |
-|---|---|---|---|---|---|
-| 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 21 | ☑ |
-| 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
-| 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
-| 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
-| Housekeeping | none | `main` | 2 | 0 | ☐ |
+| Phase | Release / store | Activities | Done | Status |
+|---|---|---|---|---|
+| 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
+| 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
+| 2 HSA | 2.4.0 / v37 | 20 | 0 | ☐ |
+| 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
+| 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
+| Housekeeping | none | 2 | 0 | ☐ |
 
 ### Activities
-| ID | Activity | Status | Date | Commit / PR | Notes |
+| ID | Activity | Status | Date | Commit | Notes |
 |---|---|---|---|---|---|
 | P0-1 | Copy plan into repo as tracker; mark analysis §6 answered | ☑ | 2026-10-17 | e2cd7ac | Plan copied verbatim; analysis §6 marked answered and linked. |
 | P0-2 | Verify IRS constants, cite sources | ☑ | 2026-10-17 | 7b4e8ea | All plan values confirmed, none differ. Flags: HSA catch-up $1,000 is statutory, NOT indexed (H-2 wording corrected: scale only the base limit); OBBBA $1k/$2k NOT indexed; $170(p) statute text not retrievable, rests on secondary sources + absence from Rev. Proc. 2025-32; Reg. 1.1275-7 / Notice 2011-21 not read at source. Added HSA_CATCHUP_AGE, OBBBA first-year consts (unused). |
@@ -53,8 +53,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Q-1 | `qcd.ts` eligibility, allocation, limit + unit tests | ☑ | 2026-10-17 | 39efb11 | qcd.ts: qcdEligible, qcdLimit, qcdAvailable, allocateQcd (pure, not yet wired). qcd.test.ts: 18 tests. |
 | Q-2 | QCD integration in `runProjection` (A1 table) | ☑ | 2026-10-17 | e44ea9c | Wired per Appendix A1: rmdTaxable/trdForced/forcedA aliases (equal rmdAmt without a QCD), 9 trad-outflow, 14 income, 1 per-person and state-tax uses replaced, rmdAmt kept for lifetimeRMD, row rmd and the unused withdrawal arg. qcdOn hoisted; opts.disableQCD added; sumExpenseStreams gained charitableQcd. Bit-exact snapshot and golden CSVs unchanged. Sanity on planF + 20k charity: lifetime fed tax 3.39M -> 3.14M. |
 | Q-3 | OBBBA non-itemizer deduction | ☑ | 2026-10-17 | 996827f | charDed = min(max(0, charitableQcd - qcd), 2000 MFJ / 1000 Single) from 2026, stdDEff at the 11 A1 sites, row charityDeduction (included in stdDeduction); magi/seniorBonus untouched. Deviation: the base is public-charity giving only (rows not marked qcd:false) because §170(p) excludes donor-advised funds, where the plan said all charitable spend. Computed even under disableQCD. Sensitivity skip entry removed; 2 active category/qcd cases added; invariant for the deduction. |
-| Q-4 | QCD row fields + invariants | ☑ | 2026-10-17 | (same commit as Q-2) | Built together with Q-2 so every commit stays green: row fields qcd/qcdBeyondRmd and invariants (trad outflow, mass balance, coverage cashIn += qcdBeyondRmd; qcd <= charitable; qcd <= owners x limit). |
-| Q-5 | QCD projection tests (R3–R6) | ☑ | 2026-10-17 | (same commit as Q-3) | qcd.projection.test.ts: 20 tests for R3-R6 (RMD/QCD income split, tax and IRMAA-lookback effects, CA vs IL, beyond-RMD window, conversion cap, oversized convAmt, per-person allocation, limits, DAF, deduction cases incl. survivor halving). Deviation: tradB path identity (R5) is checked via B's rows being identical while A's IRA is empty, since rows don't expose per-person balances. |
+| Q-4 | QCD row fields + invariants | ☑ | 2026-10-17 | e44ea9c (with Q-2) | Built together with Q-2 so every commit stays green: row fields qcd/qcdBeyondRmd and invariants (trad outflow, mass balance, coverage cashIn += qcdBeyondRmd; qcd <= charitable; qcd <= owners x limit). |
+| Q-5 | QCD projection tests (R3–R6) | ☑ | 2026-10-17 | 996827f (with Q-3) | qcd.projection.test.ts: 20 tests for R3-R6 (RMD/QCD income split, tax and IRMAA-lookback effects, CA vs IL, beyond-RMD window, conversion cap, oversized convAmt, per-person allocation, limits, DAF, deduction cases incl. survivor halving). Deviation: tradB path identity (R5) is checked via B's rows being identical while A's IRA is empty, since rows don't expose per-person balances. |
 | Q-6 | QCD fuzz property | ☑ | 2026-10-17 | 86cbea4 | Generator: optional charitable row (qcd:false sometimes) and start ages 54-75. Property: with conversions off, QCD on never raises lifetime fed+state+IRMAA+NIIT tax beyond 0.5%+$500, and disableQCD is a no-op without charitable rows. Held over 1,500 runs; ~16% of charity plans actually exercise a QCD. Conversions are excluded on purpose: a QCD frees bracket room that a conversion can use. |
 | Q-7 | Golden `planQ_qcdGiver` | ☑ | 2026-10-17 | 6523575 | planQ_qcdGiver (NY couple 74/72, 1.2M+0.8M pre-tax, 30k/yr giving): new CSV only, no A-M CSV changed. Guard test asserts QCDs and the Single-filer path really occur. |
 | Q-8 | QCD opt-tier tests | ☑ | 2026-10-17 | 863a954 | qcd.optimizer.test.ts (opt tier, ~40s): planG with 20k giving tagged charitable vs general: score at least as good, QCDs actually paid, invariants hold, lifetime conversions no higher; plus a determinism test. FINDING that differs from the plan: pre-70½ conversions are NOT lower with charity (planF 977k vs 915k, planG 10.1k vs 6.5k; the OBBBA deduction on pre-QCD cash gifts opens a little room). Total lifetime conversions ARE lower (planF 2.88M vs 2.99M, planG 19k vs 44k) and the score is +4% (planF) / +4.4% (planG). Test asserts the total, and QU-5's insight copy must say 'fewer conversions overall', not 'before 70½'. |
@@ -65,7 +65,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | QU-5 | QCD explain notes + insight rule | ☑ | 2026-10-17 | 4172d5e | yearDecisions: rmdAmt renamed rmdTaxable (+ optional rmdGross/qcd/qcdBeyondRmd) and a non-binding 'qcd-rmd' note; headroom display already uses stdDEff (Q-3). bracketCliff and optimizerRationale now read the taxable (cash) RMD via rmdCashOf. New rule qcd.ts ('QCDs cut your required-withdrawal tax', taxes+strategy): only fires when QCDs satisfy RMD dollars; copy says 'fewer Roth conversions are usually needed overall', never 'before 70½' (Q-8 finding). 10 new tests. |
 | QU-6 | QCD docs, Learn More, release notes | ☑ | 2026-10-17 | 39ab128 | HowToGuide Expenses: Category table + deduction tip. learnMoreTopics: QCD_HELP, opened from an 'ⓘ Learn more' link in the Taxes card. releases.ts: 2.3.0 entry (package.json version bump deferred to Q-REL). The guide says Medical is a tag with no effect yet. RELEASE_NOTES.md is stale (stops at 2.0.2) and was left alone. Modal verified in browser. |
 | QU-7 | QCD E2E + v35 freshness | ☑ | 2026-10-17 | 2eb2d33 | 3 e2e tests (QCD column + Taxes card, QCD checkbox saved, v35 plan with a result opens with no stale banner and unchanged numbers); seedPlan gained a version arg and qcdGiver fixture. Includes the v36 store bump and planMigrationV36.test.ts (41 tests on 18 plans captured on the v35 code at 869e998 via a worktree: key, status and projection bit-identical), so the freshness check is real, not self-referential. |
-| Q-REL | v36 migration + release gate + PR merge | ☑ | 2026-10-17 | (local main; hash is the commit that adds this row) | 2.3.0 / store v36, no-op migration. Gate: cold tsc and eslint clean; test:fast 698 pass; test:opt 72 pass (10 files, 3:41 wall); e2e 18/18; golden CSVs: only planQ_qcdGiver added vs 869e998; bit-exact + optimizer snapshots unchanged; legacy exports import with identical status, key and numbers (new v35-legacy-imports.json). Optimizer timing: first re-time read ~11% over the P0-3 baseline on samplePlan, but a same-session A/B against the Phase 0 end (cdfa26e) shows no slowdown (26.7s vs 25.5s mean, machine noise ~10%). Not done: PR/merge (work is on local main, nothing pushed, so nothing deployed); side-by-side mockup pass was done piece by piece in the browser while building, not as a final pass; legacy-export UI import is covered by exact unit tests, not a browser run. |
+| Q-REL | v36 migration + release gate | ☑ | 2026-10-17 | b36447b | 2.3.0 / store v36, no-op migration. Gate: cold tsc and eslint clean; test:fast 698 pass; test:opt 72 pass (10 files, 3:41 wall); e2e 18/18; golden CSVs: only planQ_qcdGiver added vs 869e998; bit-exact + optimizer snapshots unchanged; legacy exports import with identical status, key and numbers (new v35-legacy-imports.json). Optimizer timing: first re-time read ~11% over the P0-3 baseline on samplePlan, but a same-session A/B against the Phase 0 end (cdfa26e) shows no slowdown (26.7s vs 25.5s mean, machine noise ~10%). Not pushed (work is on local main, so nothing deployed). Not done: side-by-side mockup pass was done piece by piece in the browser while building, not as a final pass; legacy-export UI import is covered by exact unit tests, not a browser run. |
 | H-1 | HSA schema (+ `hsaReturn` registry) | ☐ | | | |
 | H-2 | `hsa.ts` limits, eligibility + tests | ☐ | | | |
 | H-3 | HSA projection core | ☐ | | | |
@@ -85,7 +85,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | HU-5 | [M4-B] HSA insights | ☐ | | | |
 | HU-6 | HSA docs, Learn More, release notes, sensitivity | ☐ | | | |
 | HU-7 | HSA E2E + v36 freshness | ☐ | | | |
-| H-REL | v37 migration + release gate + PR merge | ☐ | | | |
+| H-REL | v37 migration + release gate | ☐ | | | |
 | T-1 | TIPS schema + validation | ☐ | | | |
 | T-2 | `tipsLadder.ts` pure functions + tests | ☐ | | | |
 | T-3 | TIPS projection integration (A3) | ☐ | | | |
@@ -98,7 +98,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | TU-3 | TIPS warnings and notes | ☐ | | | |
 | TU-4 | TIPS docs, Learn More, release notes | ☐ | | | |
 | TU-5 | TIPS E2E + v37 freshness | ☐ | | | |
-| T-REL | v38 migration + release gate + PR merge | ☐ | | | |
+| T-REL | v38 migration + release gate | ☐ | | | |
 | TB-1 | `tipsBuilder.ts` bootstrap + tests | ☐ | | | |
 | TB-2 | [M5] Builder modal | ☐ | | | |
 | TB-3 | With vs without ladder MC card (optional) | ☐ | | | |
@@ -177,7 +177,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 5. **Upgrade-freshness test per release.** A v(N-1) plan with a fresh result stays `fresh` and `savedOptimizerKey` is unchanged. Follow the `planMigrationV35.test.ts` pattern.
 6. **Never run `UPDATE_GOLDENS=1` for A–M.** Only the new plan's CSV may be created.
 
-## Release gate (before each PR merge)
+## Release gate (before each release)
 - [ ] `tsc -b --force` and `pnpm lint`
 - [ ] `pnpm test:fast`: bit-exact snapshot green, no golden CSV diff except the new plan
 - [ ] `pnpm test:opt`: optimizer snapshot for planF/G/P unchanged
@@ -185,12 +185,12 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - [ ] Optimizer timing within about 5% of the P0-3 baseline
 - [ ] Browser pass: the new UI compared side by side with its mockup (M1–M5), plus an imported legacy export (`src/engine/__fixtures__/exports/*.json`) with no stale banner and unchanged headline numbers
 - [ ] `src/releases.ts`, `package.json` version, HowToGuide and CLAUDE.md updated where touched
-- [ ] PR from the feature branch, CI green, then merge (this deploys)
+- [ ] Push `main` only when the gate passes (a push deploys); CI must be green
 
 ---
 
 ## Phase 0: Setup (½–1 session)
-- [x] **P0-1** Copy this plan into the repo as `hsa-tips-qcd-plan.md` and use it as the tracker. Mark analysis §6 as answered and link to this plan. Commit on branch `chore/phase0`, which is merged by PR after P0-6. Pushing straight to `main` would deploy.
+- [x] **P0-1** Copy this plan into the repo as `hsa-tips-qcd-plan.md` and use it as the tracker. Mark analysis §6 as answered and link to this plan. Commit it on `main`.
 - [x] **P0-2** Verify constants against IRS sources and cite them in `taxConstants.ts` comments:
   - QCD limit 2026: $111,000
   - HSA limits: $4,400 / $8,750, catch-up $1,000
@@ -206,7 +206,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - [x] **P0-6** Save mockups M1–M5 from Appendix B as `ui-mockups/hsa-tips-qcd.html`: one page with an M1–M5 heading over each block, using the fonts and colors from `src/styles/clarity.css`. Open it in the browser preview to confirm it renders. This file is the UI reference for every UI activity.
 - [x] **P0-5** Pure const move: hoist `override` and `gRate*Year` (projection.ts:567-570) to just after L447. Snapshot stays green.
 
-## Phase 1: Foundation + QCD → 2.3.0 / store v36 / branch `feat/qcd`
+## Phase 1: Foundation + QCD → 2.3.0 / store v36
 ### 1A Expense category (1 session)
 - [x] **F-1** Schema: add `category?: 'general'|'medical'|'charitable'` and `qcd?: boolean` to `ExpenseStreamSchema` (`src/schemas/plan.ts:178`).
 - [x] **F-2** `sumExpenseStreams` (projection.ts:181) returns `{ total, medical, charitable }`. `total` keeps its accumulation order (`const amt = …; total += amt; if (…) charitable += amt`). At L422, `netSpend = s.total`.
@@ -264,7 +264,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - [x] **QU-7** E2E (`e2e/smoke.spec.ts`): a seeded 72-year-old with charity sees a non-zero QCD column and the Taxes card. Seed a v35 plan with a result: no stale banner.
 - [x] **Q-REL** No-op migration v36 plus `planMigrationV36.test.ts` (upgrade freshness). Run the **release gate**.
 
-## Phase 2: HSA → 2.4.0 / store v37 / branch `feat/hsa`
+## Phase 2: HSA → 2.4.0 / store v37
 ### 2A Schema and core engine (2 sessions)
 - [ ] **H-1** Schema:
   - per person: `hsa?`, `hsaContribution?`, `hsaCoverage?: 'self'|'family'`, `hsaContribInRetirement?`, `hsaReceipts?`
@@ -351,7 +351,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - [ ] **HU-7** E2E: enter an HSA and see the column and chart series. A seeded v36 plan with a result stays fresh.
 - [ ] **H-REL** No-op migration v37 and upgrade-freshness test. Run the **release gate**.
 
-## Phase 3: TIPS core → 2.5.0 / store v38 / branch `feat/tips`
+## Phase 3: TIPS core → 2.5.0 / store v38
 ### 3A Schema and engine (2 sessions)
 - [ ] **T-1** Schema:
   - `TipsRungSchema { id, maturityYear, adjustedPrincipal, faceValue?, couponRate, account, whose }`
@@ -394,7 +394,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - [ ] **TU-5** E2E: add rungs, check the columns and the MC page. A v37 plan stays fresh.
 - [ ] **T-REL** No-op migration v38 and upgrade-freshness test. Run the **release gate**.
 
-## Phase 4: TIPS builder → 2.6.0 (no store bump) / branch `feat/tips-builder`
+## Phase 4: TIPS builder → 2.6.0 (no store bump)
 - [ ] **TB-1** `src/engine/tipsBuilder.ts`: (real income per year, from/to age, real yield, funding account) → rungs plus cost today, using a backward bootstrap so each rung's principal plus later rungs' coupons meets the target. Test against a hand-computed 5-rung case.
 - [ ] **TB-2** [M5] Builder modal: a preview of rungs and cost; "Add to ladder" writes the rungs and debits the funding account under carve-out semantics.
 - [ ] **TB-3** Optional "with vs without ladder" MC comparison card (success rate, P10 ending balance).
@@ -464,6 +464,8 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 ---
 
 ## Appendix A: Engine insertion points (projection.ts at commit 869e998)
+
+> **Line numbers below are for 869e998 and are now stale.** Phases 0-1 changed `projection.ts` (the growth-rate consts were hoisted above the RMD block, `sumExpenseStreams` returns `{ total, medical, charitable, charitableQcd }`, and the QCD block adds `rmdTaxable`, `trdForced` and `forcedA`). Find each site by its code, not its line number.
 
 ### A1 QCD
 - **Compute** after L453, once per person:
