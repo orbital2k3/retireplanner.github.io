@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import * as golden from './__golden/plans';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
-import { withHsa, medicalRow, withExpenses, medicalPlan, hsaOnlyPlan } from './__testutil__/hsaPlans';
+import { withHsa, medicalPlan, hsaOnlyPlan } from './__testutil__/hsaPlans';
 
 beforeAll(pinDate);
 afterAll(unpinDate);

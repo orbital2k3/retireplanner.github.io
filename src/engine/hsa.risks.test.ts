@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runProjection, type ProjectionRow } from './projection';
 import { assertProjectionInvariants } from './__invariants__/assertions';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
-import { hsaOnlyPlan, medicalPlan, medicalRow, withExpenses, withHsa } from './__testutil__/hsaPlans';
+import { hsaOnlyPlan, medicalRow, withExpenses, withHsa } from './__testutil__/hsaPlans';
 import * as golden from './__golden/plans';
 import type { Plan } from '../schemas/plan';
 
