@@ -177,3 +177,62 @@ describe('HSA qualified spending (H-4)', () => {
     expect(r.endHSA).toBeCloseTo(grown - r.hsaQualifiedWD, 4);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// H-5: last-resort draws
+// ---------------------------------------------------------------------------------------------
+/** Nothing but an HSA: the household has to live on it (plus Social Security later). */
+function hsaOnlyPlan(receipts = 0, medical = 10_000): Plan {
+  const p = base();
+  const zero = { taxable: 0, taxableBasis: 0, traditional: 0, roth: 0, annualContribution: 0 };
+  const hsa = withHsa({
+    ...p,
+    personA: { ...p.personA, retirementAge: 55, ssClaimAge: 70 },
+    personB: { ...p.personB!, retirementAge: 55, ssClaimAge: 70 },
+    portfolio: { personA: { ...p.portfolio.personA, ...zero }, personB: { ...p.portfolio.personB!, ...zero } },
+  }, { a: { hsa: 700_000, hsaReceipts: receipts } });
+  return withExpenses(hsa, [
+    { ...p.expenseStreams[0], startAge: 55, annualAmount: 30_000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+    medicalRow({ id: 'med', startAge: 55, annualAmount: medical, inflationPct: { mode: 'fixed', rate: 0.025 } }),
+  ]);
+}
+
+describe('HSA last resort (H-5)', () => {
+  const rows = runProjection(hsaOnlyPlan(25_000)).rows;
+  const at = (age: number) => rows.find((r) => r.ageA === age)!;
+
+  it('pays the unpaid medical bill first, then receipts, then non-qualified money', () => {
+    const r = rows[0];                       // A is 53; both retired by the plan (retire 55) -> first spending year is age 55
+    expect(r.hsaNonQualWD).toBe(0);
+    const y = at(55);
+    expect(y.hsaQualifiedWD).toBeCloseTo(y.medicalSpend, 4);          // medical paid tax-free from the HSA
+    expect(y.hsaReimbursed).toBeCloseTo(25_000, 4);                   // receipts drained in the first need
+    expect(y.hsaNonQualWD).toBeGreaterThan(0);                        // the 30k of general spending is non-qualified
+  });
+
+  it('charges the 20% penalty only while the owner is under 65', () => {
+    const y = at(60);
+    expect(y.hsaNonQualWD).toBeGreaterThan(0);
+    expect(y.hsaPenalty).toBeCloseTo(y.hsaNonQualWD * 0.2, 6);
+    const old = at(66);
+    expect(old.hsaNonQualWD).toBeGreaterThan(0);
+    expect(old.hsaPenalty).toBe(0);
+  });
+
+  it('taxes the non-qualified draw as ordinary income', () => {
+    const y = at(60);
+    expect(y.ordIncome).toBeGreaterThanOrEqual(y.hsaNonQualWD - 1e-6);
+    expect(y.fedTax).toBeGreaterThan(0);
+  });
+
+  it('covers spending without a shortfall while the HSA lasts and records the draw', () => {
+    for (const r of rows.filter((x) => x.ageA >= 55 && x.endHSA > 1)) expect(r.shortfall).toBeLessThan(1);
+    expect(at(55).endHSA).toBeLessThan(at(55).begHSA * 1.065 - at(55).hsaQualifiedWD);   // growth less every draw
+  });
+
+  it('pays the penalty out of the same pool, so the HSA drains faster than the spending alone', () => {
+    const y = at(58);
+    const spent = y.begHSA * 1.065 - y.endHSA;
+    expect(spent).toBeGreaterThan(y.netSpend + y.hsaPenalty - 1);
+  });
+});

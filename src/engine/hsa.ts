@@ -1,5 +1,5 @@
 import type { Portfolio } from '../schemas/plan';
-import { HSA_LIMIT_SELF_2026, HSA_LIMIT_FAMILY_2026, HSA_CATCHUP, HSA_CATCHUP_AGE } from './taxConstants';
+import { HSA_LIMIT_SELF_2026, HSA_LIMIT_FAMILY_2026, HSA_CATCHUP, HSA_CATCHUP_AGE, HSA_NONQUAL_PENALTY } from './taxConstants';
 
 /** Owned health savings account (IRC §223). Pure helpers; the wiring lives in runProjection.
  *  Limits and eligibility follow decisions D4 and D6 of hsa-tips-qcd-plan.md. */
@@ -83,4 +83,65 @@ export function splitHsaPayment(amount: number, availA: number, availB: number):
   const pay = Math.min(amount, total);
   const a = pay * (availA / total);
   return { a, b: pay - a };
+}
+
+export interface HsaDrawInput {
+  /** Cash still missing after every other account has been used. */
+  need: number;
+  balA: number;
+  balB: number;
+  /** Qualified spending (medical bills and IRMAA) the HSA has not paid yet this year. */
+  qualNeedLeft: number;
+  /** Receipts on file: past medical bills that can be reimbursed tax-free. */
+  receipts: number;
+  /** Whether each owner is under 65 (a non-qualified draw from them costs the 20% penalty). */
+  penalizedA: boolean;
+  penalizedB: boolean;
+}
+
+export interface HsaDraw {
+  /** Pays this year's unpaid qualified spending. Tax-free cash. */
+  qualified: number;
+  /** Reimburses receipts. Tax-free cash. */
+  reimbursed: number;
+  /** Taxable as ordinary income, with the penalty added for owners under 65. */
+  nonQual: number;
+  penalty: number;
+  fromA: number;
+  fromB: number;
+}
+
+/** Last-resort HSA draw, used only when taxable, pre-tax and Roth money is exhausted. In order:
+ *  1. unpaid qualified spending for the year, 2. receipts, 3. non-qualified money. Qualified and
+ *  reimbursed dollars come out of the two accounts in proportion to their balances; non-qualified
+ *  dollars come first from owners 65 and over (no penalty), then from younger owners. */
+export function hsaLastResortDraw(i: HsaDrawInput): HsaDraw {
+  let balA = Math.max(0, i.balA), balB = Math.max(0, i.balB);
+  let left = Math.max(0, i.need);
+  const take = (want: number): number => {
+    const amt = Math.min(left, want, balA + balB);
+    if (amt <= 0) return 0;
+    const sp = splitHsaPayment(amt, balA, balB);
+    balA -= sp.a; balB -= sp.b; left -= amt;
+    return amt;
+  };
+  const qualified = take(Math.max(0, i.qualNeedLeft));
+  const reimbursed = take(Math.max(0, i.receipts));
+
+  // Non-qualified: penalty-free owners first.
+  let nonQual = 0, penalized = 0;
+  const free = [[() => balA, (v: number) => { balA -= v; }, i.penalizedA] as const, [() => balB, (v: number) => { balB -= v; }, i.penalizedB] as const]
+    .sort((x, y) => Number(x[2]) - Number(y[2]));
+  for (const [get, debit, pen] of free) {
+    const amt = Math.min(left, get());
+    if (amt <= 0) continue;
+    debit(amt); left -= amt; nonQual += amt;
+    if (pen) penalized += amt;
+  }
+  return {
+    qualified, reimbursed, nonQual,
+    penalty: penalized * HSA_NONQUAL_PENALTY,
+    fromA: Math.max(0, i.balA) - balA,
+    fromB: Math.max(0, i.balB) - balB,
+  };
 }

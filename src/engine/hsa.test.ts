@@ -84,3 +84,47 @@ describe('hsaPayAge', () => {
     expect(hsaPayAge({ ...pf, hsaPolicy: { payMedicalFromAge: 70 } })).toBe(70);
   });
 });
+
+import { hsaLastResortDraw } from './hsa';
+
+describe('hsaLastResortDraw (H-5)', () => {
+  const base = { balA: 100_000, balB: 0, qualNeedLeft: 0, receipts: 0, penalizedA: true, penalizedB: true };
+  it('takes unpaid qualified spending first, then receipts, then non-qualified', () => {
+    const d = hsaLastResortDraw({ ...base, need: 50_000, qualNeedLeft: 10_000, receipts: 15_000 });
+    expect(d.qualified).toBe(10_000);
+    expect(d.reimbursed).toBe(15_000);
+    expect(d.nonQual).toBe(25_000);
+    expect(d.penalty).toBeCloseTo(5_000, 9);               // 20% of the 25k, owner under 65
+    expect(d.fromA).toBe(50_000);
+  });
+  it('stops when the need is met and never exceeds the balance', () => {
+    expect(hsaLastResortDraw({ ...base, need: 4_000, qualNeedLeft: 10_000 })).toMatchObject({ qualified: 4_000, reimbursed: 0, nonQual: 0, penalty: 0 });
+    const d = hsaLastResortDraw({ ...base, need: 500_000, receipts: 20_000 });
+    expect(d.fromA).toBe(100_000);
+    expect(d.reimbursed + d.nonQual).toBe(100_000);
+  });
+  it('charges no penalty to an owner 65 or older', () => {
+    const d = hsaLastResortDraw({ ...base, need: 30_000, penalizedA: false });
+    expect(d.nonQual).toBe(30_000);
+    expect(d.penalty).toBe(0);
+  });
+  it('takes non-qualified dollars from the penalty-free owner first', () => {
+    const d = hsaLastResortDraw({ need: 30_000, balA: 20_000, balB: 50_000, qualNeedLeft: 0, receipts: 0, penalizedA: true, penalizedB: false });
+    expect(d.fromB).toBe(30_000);
+    expect(d.fromA).toBe(0);
+    expect(d.penalty).toBe(0);
+    const e = hsaLastResortDraw({ need: 70_000, balA: 20_000, balB: 50_000, qualNeedLeft: 0, receipts: 0, penalizedA: true, penalizedB: false });
+    expect(e.fromB).toBe(50_000);
+    expect(e.fromA).toBe(20_000);
+    expect(e.penalty).toBeCloseTo(4_000, 9);
+  });
+  it('splits tax-free draws across both owners by balance', () => {
+    const d = hsaLastResortDraw({ need: 20_000, balA: 100_000, balB: 300_000, qualNeedLeft: 20_000, receipts: 0, penalizedA: true, penalizedB: true });
+    expect(d.fromA).toBeCloseTo(5_000, 9);
+    expect(d.fromB).toBeCloseTo(15_000, 9);
+  });
+  it('does nothing without a need or a balance', () => {
+    expect(hsaLastResortDraw({ ...base, need: 0 })).toMatchObject({ qualified: 0, reimbursed: 0, nonQual: 0, fromA: 0 });
+    expect(hsaLastResortDraw({ ...base, need: 100, balA: 0 })).toMatchObject({ nonQual: 0, fromA: 0 });
+  });
+});

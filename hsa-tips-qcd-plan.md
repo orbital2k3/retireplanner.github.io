@@ -31,7 +31,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 |---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
 | 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
-| 2 HSA | 2.4.0 / v37 | 20 | 4 | ◐ |
+| 2 HSA | 2.4.0 / v37 | 20 | 5 | ◐ |
 | 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
 | Housekeeping | none | 2 | 0 | ☐ |
@@ -69,8 +69,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | H-1 | HSA schema (+ `hsaReturn` registry) | ☑ | 2026-10-17 | 26ab6e6 | Optional fields only, no default, no migration: per-person hsa/hsaContribution/hsaCoverage/hsaContribInRetirement/hsaReceipts, portfolio.hsaPolicy ({ payMedicalFromAge }), assumptions.hsaReturn ('fact' registry entry). 3 schema tests; fast tier 701 pass, bit-exact unchanged. |
 | H-2 | `hsa.ts` limits, eligibility + tests | ☑ | 2026-10-17 | e884361 | hsa.ts: hsaLimit (indexed base + unindexed $1,000 catch-up at 55), hsaContribEligible (D6), allocateHsaContribution (shared family pool, A first, own catch-ups), hsaPayAge. Beyond spec: allocateHsaContribution and hsaPayAge. hsa.test.ts: 11 tests. Not wired yet. |
 | H-3 | HSA projection core | ☑ | 2026-10-17 | 4870bec | HSA core in runProjection: hsaA/hsaB state gated by hasHSA, working contributions external (never in contribA/B) via allocateHsaContribution, spousal merge, balance update at hsaReturn (follows returnOverrides), endTotal appends HSA, rows begHSA/endHSA/hsaContrib. Retired-person contributions deliberately not wired (H-8). 10 tests; testutil __testutil__/hsaPlans.ts. Bit-exact unchanged; fast tier 722 pass. |
-| H-4 | Qualified spending + receipts | ☑ | 2026-10-17 | PENDING-COMMIT | Qualified spending: availability per owner (balance after growth + contribution, from the policy age), pre-loop hsaQualEst in spendingGapEst, in-loop hsaQual=min(avail, medical+prevIRMAA) in gap and incomeAvailForTax, final value (medical first, then converged IRMAA) in cashIn and the balance debit (pro-rata split across owners via splitHsaPayment). Receipts: seeded from hsaReceipts, accrue medical not paid by the HSA, rows hsaQualifiedWD/hsaReceiptsBal. 6 new tests (16 in file). Bit-exact unchanged; fast tier green. |
-| H-5 | Last-resort draws + penalty | ☐ | | | |
+| H-4 | Qualified spending + receipts | ☑ | 2026-10-17 | 43900d5 | Qualified spending: availability per owner (balance after growth + contribution, from the policy age), pre-loop hsaQualEst in spendingGapEst, in-loop hsaQual=min(avail, medical+prevIRMAA) in gap and incomeAvailForTax, final value (medical first, then converged IRMAA) in cashIn and the balance debit (pro-rata split across owners via splitHsaPayment). Receipts: seeded from hsaReceipts, accrue medical not paid by the HSA, rows hsaQualifiedWD/hsaReceiptsBal. 6 new tests (16 in file). Bit-exact unchanged; fast tier green. |
+| H-5 | Last-resort draws + penalty | ☑ | 2026-10-17 | PENDING-COMMIT | hsaLastResortDraw (pure, in hsa.ts) used at the top-up loop's old break: unpaid qualified need, receipts, then non-qualified (taxed via PI/ordIncome/state nonExempt in resolveYearTaxes, 20% hsaPenalty for owners under 65, penalty-free owners first). residualOf extended (+HSA cash, - penalty). Rows hsaReimbursed/hsaNonQualWD/hsaPenalty; hsaQualifiedWD includes last-resort qualified. 6 unit + 5 projection tests; deeper depletion fixtures are H-9. One fast-tier run hit the known random QCD fuzz property (Q-6, fuzz.test.ts) once, 4 reruns green; not HSA related (generators have no HSA yet). |
 | H-6 | `taxAdjustedValue` extras + seed + breakdown | ☐ | | | |
 | H-7 | HSA invariants | ☐ | | | |
 | H-8 | Retirement contributions / ACA MAGI lever | ☐ | | | |
@@ -285,7 +285,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   - final value goes into `cashIn`
   - receipts accrue for medical paid elsewhere
   - rows get `hsaQualifiedWD`, `hsaReceiptsBal`
-- [ ] **H-5** Last resort in the top-up loop (L1001 break): `hsaDraw` takes, in order:
+- [x] **H-5** Last resort in the top-up loop (L1001 break): `hsaDraw` takes, in order:
   1. Unpaid qualified need.
   2. Receipts.
   3. Non-qualified money: counts in PI, ordIncome and the stateTax nonExempt arg, plus a 20% `hsaPenalty` when the owner is under 65.
@@ -464,6 +464,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | H-2 | hsa.ts limits, eligibility and household allocation with 11 unit tests. |
 | 2026-10-17 | H-3 | HSA balance/growth/contributions/merge wired into runProjection. |
 | 2026-10-17 | H-4 | HSA qualified spending and receipts wired in. |
+| 2026-10-17 | H-5 | HSA last-resort draws, penalty and tax treatment wired into the top-up loop. |
 
 ---
 
