@@ -30,7 +30,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Phase | Release / store | Branch | Activities | Done | Status |
 |---|---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | `chore/phase0` → PR | 6 | 6 | ☑ |
-| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 13 | ◐ |
+| 1 Foundation + QCD | 2.3.0 / v36 | `feat/qcd` | 21 | 14 | ◐ |
 | 2 HSA | 2.4.0 / v37 | `feat/hsa` | 20 | 0 | ☐ |
 | 3 TIPS core | 2.5.0 / v38 | `feat/tips` | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | `feat/tips-builder` | 4 | 0 | ☐ |
@@ -57,8 +57,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | Q-5 | QCD projection tests (R3–R6) | ☑ | 2026-10-17 | (same commit as Q-3) | qcd.projection.test.ts: 20 tests for R3-R6 (RMD/QCD income split, tax and IRMAA-lookback effects, CA vs IL, beyond-RMD window, conversion cap, oversized convAmt, per-person allocation, limits, DAF, deduction cases incl. survivor halving). Deviation: tradB path identity (R5) is checked via B's rows being identical while A's IRA is empty, since rows don't expose per-person balances. |
 | Q-6 | QCD fuzz property | ☑ | 2026-10-17 | 86cbea4 | Generator: optional charitable row (qcd:false sometimes) and start ages 54-75. Property: with conversions off, QCD on never raises lifetime fed+state+IRMAA+NIIT tax beyond 0.5%+$500, and disableQCD is a no-op without charitable rows. Held over 1,500 runs; ~16% of charity plans actually exercise a QCD. Conversions are excluded on purpose: a QCD frees bracket room that a conversion can use. |
 | Q-7 | Golden `planQ_qcdGiver` | ☑ | 2026-10-17 | 6523575 | planQ_qcdGiver (NY couple 74/72, 1.2M+0.8M pre-tax, 30k/yr giving): new CSV only, no A-M CSV changed. Guard test asserts QCDs and the Single-filer path really occur. |
-| Q-8 | QCD opt-tier tests | ☑ | 2026-10-17 | (hash backfilled in QU-1) | qcd.optimizer.test.ts (opt tier, ~40s): planG with 20k giving tagged charitable vs general: score at least as good, QCDs actually paid, invariants hold, lifetime conversions no higher; plus a determinism test. FINDING that differs from the plan: pre-70½ conversions are NOT lower with charity (planF 977k vs 915k, planG 10.1k vs 6.5k; the OBBBA deduction on pre-QCD cash gifts opens a little room). Total lifetime conversions ARE lower (planF 2.88M vs 2.99M, planG 19k vs 44k) and the score is +4% (planF) / +4.4% (planG). Test asserts the total, and QU-5's insight copy must say 'fewer conversions overall', not 'before 70½'. |
-| QU-1 | [M4-A] Projections QCD columns + RMD tooltip | ☐ | | | |
+| Q-8 | QCD opt-tier tests | ☑ | 2026-10-17 | 863a954 | qcd.optimizer.test.ts (opt tier, ~40s): planG with 20k giving tagged charitable vs general: score at least as good, QCDs actually paid, invariants hold, lifetime conversions no higher; plus a determinism test. FINDING that differs from the plan: pre-70½ conversions are NOT lower with charity (planF 977k vs 915k, planG 10.1k vs 6.5k; the OBBBA deduction on pre-QCD cash gifts opens a little room). Total lifetime conversions ARE lower (planF 2.88M vs 2.99M, planG 19k vs 44k) and the score is +4% (planF) / +4.4% (planG). Test asserts the total, and QU-5's insight copy must say 'fewer conversions overall', not 'before 70½'. |
+| QU-1 | [M4-A] Projections QCD columns + RMD tooltip | ☑ | 2026-10-17 | (hash backfilled in QU-2) | New QCD column group (QCD, Charity ded.) in gold; shown by default only when lifetime QCD > 0 until the user changes columns (then their choice sticks; Reset clears it). RMD tooltip uses the mockup copy (+ a beyond-RMD sentence). Std Deduct column now excludes the charity deduction so the columns sum. Verified in browser. Pre-existing React key warning in this table (fragment in rows.map) left alone. |
 | QU-2 | Split QCD out of cash RMD in charts and Sankey | ☐ | | | |
 | QU-3 | [M4-B] `qcdBenefit.ts` + Taxes card | ☐ | | | |
 | QU-4 | [M4-C] QCD warnings | ☐ | | | |
@@ -249,7 +249,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - [x] **Q-8** Opt tier (cheap fixture, `optimizeCached`): with charity, pre-70½ conversions are ≤ the no-charity run, and results are deterministic.
 
 ### 1C QCD UI and reporting (1 session)
-- [ ] **QU-1** [M4-A] `Projections.tsx` COLUMNS (~L61): add `QCD` and `Charity deduction`. The RMD tooltip shows "of which QCD $X". CSV export picks them up automatically.
+- [x] **QU-1** [M4-A] `Projections.tsx` COLUMNS (~L61): add `QCD` and `Charity deduction`. The RMD tooltip shows "of which QCD $X". CSV export picks them up automatically.
 - [ ] **QU-2** Split cash RMD from QCD in `CashFlowsBalanced`, `IncomeSourcesArea`, `RothVsRmd` and `sankeyFlows` (add a Traditional → Charity link).
 - [ ] **QU-3** [M4-B] New `src/engine/qcdBenefit.ts`:
   - `compareWithWithoutQCD`: same policy, `disableQCD`, memoized on the main thread like `comparison.ts`
@@ -452,6 +452,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | Q-6 | QCD fuzz property added; generator now covers charity and older ages. |
 | 2026-10-17 | Q-7 | Golden `planQ_qcdGiver` created. |
 | 2026-10-17 | Q-8 | QCD optimizer tests added; plan's pre-70½ conversion claim does not hold, total conversions claim does (see Q-8 Notes). Engine part of Phase 1 (Q-1..Q-8) complete. |
+| 2026-10-17 | QU-1 | Projections QCD columns + RMD tooltip built and browser-verified. Full opt tier passed after the engine work (10 files / 72 tests, 3:35 wall). |
 
 ---
 
