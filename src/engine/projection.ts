@@ -267,6 +267,9 @@ export interface ProjectionOptions {
   /** Pay charitable gifts as ordinary spending instead of QCDs. Counterfactual for the "tax saved by
    *  QCD" comparison; not a plan field. */
   disableQCD?: boolean;
+  /** Test hook: when given, the number of gross-up iterations used each year is appended to
+   *  `grossUpIters`. Never set in app code. */
+  stats?: { grossUpIters: number[] };
 }
 
 /** Map a stored MFJ bracket-fill ceiling to its Single equivalent by bracket index. */
@@ -822,7 +825,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
 
     // 16 iterations: 8 was enough for IL/TX plans but CA/NY (which tax retirement + conversions)
     // need more to fully converge fedTax + irmaa + stateAmt jointly.
+    let itersUsed = 0;
     for (let iter = 0; iter < 16; iter++) {
+      itersUsed = iter + 1;
       // Cash needed from withdrawals: spending + all taxes/surcharges, less RMD/SS/other/inherited-dist cash.
       const taxBurden = prevTax + stateAmt + prevIRMAA + prevNIIT + prevACA;
       // When payTaxFromBrokerage is on, only pull the tax shortfall that income surplus cannot
@@ -902,6 +907,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       prevStateAmt = stateAmt;
       prevACA = acaPremiumYear;
     }
+
+    opts?.stats?.grossUpIters.push(itersUsed);
 
     // Collect bracket-fill ceiling override events (once per age, retirement phase only).
     if (overrideFiredThisYear && !activePolicy && retired &&

@@ -31,7 +31,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 |---|---|---|---|---|
 | 0 Setup | none (tests + no-op refactor) | 6 | 6 | ☑ |
 | 1 Foundation + QCD | 2.3.0 / v36 | 21 | 21 | ☑ |
-| 2 HSA | 2.4.0 / v37 | 20 | 8 | ◐ |
+| 2 HSA | 2.4.0 / v37 | 20 | 9 | ◐ |
 | 3 TIPS core | 2.5.0 / v38 | 13 | 0 | ☐ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 0 | ☐ |
 | Housekeeping | none | 2 | 0 | ☐ |
@@ -73,8 +73,8 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | H-5 | Last-resort draws + penalty | ☑ | 2026-10-17 | b3f4a44 | hsaLastResortDraw (pure, in hsa.ts) used at the top-up loop's old break: unpaid qualified need, receipts, then non-qualified (taxed via PI/ordIncome/state nonExempt in resolveYearTaxes, 20% hsaPenalty for owners under 65, penalty-free owners first). residualOf extended (+HSA cash, - penalty). Rows hsaReimbursed/hsaNonQualWD/hsaPenalty; hsaQualifiedWD includes last-resort qualified. 6 unit + 5 projection tests; deeper depletion fixtures are H-9. One fast-tier run hit the known random QCD fuzz property (Q-6, fuzz.test.ts) once, 4 reruns green; not HSA related (generators have no HSA yet). |
 | H-6 | `taxAdjustedValue` extras + seed + breakdown | ☑ | 2026-10-17 | a4994b7 | taxAdjustedValue gains optional 7th arg extras {hsa, hsaReceipts, preTax, clean} appended after the core sum (absent = bit-identical, tested with Object.is). HSA above receipts haircut at taxAdjOrdRate, min(HSA, receipts) Roth-like. Updated: projection endTaxAdjusted (extras only when hasHSA), optimizer max-spending gross-up seed, TaxAdjustedBreakdown (HSA rows only when an HSA exists), decisionTrace ordRate sensitivity exposure, legacy insight (receipts-backed HSA counts as tax-free). 6 new taxAdjusted tests + 1 projection test. Finding: the HSA pays IRMAA at 65+ even with no medical rows (D4), so end-value tests need policy age 120 to isolate the haircut. Optimizer snapshot green. |
 | H-7 | HSA invariants | ☑ | 2026-10-17 | aa9078b | assertions.ts: HSA no-overdraw and mass balance (draws vs begHSA*(1+g)+contrib), negative fields, qualified <= medical+IRMAA, penalty <= 20% of non-qual and 0 when all owners 65+, receipts reimbursed <= on file (cross-row), endTotal identity includes endHSA, conservation adds begHSA growth, external contributions (hsaContrib - hsaContribRet) and the penalty as outflow, spending coverage counts HSA cash. Renamed the inherited-HSA local to inheritedHsaCash. Deviation: external contributions are ADDED to conservation inflows rather than skipping those years (stronger check, holds). Added row field hsaContribRet (0 until H-8). hsa.invariants.test.ts: 12 plan cases + a tamper test proving the checks fail; fuzz endTotal identity includes HSA. |
-| H-8 | Retirement contributions / ACA MAGI lever | ☑ | 2026-10-17 | PENDING-COMMIT | Retiree contributions (D6: retired, election set, age < 65): hsaContribRetA/B from the shared allocator; cash need in spendingGapEst, incomeAvailForTax (-), gap and residualOf; above-the-line deduction subtracted from every PI expression and wrapped (clamped at 0) around every ordinary-income expression (7 estimate sites, in-loop, resolveYearTaxes); NOT in stateTax args. Row hsaContribRet now real; invariants (cash coverage, retiree contribution range / pre-65). hsaWarnings.ts: hsaAcaFloorWarning(plan, rows) fires only when the contribution is what drops ACA income under 100% FPL; wiring it into the warnings strip is HU-4. hsa.retirement.test.ts: 11 tests incl. exact cash identity (Roth draw = contribution - tax/premium saved), ACA premium vs acaNetPremium, IL+CA state tax unchanged. Bit-exact unchanged; fast 770 pass. |
-| H-9 | HSA risk tests (R7, R9) | ☐ | | | |
+| H-8 | Retirement contributions / ACA MAGI lever | ☑ | 2026-10-17 | bd953f7 | Retiree contributions (D6: retired, election set, age < 65): hsaContribRetA/B from the shared allocator; cash need in spendingGapEst, incomeAvailForTax (-), gap and residualOf; above-the-line deduction subtracted from every PI expression and wrapped (clamped at 0) around every ordinary-income expression (7 estimate sites, in-loop, resolveYearTaxes); NOT in stateTax args. Row hsaContribRet now real; invariants (cash coverage, retiree contribution range / pre-65). hsaWarnings.ts: hsaAcaFloorWarning(plan, rows) fires only when the contribution is what drops ACA income under 100% FPL; wiring it into the warnings strip is HU-4. hsa.retirement.test.ts: 11 tests incl. exact cash identity (Roth draw = contribution - tax/premium saved), ACA premium vs acaNetPremium, IL+CA state tax unchanged. Bit-exact unchanged; fast 770 pass. |
+| H-9 | HSA risk tests (R7, R9) | ☑ | 2026-10-17 | PENDING-COMMIT | hsa.risks.test.ts (16 tests). R7: couple on a 240k pension in the IRMAA range spending from taxable; HSA pays medical+IRMAA: residual <$1 in every draw year, gross-up iterations <= baseline (HSA present, policy age 120) + 2 every year, IRMAA actually paid from the HSA in >=3 years. Added test-only ProjectionOptions.stats.grossUpIters (one counter assignment per iteration, no numeric effect). R9: depletion fixtures at 60 and 66: HSA touched only after every other account is empty, order qualified -> receipts -> non-qualified, penalty = 20% of non-qual under 65 and 0 from 65, ranOut age strictly later than without the HSA. Receipts: endTaxAdjusted rises by exactly 22% x min(HSA, receipts). Note: late survivor years legitimately sweep surplus (income > spending), so the residual check is limited to draw years. |
 | H-10 | HSA fuzz | ☐ | | | |
 | H-11 | Golden `planR_hsaEarlyRetiree` + MC test | ☐ | | | |
 | H-12 | HSA opt-tier tests | ☐ | | | |
@@ -314,7 +314,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
   Tests: the ACA premium falls by the expected subsidy change; IL vs CA state tax is unchanged; a warning fires when ACA MAGI drops below 100% FPL.
 
 ### 2C Tests and goldens (1 session)
-- [ ] **H-9** Tests for risks R7 and R9:
+- [x] **H-9** Tests for risks R7 and R9:
   - HSA paying IRMAA at 66+: residual under $1 and gross-up iterations ≤ baseline + 2
   - depletion fixtures at 60 and 66: draw order correct, penalty only under 65, `ranOut` delayed
   - receipts make that slice Roth-like in `endTaxAdjusted`
@@ -468,6 +468,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-17 | H-6 | taxAdjustedValue extras, HSA haircut in end value, optimizer seed, breakdown and explain readers. |
 | 2026-10-17 | H-7 | HSA invariants added and exercised on 12 plans, with a tamper test. |
 | 2026-10-17 | H-8 | Retiree HSA contributions with the ACA/MAGI deduction, cash need and warning helper. |
+| 2026-10-17 | H-9 | R7 convergence and R9 draw-order/penalty tests; stats hook for iteration counts. |
 
 ---
 
