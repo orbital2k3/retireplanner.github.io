@@ -35,6 +35,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | 3 TIPS core | 2.5.0 / v38 | 13 | 13 | ☑ |
 | 4 TIPS builder | 2.6.0 / no bump | 4 | 4 | ☑ |
 | Housekeeping | none | 2 | 2 | ☑ |
+| Part 3 open analysis | none | 9 | 0 | ◐ |
 
 ### Activities
 | ID | Activity | Status | Date | Commit | Notes |
@@ -105,6 +106,15 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 | TB-4 | Builder E2E + release gate | ☑ | 2026-10-20 | 2e71b74 | 2.6.0, no store bump (v38). e2e: 'TIPS builder' test (open the builder, fund from taxable, add N rungs: N rungs saved with coupon 1.9%, flag absent, table shows them, Projections 'Ladder Bal.' non-zero, Monte Carlo 200-trial run then Compare shows the with/without table, no page errors). planFreshness260.test.ts (6): v38-baselines.json captured on 9f4c518 in a worktree (samplePlan, planQ, planR, planS and a builder-shaped ladder, each with a current result): store load and export/import keep plan, key, status 'fresh' and endTotalReal/lifetimeFedTax bit-identical. package.json 2.6.0, releases.ts 2.6.0 entry. Gate: cold 'pnpm exec tsc -b --force' clean; 'pnpm lint' clean; test:fast 1086 pass / 1 skip (86 files); test:opt 81 pass (12 files, 296s wall, run alone); e2e 25/25; golden CSVs and src/engine/__regression__ vs 9f4c518: no diff at all (Phase 4 adds no golden plan); bit-exact and optimizer snapshots unchanged. Optimizer A/B, same session, interleaved 3 rounds 2.6.0 vs 2.5.0 (9f4c518): samplePlan max-end mean 32.6 vs 32.7s (-0.4%); planF max-end median 2.98 vs 2.96s; planP max-spend median 5.13 vs 4.65s (one 2.6.0 round hit a load burst: 5.00s planF / 9.90s planP in the same round). Phase 4 changes no engine source on the projection/optimizer path (git diff 9f4c518: only new tipsBuilder.ts and planWithoutLadder), so the differences are noise by construction. Browser: builder modal vs M5 (TB-2), MC comparison (TB-3); the three legacy exports imported through the real Import input: status and numbers equal the v35 baselines exactly (fireopt-2026-05-29 stale $4.61M, fireopt-optimized stale $7.43M, retirement-optimizer-2026-07-31 none $2.97M). Note: two of the three files import as 'stale' and so show the stale banner, exactly as on v35 (their saved results predate later key changes); 'no stale banner' is not achievable for them and is not a regression. Not pushed. |
 | HK-1 | Update CLAUDE.md | ☑ | 2026-10-20 | | CLAUDE.md updated in its terse style: engine modules qcd/qcdBenefit, hsa/hsaBenefit/hsaWarnings, tipsLadder, tipsValidation/tipsCsv/tipsWarnings/tipsBuilder; __golden (A-S, which have CSVs, never regenerate) and __regression__ (bit-exact + optimizer snapshot); store v38 with the V34-V38 and planFreshness260 tests and baseline capture; the optional-fields / no-op-migration / hoisted-flag rule; hash routes (/inputs default, /dashboard, /projections, /taxes, /montecarlo, /help, legacy redirects); Strategy controls now live in the Optimization Goal section of /inputs; 'pnpm exec tsc -b --force'. FINDING: CLAUDE.md is in .gitignore (line 37) although its header says it is checked in, so the update is local to this checkout and is NOT in this commit (only the tracker is). The user should decide whether to un-ignore it. |
 | HK-2 | Mark analysis doc superseded | ☑ | 2026-10-20 | | Status line of hsa-tips-qcd-analysis.md now says it is superseded by this plan (built as 2.3.0-2.6.0); body left as the historical record. |
+| P3-1 | Stranded ladder (held to maturity) analysis | ☑ | 2026-10-20 |  | Evidence (src/engine/__study__/tipsOpenItems.study.test.ts item 1; run: STUDY_OUT=file HEAVY=1 pnpm vitest run --project opt <file>). Golden plans (sample + A-R with a plausible 8-year bridge from the largest account, 40% of the first retired year's spending, at most half the account; planS as is; 20 plans): 0 stranded years, 0 rmdUnmet years. L/M/P bridge variants end with more lifetime shortfall than the same money left liquid (+44k/+36k/+28k real) but only after the ladder has matured: return drag (CPI+1.9% vs 6.5-8% account returns), not stranding. Fuzz arbTipsPlan, 3,000 samples (seed 20261020, 2,999 with a live ladder): 690 (23%) have a shortfall year while bonds are held and in 531 the ladder adds shortfall vs liquid, but the generator is built to stress (25% cash-poor plans, rungs up to the account size). Plausible subset (rungs fit their accounts, ladder at most 50% of the liquid total, plan funded without the ladder): 1,048 plans, 5 stranded (0.5%), all 5 with extra shortfall (2.94M real in total, about 590k each). Decision (conservative): keep hold-to-maturity and the tips-stranded warning, no engine change; not modelling early sale understates liquidity, which is the safe direction. Recommendation: a sell-early fallback (sell rungs at indexed principal only to avoid a shortfall, optionally with a price haircut) goes to the Phase 5 backlog; the warning plus the builder's 'no more than the account has left' check cover plausible plans. |
+| P3-2 | Working-year phantom income analysis | ☐ | | | |
+| P3-3 | Year-end index convention analysis | ☐ | | | |
+| P3-4 | faceValue default (D12) analysis + copy | ☐ | | | |
+| P3-5 | Pre-tax rung with QCD and conversions: tests | ☐ | | | |
+| P3-6 | Optimizer with a fixed ladder analysis | ☐ | | | |
+| P3-7 | Account-value readers audit + fixes | ☐ | | | |
+| P3-8 | Mockup side-by-side pass + legacy imports | ☐ | | | |
+| P3-9 | BucketCompositionStacked pre-tax color | ☐ | | | |
 
 ## Decisions
 **Confirmed by the user:**
@@ -407,6 +417,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 - Engine Medicare base premiums
 - HSA as an optimizer dimension
 - TIPS sizing optimizer
+- TIPS sell-early fallback (sell rungs at indexed principal to avoid a shortfall; P3-1)
 - In-kind RMD from TIPS rungs
 - I-bonds, CDs and nominal ladders
 - Spending scaling of only 'general' expenses
@@ -498,6 +509,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-20 | TB-3 | With vs without ladder Monte Carlo comparison (on demand, carve-out ladders only). |
 | 2026-10-20 | TB-4 | v2.6.0 release gate passed (no store bump); Phase 4 (TIPS builder) complete on local main, not pushed. |
 | 2026-10-20 | HK-1, HK-2 | CLAUDE.md updated (local only: it is gitignored); analysis doc marked superseded. |
+| 2026-10-20 | P3-1 | Part 3 started. Stranded-ladder study (goldens + fuzz); warning kept, sell-early fallback added to the Phase 5 backlog. |
 
 ---
 
