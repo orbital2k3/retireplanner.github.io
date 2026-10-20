@@ -1,5 +1,7 @@
 import type { Insight, InsightContext } from '../index';
 import { householdTotals } from '../../../schemas/plan';
+import { ladderInBalances } from '../../tipsValidation';
+import { resolveTipsLadder } from '../../tipsLadder';
 import { fmtUSD } from '../../../lib/format';
 
 /** Surfaces lifetime tax burden as % of starting net worth. Above 25% → conversion
@@ -7,7 +9,10 @@ import { fmtUSD } from '../../../lib/format';
 export function taxRule(ctx: InsightContext): Insight | null {
   const { plan, proj } = ctx;
   const totals = householdTotals(plan.portfolio);
-  const startBal = totals.taxable + totals.traditional + totals.roth;
+  // A TIPS ladder entered on top of the balances is extra starting wealth (a carved-out one is already inside them).
+  const onTop = !ladderInBalances(plan.portfolio)
+    ? (resolveTipsLadder(plan.portfolio, new Date().getFullYear())?.rungs.reduce((s, r) => s + r.adjustedPrincipal, 0) ?? 0) : 0;
+  const startBal = totals.taxable + totals.traditional + totals.roth + onTop;
   if (startBal <= 0) return null;
 
   // Lifetime federal tax in today's $.

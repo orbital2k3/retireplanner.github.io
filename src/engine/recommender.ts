@@ -45,7 +45,8 @@ export const REC_GOALS: Record<RecGoal, RecGoalSpec> = {
     direction: 'max',
     score: (r) => {
       const last = r.rows[r.rows.length - 1];
-      return last ? last.endRoth / last.inflationFactor : 0;
+      // A Roth TIPS rung still held at the horizon is Roth money too.
+      return last ? (last.endRoth + last.endTipsRoth) / last.inflationFactor : 0;
     },
     format: fmtK,
   },
