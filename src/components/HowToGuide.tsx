@@ -709,6 +709,13 @@ export function GuideContent() {
         <strong>Paste from CSV</strong> adds many rungs at once: one per line with maturity, adjusted principal, coupon,
         account, owner and par (the last two optional). You can paste straight from a spreadsheet.
       </P>
+      <P>
+        <strong>Build a ladder…</strong> sizes the rungs for you: enter an income per year in today's dollars, the ages
+        it should cover, the real yield and the account to buy from. It shows each rung, the cost today and the account's
+        balance before and after, then adds the rungs to any you already have. Each rung is bought at par with a coupon
+        equal to the real yield. The money stays in your balance above and the plan sets the bonds apart from it, so the
+        builder can't buy from a balance while the box below is unticked, or spend more than the account has left.
+      </P>
       <Tip>
         <strong>My balances already include these bonds.</strong> This box is ticked by default, because a brokerage
         statement shows one total for the account. The tool then sets the bonds apart from your balance so nothing is

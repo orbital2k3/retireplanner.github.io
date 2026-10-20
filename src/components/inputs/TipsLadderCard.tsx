@@ -6,6 +6,7 @@ import { NumberInput } from './NumberInput';
 import { fmtFull } from '../../lib/format';
 import { parseTipsCsv, type TipsCsvError } from '../../engine/tipsCsv';
 import { ladderInBalances, tipsLadderIssues } from '../../engine/tipsValidation';
+import { TipsBuilderModal } from './TipsBuilderModal';
 
 /** TIPS ladder card on the Portfolio panel (mockup M3). Until a rung exists it is a single "+ Add TIPS
  *  ladder" link. Every edit writes through `onChange`; an emptied ladder is stored as absent, and the
@@ -23,11 +24,14 @@ const newRung = (year: number): TipsRung => ({
   maturityYear: year, adjustedPrincipal: 10_000, couponRate: 0.01, account: 'taxable', whose: 'Household',
 });
 
-export function TipsLadderCard({ portfolio, nameA, nameB, startYear, onChange }: {
+export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retireAgeA, onChange }: {
   portfolio: Portfolio;
   nameA: string;
   nameB?: string;
   startYear: number;
+  /** Person A's age in the start year. The builder is offered only when it is known. */
+  ageA?: number;
+  retireAgeA?: number;
   onChange: (ladder: TipsLadder | undefined) => void;
 }) {
   const ladder = portfolio.tipsLadder;
@@ -37,9 +41,23 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, onChange }:
   const [helpOpen, setHelpOpen] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [csvErrors, setCsvErrors] = useState<TipsCsvError[]>([]);
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   const write = (next: TipsRung[], inc = include) => onChange(normalize(next, inc));
   const update = (id: string, patch: Partial<TipsRung>) => write(rungs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  // Builder rungs are appended; the existing rungs and the carve-out flag are kept as they are.
+  const builder = ageA !== undefined && builderOpen && (
+    <TipsBuilderModal
+      portfolio={portfolio} nameA={nameA} nameB={nameB} ageA={ageA} startYear={startYear}
+      defaultFromAge={retireAgeA ?? ageA}
+      onAdd={(added) => write([...rungs, ...added])}
+      onClose={() => setBuilderOpen(false)}
+    />
+  );
+  const builderBtn = (style: React.CSSProperties) => ageA !== undefined && (
+    <button type="button" style={style} onClick={() => setBuilderOpen(true)}>Build a ladder…</button>
+  );
 
   const helpLink = (
     <button
@@ -62,6 +80,8 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, onChange }:
         >
           Paste from CSV
         </button>
+        {builderBtn({ background: 'transparent', border: 'none', padding: 0, marginLeft: 14, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 })}
+        {builder}
         <div className="helper-text">Treasury inflation-protected bonds you hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.</div>
         {helpLink}
         {helpOpen && <LearnMoreModal topic={TIPS_HELP} onClose={() => setHelpOpen(false)} />}
@@ -96,10 +116,14 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, onChange }:
         <div className="subsection-label" style={{ margin: 0 }}>
           TIPS ladder <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-muted)' }}>· {rungs.length} {rungs.length === 1 ? 'rung' : 'rungs'} · {fmtFull(total)}</span>
         </div>
-        <button type="button" style={smallBtn} onClick={() => setCsvOpen((o) => !o)}>
-          Paste from CSV
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button type="button" style={smallBtn} onClick={() => setCsvOpen((o) => !o)}>
+            Paste from CSV
+          </button>
+          {builderBtn({ ...smallBtn, borderColor: 'var(--gold)', color: '#6b5418' })}
+        </div>
       </div>
+      {builder}
       <div className="helper-text" style={{ marginBottom: 8 }}>
         Treasury inflation-protected bonds you hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.
       </div>

@@ -930,7 +930,11 @@ export default function InputsPage() {
               )}
             </div>
             {hasHsa && <HsaPolicyRow value={pf.hsaPolicy?.payMedicalFromAge} onChange={(age) => setHsaPolicy(age === undefined ? undefined : { payMedicalFromAge: age })} />}
-            <TipsLadderCard portfolio={pf} nameA={nameA} nameB={pf.personB ? nameB : undefined} startYear={new Date().getFullYear()} onChange={setTipsLadder} />
+            <TipsLadderCard
+              portfolio={pf} nameA={nameA} nameB={pf.personB ? nameB : undefined} startYear={new Date().getFullYear()}
+              ageA={isValidDob(A.dob) ? new Date().getFullYear() - parseInt(A.dob.slice(0, 4), 10) : undefined}
+              retireAgeA={A.retirementAge} onChange={setTipsLadder}
+            />
           </div>
         </div>
 
