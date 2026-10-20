@@ -1,6 +1,6 @@
 # HSA, TIPS Ladder, and QCD: Gap Analysis and Build Options
 
-Status: analysis only (2026-10-05). No code written. Open questions in §6 must be answered before planning.
+Status: **superseded** by [`hsa-tips-qcd-plan.md`](hsa-tips-qcd-plan.md) (the build plan and tracker; shipped as 2.3.0 QCD, 2.4.0 HSA, 2.5.0 TIPS ladder, 2.6.0 TIPS builder). Kept as the original analysis (2026-10-05); where they differ, the plan and the code are authoritative.
 Engine baseline: `PLAN_STORE_VERSION = 32`, three household buckets (taxable / traditional per person / roth),
 standard deduction only (no itemized), one return series per year applied to all buckets (MC `returnOverrides`).
 
