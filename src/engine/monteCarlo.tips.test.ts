@@ -4,6 +4,7 @@ import { planB_largeTradSingle } from './__golden/plans';
 import type { Plan } from '../schemas/plan';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { rung, thisYear, withExpenses, withTips } from './__testutil__/tipsPlans';
+import { planWithoutLadder } from './tipsLadder';
 
 beforeAll(pinDate);
 afterAll(unpinDate);
@@ -51,5 +52,15 @@ describe('Monte Carlo and the TIPS ladder', () => {
   it('works on historical bootstrap paths too (they carry real CPI, which the ladder follows)', () => {
     const r = runMonteCarlo(ladderPlan(), { trials: 200, model: 'historical', seed: 5 });
     expect(r.successRate).toBeGreaterThan(0.99);
+  });
+
+  it('TB-3: planWithoutLadder gives back the same money as plain balances (carve-out only)', () => {
+    expect(planWithoutLadder(ladderPlan(), Y)).toEqual(roth700());
+    const without = runMonteCarlo(planWithoutLadder(ladderPlan(), Y)!, opts);
+    expect(without.successRate).toBe(runMonteCarlo(roth700(), opts).successRate);
+    // On-top ladders and plans without a live ladder have no same-money counterpart.
+    const onTop = withTips(roth700(), ladderPlan().portfolio.tipsLadder!.rungs, false);
+    expect(planWithoutLadder(onTop, Y)).toBeNull();
+    expect(planWithoutLadder(roth700(), Y)).toBeNull();
   });
 });

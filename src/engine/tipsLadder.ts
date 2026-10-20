@@ -197,3 +197,14 @@ export function tipsLadderYear(
   }
   return y;
 }
+
+/** The same plan with the ladder's money left in its accounts, for a "with vs without the ladder"
+ *  comparison. Only defined when the balances include the ladder (the carve-out case): removing the
+ *  ladder then returns exactly that money to the accounts. With an on-top ladder there is no
+ *  same-money counterpart, so this returns null (as it does when there is no live ladder). */
+export function planWithoutLadder<P extends { portfolio: Portfolio }>(plan: P, startYear: number): P | null {
+  if (resolveTipsLadder(plan.portfolio, startYear) === null || !ladderInBalances(plan.portfolio)) return null;
+  const { tipsLadder: _drop, ...portfolio } = plan.portfolio;
+  void _drop;
+  return { ...plan, portfolio };
+}
