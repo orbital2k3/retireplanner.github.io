@@ -24,7 +24,7 @@ const newRung = (year: number): TipsRung => ({
   maturityYear: year, adjustedPrincipal: 10_000, couponRate: 0.01, account: 'taxable', whose: 'Household',
 });
 
-export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retireAgeA, onChange }: {
+export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retireAgeA, ssClaimAgeA, onChange }: {
   portfolio: Portfolio;
   nameA: string;
   nameB?: string;
@@ -32,6 +32,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
   /** Person A's age in the start year. The builder is offered only when it is known. */
   ageA?: number;
   retireAgeA?: number;
+  ssClaimAgeA?: number;
   onChange: (ladder: TipsLadder | undefined) => void;
 }) {
   const ladder = portfolio.tipsLadder;
@@ -50,7 +51,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
   const builder = ageA !== undefined && builderOpen && (
     <TipsBuilderModal
       portfolio={portfolio} nameA={nameA} nameB={nameB} ageA={ageA} startYear={startYear}
-      defaultFromAge={retireAgeA ?? ageA}
+      defaultFromAge={retireAgeA ?? ageA} ssClaimAgeA={ssClaimAgeA}
       onAdd={(added) => write([...rungs, ...added])}
       onClose={() => setBuilderOpen(false)}
     />

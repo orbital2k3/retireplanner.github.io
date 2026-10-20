@@ -933,7 +933,7 @@ export default function InputsPage() {
             <TipsLadderCard
               portfolio={pf} nameA={nameA} nameB={pf.personB ? nameB : undefined} startYear={new Date().getFullYear()}
               ageA={isValidDob(A.dob) ? new Date().getFullYear() - parseInt(A.dob.slice(0, 4), 10) : undefined}
-              retireAgeA={A.retirementAge} onChange={setTipsLadder}
+              retireAgeA={A.retirementAge} ssClaimAgeA={A.ssClaimAge} onChange={setTipsLadder}
             />
           </div>
         </div>

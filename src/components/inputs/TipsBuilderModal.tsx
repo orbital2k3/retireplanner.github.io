@@ -19,7 +19,7 @@ const hint: React.CSSProperties = { fontSize: 11, color: 'var(--text-muted)', ma
 const tile: React.CSSProperties = { background: 'var(--cream)', borderRadius: 6, padding: '6px 8px' };
 const grid4: React.CSSProperties = { display: 'grid', gridTemplateColumns: '.6fr .6fr 1fr 1fr', gap: 6, fontSize: 12 };
 
-export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, defaultFromAge, onAdd, onClose }: {
+export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, defaultFromAge, ssClaimAgeA, onAdd, onClose }: {
   portfolio: Portfolio;
   nameA: string;
   nameB?: string;
@@ -27,6 +27,8 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
   ageA: number;
   startYear: number;
   defaultFromAge: number;
+  /** Person A's Social Security claim age, for the bridge hint. */
+  ssClaimAgeA?: number;
   onAdd: (rungs: TipsRung[]) => void;
   onClose: () => void;
 }) {
@@ -87,6 +89,7 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
             <div>
               <div style={label}>Through age</div>
               <NumberInput value={throughAge} digits={0} min={ageA} max={120} style={{ fontSize: 13 }} onCommit={(v) => setThroughAge(Math.round(v))} />
+              {ssClaimAgeA !== undefined && ssClaimAgeA > fromAge && <div style={hint}>Bridge to Social Security at {ssClaimAgeA}</div>}
             </div>
             <div>
               <div style={label}>Real yield</div>
