@@ -412,6 +412,49 @@ test('Inputs: adding a TIPS ladder is saved, and removing the last rung leaves n
   expect((await storedPlan(page)).portfolio.tipsLadder).toBeUndefined();
 });
 
+test('TIPS builder: build rungs, see them in the ladder table, a Projections column and the Monte Carlo comparison', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await seedPlan(page, saved(planA_simple()));
+  await page.goto('/#/inputs');
+  await page.getByRole('button', { name: 'Build a ladder…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Build a TIPS ladder' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Buy with money from').selectOption('taxable');
+  const add = dialog.getByRole('button', { name: /^Add \d+ rungs? to ladder$/ });
+  const n = Number((await add.innerText()).match(/\d+/)![0]);
+  expect(n).toBeGreaterThan(0);
+  await add.click();
+  await expect(dialog).toHaveCount(0);
+
+  // Saved as appended rungs; the carve-out flag is left absent.
+  const ladder = (await storedPlan(page)).portfolio.tipsLadder!;
+  expect(ladder.rungs).toHaveLength(n);
+  expect(ladder.rungs.every((r) => r.account === 'taxable' && r.couponRate === 0.019)).toBe(true);
+  expect(ladder.balancesIncludeLadder).toBeUndefined();
+  await expect(page.getByText(new RegExp(`${n} rungs`))).toBeVisible();
+  await expect(page.locator('.tips-row')).toHaveCount(n + 1); // header + rungs
+
+  // Projections: the ladder balance column shows the rungs.
+  await page.goto('/#/projections');
+  await page.getByRole('button', { name: /Show \/ Hide Columns/ }).click();
+  await page.locator('label', { hasText: /^TIPS$/ }).locator('input[type=checkbox]').check();
+  const header = page.locator('table.data-table thead th', { hasText: /^Ladder Bal\.$/ });
+  await expect(header).toBeVisible();
+  const col = await header.evaluate((th) => Array.from(th.parentElement!.children).indexOf(th));
+  await expect(page.locator('table.data-table tbody tr').first().locator('td').nth(col)).toHaveText(/\$[1-9]/);
+
+  // Monte Carlo: with vs without the ladder, on a short run.
+  await page.goto('/#/montecarlo');
+  await page.locator('input[type=number][step="50"]').fill('200');
+  await page.getByRole('button', { name: /Run Simulation/ }).click();
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  const table = page.getByRole('table', { name: 'With vs without the TIPS ladder' });
+  await expect(table).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByText('Money left in accounts')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('a plan saved by v37 with a current result opens with no stale banner and the same numbers', async ({ page }) => {
   const plan = optimizedPlanA();
   const before = runProjection(enginePlan(plan));

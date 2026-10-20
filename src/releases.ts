@@ -16,6 +16,27 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.6.0',
+    date: '2026-10-20',
+    summary: 'Build a TIPS ladder from an income target, and see what it does to your Monte Carlo odds.',
+    changes: [
+      {
+        kind: 'feature',
+        title: 'TIPS ladder builder',
+        text: 'Build a ladder\u2026 on the TIPS card sizes the rungs for you. Enter an income per year in today\u2019s dollars, the ages it should cover, the real yield and the account to buy from. It shows each rung, the cost today and the account\u2019s balance before and after, then adds the rungs to any you already have.',
+        bullets: [
+          'Each rung is bought at par with a coupon equal to the real yield, and each year\u2019s rungs pay the target income in that year\u2019s dollars.',
+          'The money stays in your balance and the plan sets the bonds apart from it. The builder won\u2019t spend more than the account has left.',
+        ],
+      },
+      {
+        kind: 'feature',
+        title: 'With vs without the ladder',
+        text: 'After a Monte Carlo run, Compare shows the chance of success and the 10th-percentile end balance with your ladder and with the same money left in its accounts.',
+      },
+    ],
+  },
+  {
     version: '2.5.0',
     date: '2026-10-18',
     summary: 'Add a TIPS ladder. Each rung pays a fixed real amount in its year whatever the market does, with the tax on inflation increases handled for you.',
