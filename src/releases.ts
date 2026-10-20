@@ -16,68 +16,9 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
-    version: '2.6.0',
-    date: '2026-10-20',
-    summary: 'Build a TIPS ladder from an income target, and see what it does to your Monte Carlo odds.',
-    changes: [
-      {
-        kind: 'feature',
-        title: 'TIPS ladder builder',
-        text: 'Build a ladder\u2026 on the TIPS card sizes the rungs for you. Enter an income per year in today\u2019s dollars, the ages it should cover, the real yield and the account to buy from. It shows each rung, the cost today and the account\u2019s balance before and after, then adds the rungs to any you already have.',
-        bullets: [
-          'Each rung is bought at par with a coupon equal to the real yield, and each year\u2019s rungs pay the target income in that year\u2019s dollars.',
-          'The money stays in your balance and the plan sets the bonds apart from it. The builder won\u2019t spend more than the account has left.',
-        ],
-      },
-      {
-        kind: 'feature',
-        title: 'With vs without the ladder',
-        text: 'After a Monte Carlo run, Compare shows the chance of success and the 10th-percentile end balance with your ladder and with the same money left in its accounts.',
-      },
-    ],
-  },
-  {
-    version: '2.5.0',
-    date: '2026-10-18',
-    summary: 'Add a TIPS ladder. Each rung pays a fixed real amount in its year whatever the market does, with the tax on inflation increases handled for you.',
-    changes: [
-      {
-        kind: 'feature',
-        title: 'TIPS ladder',
-        text: 'Enter your inflation-protected bonds as rungs in Portfolio (or paste them from a spreadsheet): maturity year, adjusted principal, coupon, par, and the account that holds them. The bonds follow inflation rather than market returns, so the years they cover are the same in every market scenario. Taxable rungs owe federal tax each year on the inflation increase, even though you get no cash until maturity, and that income is exempt from state tax. Rungs in an IRA count toward your required withdrawals, and rungs in a Roth are never taxed.',
-        bullets: [
-          'Your balances are assumed to already include the bonds, so the tool sets them apart to avoid counting them twice. Untick the box if they are on top.',
-          'Bonds are held to maturity and never sold early. At maturity a bond pays at least its par value.',
-          'The ladder shows as a hatched band inside its account\u2019s color on the charts, and the Projections table has a TIPS column group (balance, coupon, inflation accrual, maturity, taxable income, unmet RMD).',
-          'Monte Carlo runs and historical stress tests carry the ladder, so its value shows there. The Monte Carlo page suggests raising Equity % for the rest of your portfolio.',
-          'New plan notes cover rungs larger than their account, taxable rungs and phantom income, an IRA that cannot pay its required withdrawal because it is held in bonds, and running short while bonds are still held.',
-        ],
-      },
-    ],
-  },
-  {
-    version: '2.4.0',
-    date: '2026-10-18',
-    summary: 'Add your health savings account. It pays medical bills and Medicare surcharges tax-free, keeps receipts, and can lower your ACA income when you retire early.',
-    changes: [
-      {
-        kind: 'feature',
-        title: 'Health savings account (HSA)',
-        text: 'Enter an HSA for each person in Portfolio: balance, yearly contribution, self or family coverage, and unreimbursed receipts. Mark expense rows as Medical and the HSA pays them tax-free, plus any Medicare income surcharge, from the age you choose (65 by default). Bills paid from other accounts before then are kept as receipts you can claim later. If your other accounts run out, the HSA is the last resort, with tax and a 20% penalty before 65 on anything that isn\u2019t medical.',
-        bullets: [
-          'Contributions follow the 2026 limits, with the $1,000 catch-up from 55, and stop at 65 (or at your Social Security claim age if later).',
-          'Retiring before 65? Tick "Keep contributing after I retire" to model an HSA-eligible ACA plan. The contribution is deducted from your income, which lowers ACA income and can raise your subsidy.',
-          'The HSA counts in your balances, charts, Monte Carlo runs and the after-tax ending value (the part above your receipts is taxed like pre-tax money).',
-          'The Projections table has an HSA column group, the Sankey shows HSA money going to medical bills, and the Taxes page shows what the HSA does for you.',
-          'New plan notes cover contributions over the limit, contributions after Medicare, spouses sharing one family limit, early non-medical draws, and California\u2019s different HSA rules.',
-        ],
-      },
-    ],
-  },
-  {
     version: '2.3.0',
-    date: '2026-10-17',
-    summary: 'Give to charity straight from your IRA. Tag spending as charitable and the plan pays it as qualified charitable distributions, with the tax effect shown.',
+    date: '2026-10-20',
+    summary: 'Give to charity straight from your IRA, add your health savings account, and hold a TIPS ladder that pays a fixed real income, with a builder that sizes it for you.',
     changes: [
       {
         kind: 'feature',
@@ -96,8 +37,42 @@ export const RELEASES: Release[] = [
         text: 'From 2026, cash gifts to public charities that a QCD didn\u2019t cover get a deduction even if you take the standard deduction: up to $1,000, or $2,000 for a couple. It drops to $1,000 when only one of you is left.',
       },
       {
-        kind: 'cosmetic',
-        text: 'The Medical category is a tag for now and does not change your results.',
+        kind: 'feature',
+        title: 'Health savings account (HSA)',
+        text: 'Enter an HSA for each person in Portfolio: balance, yearly contribution, self or family coverage, and unreimbursed receipts. Mark expense rows as Medical and the HSA pays them tax-free, plus any Medicare income surcharge, from the age you choose (65 by default). Bills paid from other accounts before then are kept as receipts you can claim later. If your other accounts run out, the HSA is the last resort, with tax and a 20% penalty before 65 on anything that isn\u2019t medical.',
+        bullets: [
+          'Contributions follow the 2026 limits, with the $1,000 catch-up from 55, and stop at 65 (or at your Social Security claim age if later).',
+          'Retiring before 65? Tick "Keep contributing after I retire" to model an HSA-eligible ACA plan. The contribution is deducted from your income, which lowers ACA income and can raise your subsidy.',
+          'The HSA counts in your balances, charts, Monte Carlo runs and the after-tax ending value (the part above your receipts is taxed like pre-tax money).',
+          'The Projections table has an HSA column group, the Sankey shows HSA money going to medical bills, and the Taxes page shows what the HSA does for you.',
+          'New plan notes cover contributions over the limit, contributions after Medicare, spouses sharing one family limit, early non-medical draws, and California\u2019s different HSA rules.',
+        ],
+      },
+      {
+        kind: 'feature',
+        title: 'TIPS ladder',
+        text: 'Enter your inflation-protected bonds as rungs in Portfolio (or paste them from a spreadsheet): maturity year, adjusted principal, coupon, par, and the account that holds them. The bonds follow inflation rather than market returns, so the years they cover are the same in every market scenario. Taxable rungs owe federal tax each year on the inflation increase, even though you get no cash until maturity, and that income is exempt from state tax. Rungs in an IRA count toward your required withdrawals, and rungs in a Roth are never taxed.',
+        bullets: [
+          'Your balances are assumed to already include the bonds, so the tool sets them apart to avoid counting them twice. Untick the box if they are on top.',
+          'Bonds are held to maturity and never sold early. At maturity a bond pays at least its par value.',
+          'The ladder shows as a hatched band inside its account\u2019s color on the charts, and the Projections table has a TIPS column group (balance, coupon, inflation accrual, maturity, taxable income, unmet RMD).',
+          'Monte Carlo runs and historical stress tests carry the ladder, so its value shows there. The Monte Carlo page suggests raising Equity % for the rest of your portfolio.',
+          'New plan notes cover rungs larger than their account, taxable rungs and phantom income, an IRA that cannot pay its required withdrawal because it is held in bonds, and running short while bonds are still held.',
+        ],
+      },
+      {
+        kind: 'feature',
+        title: 'TIPS ladder builder',
+        text: 'Build a ladder\u2026 on the TIPS card sizes the rungs for you. Enter an income per year in today\u2019s dollars, the ages it should cover, the real yield and the account to buy from. It shows each rung, the cost today and the account\u2019s balance before and after, then adds the rungs to any you already have.',
+        bullets: [
+          'Each rung is bought at par with a coupon equal to the real yield, and each year\u2019s rungs pay the target income in that year\u2019s dollars.',
+          'The money stays in your balance and the plan sets the bonds apart from it. The builder won\u2019t spend more than the account has left.',
+        ],
+      },
+      {
+        kind: 'feature',
+        title: 'With vs without the ladder',
+        text: 'After a Monte Carlo run, Compare shows the chance of success and the 10th-percentile end balance with your ladder and with the same money left in its accounts.',
       },
     ],
   },

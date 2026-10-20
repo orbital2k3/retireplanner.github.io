@@ -10,8 +10,8 @@ import { pinDate, unpinDate } from '../engine/__regression__/snapshotUtil';
 import { PLAN_STORE_VERSION } from './planStoreVersion';
 import { usePlanStore } from './usePlanStore';
 
-/** 2.6.0 (TIPS builder) has no store bump: a plan saved by 2.5.0 / v38 must load as it was. v38-baselines.json
- *  was captured on the 2.5.0 release commit 9f4c518 in a worktree: samplePlan, planQ, planR, planS and a
+/** The TIPS builder (Phase 4) has no store bump: a plan saved by the v38 code must load as it was. v38-baselines.json
+ *  was captured on the Phase 3 commit 9f4c518 in a worktree: samplePlan, planQ, planR, planS and a
  *  builder-shaped ladder (par absent, coupon = yield), each with a current optimizer result. */
 interface Baseline { name: string; key: string; resultKey: string; status: string; endTotalReal: number; lifetimeFedTax: number; saved: SavedPlan }
 const baselines = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures__/exports/v38-baselines.json'), 'utf8')) as Baseline[];
@@ -19,7 +19,7 @@ const baselines = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures_
 beforeAll(pinDate);
 afterAll(unpinDate);
 
-describe('2.6.0 keeps v38 plans fresh', () => {
+describe('the TIPS builder keeps v38 plans fresh', () => {
   it('is still store version 38', () => {
     expect(PLAN_STORE_VERSION).toBe(38);
     expect(baselines.map((b) => b.status)).toEqual(Array(5).fill('fresh'));

@@ -123,6 +123,7 @@ Legend: ☐ not started · ◐ in progress · ☑ done · ⊘ skipped/blocked
 - QCD v1 includes the OBBBA non-itemizer deduction and the "tax saved by QCD" figure.
 - HSA v1 includes contributions in retirement on an ACA plan, and shoebox receipts.
 - TIPS v1 is the rung table; the builder comes in a later phase.
+- **2026-10-20, superseding 'Separate releases':** nothing was released between phases, so Phases 1-4 ship together as **one release, 2.3.0** (package.json 2.3.0, one 2.3.0 entry in releases.ts). The phase labels 2.3.0-2.6.0 in this tracker are internal milestones. Store versions v36-v38 stay as they are (no-op migrations, already covered by the freshness tests; renumbering would break local saved plans and the captured baselines).
 
 **Defaults, taken from the analysis recommendations and the engine review.** Revisit any of these before starting its phase.
 
@@ -518,6 +519,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-20 | P3-7 | Account-value readers audit: 2 fixed (max-roth, lifetime-tax insight), 3 display approximations recorded. |
 | 2026-10-20 | P3-8 | Mockup side-by-side via DOM (no screenshots possible); one M5 hint added; legacy imports confirmed. |
 | 2026-10-20 | P3-9 | Pre-tax color question put to the user; nothing changed. Part 3 reported. |
+| 2026-10-20 | Release | By user decision: one combined 2.3.0 release. releases.ts entries 2.3.0-2.6.0 merged into one 2.3.0 (QCD, charitable deduction, HSA, TIPS ladder, builder, with vs without comparison; the stale 'Medical is a tag for now' note dropped), package.json 2.6.0 -> 2.3.0, planFreshness260.test.ts renamed planFreshnessV38.test.ts. CLAUDE.md stays gitignored (user decision). |
 
 ---
 

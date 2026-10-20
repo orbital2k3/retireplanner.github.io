@@ -11,7 +11,7 @@ import { CPI_INFLATION, N_YEARS, START_YEAR } from '../marketHistory';
 import { pinDate } from '../__regression__/snapshotUtil';
 import { withTips, ladderRungs } from '../__testutil__/tipsPlans';
 
-/** Part 3 open items of hsa-tips-qcd-plan.md (TIPS, after 2.6.0). Research output (console tables), not a
+/** Part 3 open items of hsa-tips-qcd-plan.md (TIPS, after Phase 4). Research output (console tables), not a
  *  regression check. Run: HEAVY=1 pnpm vitest run --project opt src/engine/__study__/tipsOpenItems.study.test.ts */
 
 pinDate();
