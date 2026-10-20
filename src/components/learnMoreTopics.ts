@@ -212,7 +212,7 @@ export const TIPS_HELP: HelpTopic = {
       heading: 'What a ladder does',
       paras: [
         'TIPS are Treasury bonds whose principal rises with inflation. A ladder is a row of them, one maturing in each year you want covered. Each rung pays a fixed real amount in its year, whatever the stock market does. That is the point: those years no longer depend on returns.',
-        'Enter each bond as a rung: the year it matures, the principal shown on your statement (the inflation-adjusted figure), its coupon, and which account holds it. Par value is optional and only sets a floor: at maturity a TIPS pays at least par.',
+        'Enter each bond as a rung: the year it matures, the principal shown on your statement (the inflation-adjusted figure), its coupon, and which account holds it. Par value is optional and only sets a floor: at maturity a TIPS pays at least par. Left blank, the plan uses today\'s principal as par, which is right for a bond bought at issue but generous for one bought later (its par is usually lower); it only matters if prices fall.',
       ],
     },
     {

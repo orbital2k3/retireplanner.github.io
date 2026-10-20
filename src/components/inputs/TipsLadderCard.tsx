@@ -173,7 +173,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
               <div className="input-prefix-wrap"><span className="input-prefix">$</span>
                 <NumberInput value={r.adjustedPrincipal} min={1} style={{ fontSize: 13, paddingLeft: 22 }} onCommit={(v) => { if (v > 0) update(r.id, { adjustedPrincipal: v }); }} />
               </div>
-              <div className="input-prefix-wrap" title="Par value. Sets the floor if prices fall. Leave equal to the principal if you are unsure.">
+              <div className="input-prefix-wrap" title="Par value from your statement, usually below the adjusted principal. Sets the floor if prices fall. Left equal to the principal, the plan assumes a higher floor than most bonds bought after issue have.">
                 <span className="input-prefix">$</span>
                 <NumberInput
                   value={r.faceValue ?? r.adjustedPrincipal} min={1} style={{ fontSize: 13, paddingLeft: 22 }}

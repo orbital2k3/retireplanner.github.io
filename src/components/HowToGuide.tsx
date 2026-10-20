@@ -700,7 +700,7 @@ export function GuideContent() {
       <FieldTable rows={[
         ["Matures", "The calendar year the bond matures.", "2031"],
         ["Adj. principal", "Today's inflation-adjusted principal, as shown on your brokerage statement.", "$48,000"],
-        ["Face (par)", "The original par value. It sets the floor at maturity (a TIPS never pays less than par). Leave it equal to the principal if you are unsure.", "$45,000"],
+        ["Face (par)", "The original par value from your statement, usually below the adjusted principal. It sets the floor at maturity (a TIPS never pays less than par). Left equal to the principal, the plan assumes a higher floor than most bonds bought after issue have, which only matters if prices fall.", "$45,000"],
         ["Coupon", "The fixed real interest rate, paid on the inflation-adjusted principal.", "1.25%"],
         ["Account", "Taxable, Pre-tax or Roth. Taxable rungs owe federal tax each year on the inflation increase even though you get no cash until maturity (\"phantom income\"). Treasury interest is exempt from state tax.", "Pre-tax"],
         ["Whose", "For a pre-tax rung, whose IRA holds it. It counts in that person's required withdrawal, and passes to the survivor if they die first.", "Alex"],
