@@ -24,9 +24,9 @@ const setup = (pf: Portfolio) => {
 describe('TipsLadderCard', () => {
   it('is just an add link (and a CSV link) until a rung exists', () => {
     const onChange = setup(portfolio());
-    expect(screen.getByText('+ Add TIPS ladder')).toBeInTheDocument();
+    expect(screen.getByText('+ Enter bonds I own')).toBeInTheDocument();
     expect(screen.queryByText('Adj. principal')).toBeNull();
-    fireEvent.click(screen.getByText('+ Add TIPS ladder'));
+    fireEvent.click(screen.getByText('+ Enter bonds I own'));
     const ladder = onChange.mock.calls[0][0]!;
     expect(ladder.rungs).toHaveLength(1);
     expect(ladder.rungs[0]).toMatchObject({ maturityYear: YEAR + 1, account: 'taxable', whose: 'Household' });
@@ -36,7 +36,7 @@ describe('TipsLadderCard', () => {
   it('shows the rung count and total, and the totals by account', () => {
     setup(portfolio([rung(), rung({ id: 'r2', account: 'roth', whose: 'Household', adjustedPrincipal: 2_000 })]));
     expect(screen.getByText(/2 rungs/)).toBeInTheDocument();
-    expect(screen.getByText(/\$50,000/)).toBeInTheDocument();
+    expect(screen.getByText(/2 rungs · \$50,000/)).toBeInTheDocument();
     expect(screen.getByText('In pre-tax')).toBeInTheDocument();
     expect(screen.getByText(/Alex: \$48,000 of \$/)).toBeInTheDocument();
   });

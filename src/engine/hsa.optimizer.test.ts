@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import * as golden from './__golden/plans';
 import type { Plan } from '../schemas/plan';
 import { optimizeStrategy } from './optimizer';
@@ -13,7 +13,7 @@ import { REC_GOALS } from './recommender';
  *  the blend windows keep their three-bucket shape, but the objective sees the HSA at its haircut value.
  *  planF (all-trad couple, ~2.5s per max-end run) and planP (~4s max-spending) are the cheap fixtures. */
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 /** planF with an HSA, a tagged medical bill and a few hundred thousand of receipts' worth of history. */

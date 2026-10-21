@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { samplePlan, type Plan } from '../schemas/plan';
@@ -12,6 +12,11 @@ import { enginePlan, planStatus } from '../engine/strategy/savedPlan';
 import { importPlanFromJSON } from '../storage/exportImport';
 import { usePlanStore } from './usePlanStore';
 import { OPT_WINDOW } from '../engine/__testutil__/strategyPlans';
+import { pinDate, unpinDate } from '../engine/__regression__/snapshotUtil';
+
+// The captured projections start in 2026; pin the clock so they still match after New Year.
+pinDate();
+afterAll(unpinDate);
 
 /** P19: a real export (sanitized) and the 2026-10-06 shape (two inherited IRAs) migrate to slots
  *  with the projection, the status and the optimizer result unchanged. */

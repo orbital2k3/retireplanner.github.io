@@ -520,6 +520,7 @@ The goal is one pass per UI activity with no design rework. Every UI activity's 
 | 2026-10-20 | P3-8 | Mockup side-by-side via DOM (no screenshots possible); one M5 hint added; legacy imports confirmed. |
 | 2026-10-20 | P3-9 | Pre-tax color question put to the user; nothing changed. Part 3 reported. |
 | 2026-10-20 | Release | By user decision: one combined 2.3.0 release. releases.ts entries 2.3.0-2.6.0 merged into one 2.3.0 (QCD, charitable deduction, HSA, TIPS ladder, builder, with vs without comparison; the stale 'Medical is a tag for now' note dropped), package.json 2.6.0 -> 2.3.0, planFreshness260.test.ts renamed planFreshnessV38.test.ts. CLAUDE.md stays gitignored (user decision). |
+| 2026-10-20 | Audit | Independent audit of QCD/HSA/TIPS recorded in `audit-qcd-hsa-tips.md` (4 High, 16 Medium). Fixed in this commit: Sankey shortfall+giving split (H2), retiree HSA deduction off capital gains and conforming-state income (H1/M3), HSA card net ACA effect (H1a), family pool on either spouse (M1), IRMAA only from 65+ owners (M2), no self-funded retiree contribution (M4), TIPS basis gain realized at maturity (M6), matured on-top rung copy (M7), face cap (M8), CSV year bound, removePersonB drops B rungs (M15), clock pinned in date-sensitive tests (H3). planR CSVs regenerated deliberately (new in this release); v38 migration/freshness tests check planR numbers against the current engine. Fast 1133 pass, opt 81 pass; e2e not run. |
 
 ---
 

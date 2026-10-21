@@ -479,7 +479,7 @@ export function GuideContent() {
       <FieldTable rows={[
         ["General", "Ordinary spending. Nothing special happens.", "Food, travel, housing"],
         ["Medical", "Medical spending. If you have an HSA, it pays these bills tax-free from the age you choose (65 by default) and keeps receipts for bills paid earlier. See Health savings account in Portfolio.", "Healthcare"],
-        ["Charitable", "Giving. From age 70½ it is paid straight from your IRA as a qualified charitable distribution (QCD), which counts toward your required withdrawal and is not taxed. Untick \"Paid directly to a public charity\" for gifts to donor-advised funds or private foundations.", "Church and charities"],
+        ["Charitable", "Giving. From age 70½ it is paid straight from your IRA as a qualified charitable distribution (QCD), which counts toward your required withdrawal and is not taxed. For a donor-advised fund or private foundation, untick \"Paid directly to a public charity\": those can't receive a QCD, so the gift is taxed like General spending (no QCD, no charity deduction) but still shows as giving in the Sankey and the Projections table.", "Church and charities"],
       ]} />
       <Tip>
         Before you are eligible for QCDs, or for gifts a QCD can&apos;t cover, cash gifts to public
@@ -681,8 +681,8 @@ export function GuideContent() {
         ["HSA balance", "What is in the account on January 1 of the current year.", "$62,000"],
         ["Annual contribution", "What you put in each year, in today's dollars, while you work. The tool caps it at the legal limit ($4,400 self-only or $8,750 family in 2026, plus $1,000 from 55). Contributions stop at 65, or when you claim Social Security if that is later.", "$4,400"],
         ["Coverage", "Self or Family. Spouses on family coverage share one limit.", "Family"],
-        ["Unreimbursed receipts", "Past medical bills you paid out of pocket and have not been repaid for. They can be claimed tax-free later.", "$18,000"],
-        ["Keep contributing after I retire", "Shown if you retire before 65. You keep paying in from your portfolio on an HSA-eligible plan until 65. The contribution is deducted from your income, which can lower your ACA income and raise your subsidy. That works best when the money comes from Roth or cash, since pre-tax withdrawals add back the income.", "Ticked"],
+        ["Unreimbursed receipts", "Past medical bills you paid out of pocket and have not been repaid for. They can be claimed tax-free later. See the note below for how the plan uses them.", "$18,000"],
+        ["Keep contributing after I retire", "Shown if you retire before 65. You keep paying in from your portfolio on an HSA-eligible plan until 65. The contribution is deducted from your income (and your state income, except in California), which can lower your ACA income and raise your subsidy. That works best when the money comes from Roth or cash, since pre-tax withdrawals add back the income. The Taxes page shows the net effect over all the contribution years.", "Ticked"],
         ["HSA pays medical expenses from age", "One setting for the household. From that age, the HSA pays your Medical-tagged expenses and any Medicare surcharge before your other accounts. Before it, those bills are paid elsewhere and kept as receipts.", "65"],
       ]} />
       <Tip>
@@ -690,12 +690,29 @@ export function GuideContent() {
         are empty, the tool draws on the HSA: first for unpaid medical bills, then to reimburse receipts, then
         for anything else, which is taxed and carries a 20% penalty before 65. The plan shows a note if that happens.
       </Tip>
+      <Tip>
+        <strong>How receipts are used.</strong> Both people&apos;s receipts go into one household pot, and every
+        Medical bill paid from other accounts (for example before the HSA pay-from age) is added to it. The plan
+        does not cash receipts in early, because leaving money in the HSA keeps it growing tax-free. They are used
+        in two places: if your other accounts run out, receipts let the HSA pay you tax-free before any taxed draw;
+        and at the end of the plan, the part of the HSA covered by receipts counts as tax-free in the after-tax
+        ending value (the rest is taxed like pre-tax money). Receipts are a fixed dollar amount and do not grow
+        with inflation.
+      </Tip>
 
       <H3>TIPS ladder</H3>
       <P>
-        If you hold Treasury inflation-protected bonds (TIPS) to maturity, click <strong>+ Add TIPS ladder</strong>
-        under your balances. Each rung is one bond. A rung pays a fixed real amount in its year, so the years it
-        covers do not depend on the market. The ladder card appears only once you add a rung.
+        A TIPS ladder is a set of Treasury inflation-protected bonds held to maturity. Each rung is one bond. A rung
+        pays a fixed real amount in its year, so the years it covers do not depend on the market. Under your balances
+        there are three ways to start:
+      </P>
+      <FieldTable rows={[
+        ["+ Enter bonds I own", "Adds one editable row. Type each bond from your brokerage statement, then use + Add rung for more.", "Bonds you already hold"],
+        ["Paste from CSV", "Adds many bonds at once from a spreadsheet.", "A list exported from your broker"],
+        ["Build a ladder…", "Plans new bonds that pay an income you choose, bought from one of your accounts.", "$40,000 a year from 62 to 69"],
+      ]} />
+      <P>
+        Once a rung exists, the card shows them all in one table, which is where you edit or remove any rung.
       </P>
       <FieldTable rows={[
         ["Matures", "The calendar year the bond matures.", "2031"],
@@ -703,7 +720,7 @@ export function GuideContent() {
         ["Face (par)", "The original par value from your statement, usually below the adjusted principal. It sets the floor at maturity (a TIPS never pays less than par). Left equal to the principal, the plan assumes a higher floor than most bonds bought after issue have, which only matters if prices fall.", "$45,000"],
         ["Coupon", "The fixed real interest rate, paid on the inflation-adjusted principal.", "1.25%"],
         ["Account", "Taxable, Pre-tax or Roth. Taxable rungs owe federal tax each year on the inflation increase even though you get no cash until maturity (\"phantom income\"). Treasury interest is exempt from state tax.", "Pre-tax"],
-        ["Whose", "For a pre-tax rung, whose IRA holds it. It counts in that person's required withdrawal, and passes to the survivor if they die first.", "Alex"],
+        ["Whose", "For a pre-tax rung, whose IRA holds it. It comes out of that person's pre-tax balance, counts in their required withdrawal, and passes to the survivor if they die first. Taxable and Roth rungs show Household: those balances are pooled for the household in this plan, so a rung there has no single owner.", "Alex"],
       ]} />
       <P>
         <strong>Paste from CSV</strong> adds many rungs at once: one per line with maturity, adjusted principal, coupon,
@@ -711,15 +728,21 @@ export function GuideContent() {
       </P>
       <P>
         <strong>Build a ladder…</strong> sizes the rungs for you: enter an income per year in today's dollars, the ages
-        it should cover, the real yield and the account to buy from. It shows each rung, the cost today and the account's
-        balance before and after, then adds the rungs to any you already have. Each rung is bought at par with a coupon
-        equal to the real yield. The money stays in your balance above and the plan sets the bonds apart from it, so the
-        builder can't buy from a balance while the box below is unticked, or spend more than the account has left.
+        it should cover, the real yield and the account to buy from. It opens with example values (about $40,000 a year
+        for eight years from your retirement age), so the table you see first is a <em>preview</em>, not a ladder you
+        already have. Change any input and the preview, the cost today and the account's balance before and after all
+        update. Nothing is added until you click <strong>Add rungs to ladder</strong> at the bottom; the rungs then join any
+        you already have on the card, where you can edit or remove them. Each rung is bought at par with a coupon equal to
+        the real yield. The money stays in your balance above and the plan sets the bonds apart from it, so the button is
+        greyed out, with a message saying why, if the box below is unticked or the account doesn't have enough left.
       </P>
       <Tip>
-        <strong>My balances already include these bonds.</strong> This box is ticked by default, because a brokerage
-        statement shows one total for the account. The tool then sets the bonds apart from your balance so nothing is
-        counted twice. If the rungs add up to more than the account holds, you get an error and the plan caps them at the balance.
+        <strong>My account balances above already include these bonds.</strong> Ticked (the default): your brokerage
+        statement shows one total for the account, bonds included. The plan takes the rungs out of that balance and
+        invests only the rest at market returns. For example, Pre-tax $500,000 with $100,000 of pre-tax rungs is modeled as
+        $400,000 invested plus the $100,000 ladder; each tile on the card shows what stays invested. Unticked: the bonds are
+        extra money on top of the balances you entered, so the example becomes $500,000 invested plus the ladder. If the
+        rungs add up to more than the account holds, you get an error and the plan caps them at the balance.
       </Tip>
       <Tip>
         <strong>Bonds are held to maturity.</strong> The plan never sells a bond early, so a ladder cannot cover a year

@@ -124,7 +124,7 @@ export const QCD_HELP: HelpTopic = {
       paras: [
         'You can start in the year you turn 70½. The limit in 2026 is $111,000 a year for each person, and it rises with inflation. A couple has two limits.',
         'The money has to come from an IRA. If your savings are in a 401(k), assume they have been rolled into an IRA. Money in an inherited IRA is left out.',
-        'The gift has to go directly to a public charity. Donor-advised funds and private foundations do not qualify. Untick the box on a giving row to mark a gift like that, and it will be paid as ordinary spending.',
+        'The gift has to go directly to a public charity. Donor-advised funds and private foundations do not qualify. Untick the box on a giving row to mark a gift like that. It is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. It still shows as giving in the Sankey and the Giving column of the Projections table.',
       ],
     },
     {
@@ -170,7 +170,7 @@ export const HSA_HELP: HelpTopic = {
     {
       heading: 'What you can put in',
       paras: [
-        'In 2026 the limit is $4,400 for self-only coverage and $8,750 for family coverage. The base limit rises with inflation. If you are 55 or older you can add $1,000, and that catch-up does not rise with inflation. Spouses on family coverage share one family limit, and each has their own catch-up.',
+        'In 2026 the limit is $4,400 for self-only coverage and $8,750 for family coverage. The base limit rises with inflation. If you are 55 or older you can add $1,000, and that catch-up does not rise with inflation. If either spouse is on family coverage, you both share one family limit, and each has their own catch-up.',
         'You need an HSA-eligible health plan, and you cannot be on Medicare. The tool stops contributions at 65, or when you claim Social Security if that is later, because claiming enrolls you in Medicare Part A.',
         'You do not need a job to contribute. From 2026, bronze and catastrophic marketplace plans count as HSA-eligible, so an early retiree on one can keep contributing. Tick the box in the HSA section to model that.',
       ],
@@ -178,14 +178,14 @@ export const HSA_HELP: HelpTopic = {
     {
       heading: 'How the tool pays bills from it',
       paras: [
-        'Mark expense rows as Medical. From the age you pick (65 by default, or Always), the HSA pays those bills first, before your other accounts, plus any Medicare income surcharge (IRMAA). None of that is income.',
-        'Before that age, medical bills are paid from your other accounts and logged as receipts. Receipts are what you can still claim tax-free later. The tool reimburses them only as a last resort, when your other accounts have run out.',
+        'Mark expense rows as Medical. From the age you pick (65 by default, or Always), the HSA pays those bills first, before your other accounts, plus any Medicare income surcharge (IRMAA) once the HSA owner is 65 (Medicare premiums count as medical costs only from an owner 65 or over, even when they are a spouse\u2019s). None of that is income.',
+        'Before that age, medical bills are paid from your other accounts and logged as receipts, added to any receipts you entered. Both people\'s receipts form one household pot. Receipts are what you can still claim tax-free later. The tool reimburses them only as a last resort, when your other accounts have run out. Otherwise they lower the tax counted on the HSA at the end of the plan (see below). They are a fixed dollar amount and do not grow with inflation.',
       ],
     },
     {
       heading: 'What it does for your ACA subsidy',
       paras: [
-        'If you retire before 65 and keep contributing, the contribution is deducted from your income. That lowers the income used for your marketplace subsidy, so the subsidy goes up. The catch is where the contribution money comes from: if it comes from withdrawals that count as income (pre-tax money, or brokerage gains), those cancel part or all of the deduction. Paying it from Roth money or cash gets the full effect. The Taxes page shows what your plan actually gets. Be careful near the bottom of the range: under 100% of the poverty level there is no subsidy at all, and the plan warns you if a contribution pushes you there.',
+        'If you retire before 65 and keep contributing, the contribution is deducted from your income, including capital gains, and from your state income in every state the tool models except California. That lowers the income used for your marketplace subsidy, so the subsidy goes up. The catch is where the contribution money comes from: if it comes from withdrawals that count as income (pre-tax money, or brokerage gains), those cancel part or all of the deduction. Paying it from Roth money or cash gets the full effect. It also moves money you could spend before 65 into the HSA, so your brokerage money can run out sooner and the pre-tax withdrawals that replace it can raise your ACA income in a later year. The Taxes page shows what your plan actually gets over all the contribution years. If every other account is empty, the plan skips that year\u2019s contribution, since paying it from the HSA itself would only cost tax and penalty. Be careful near the bottom of the range: under 100% of the poverty level there is no subsidy at all, and the plan warns you if a contribution pushes you there.',
       ],
     },
     {
@@ -218,7 +218,13 @@ export const TIPS_HELP: HelpTopic = {
     {
       heading: 'Do my balances already include it?',
       paras: [
-        'Usually yes: your brokerage statement shows one total for the account, bonds included. Leave the box ticked and the tool sets the bonds apart from that balance, so nothing is counted twice. Untick it only if the bonds are in addition to the balances you entered. If the rungs add up to more than the account holds, the plan shows an error and caps them at the balance.',
+        'Usually yes: your brokerage statement shows one total for the account, bonds included. Leave the box ticked and the tool takes the rungs out of that balance and invests only the rest, so nothing is counted twice. Pre-tax $500,000 with $100,000 of rungs becomes $400,000 invested plus the ladder. Untick it only if the bonds are in addition to the balances you entered. If the rungs add up to more than the account holds, the plan shows an error and caps them at the balance.',
+      ],
+    },
+    {
+      heading: 'Whose bonds are they?',
+      paras: [
+        'There is one ladder for the household, but each rung says which account holds it. Taxable and Roth balances are pooled for the household in this plan, so those rungs are Household. A pre-tax rung belongs to one person: it comes out of that person\'s pre-tax balance, counts toward their required withdrawal, and passes to the survivor.',
       ],
     },
     {
@@ -244,13 +250,14 @@ export const TIPS_HELP: HelpTopic = {
     {
       heading: 'Seeing it',
       paras: [
+        'Build a ladder\u2026 on the card plans new rungs for an income you choose. It opens with example values, so its table is a preview; nothing is added until you click Add.',
         'On the charts the ladder is the hatched band inside its account\'s color. The Projections table has a TIPS column group (balance, coupon, inflation accrual, maturity, taxable income and unmet RMD) that you can switch on in the column chooser.',
       ],
     },
     {
       heading: 'What it leaves out',
       paras: [
-        'Selling bonds before maturity, price changes from interest rates, reinvesting coupons into new bonds, I bonds, CDs and ladders of ordinary bonds. A tool that builds a ladder from the income you want is planned for a later release.',
+        'Selling bonds before maturity, price changes from interest rates, reinvesting coupons into new bonds, I bonds, CDs and ladders of ordinary bonds.',
       ],
     },
   ],

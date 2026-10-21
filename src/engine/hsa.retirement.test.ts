@@ -1,12 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import { acaNetPremium, federalPovertyLevel } from './aca';
 import { assertProjectionInvariants } from './__invariants__/assertions';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
-import { acaRetireePlan } from './__testutil__/hsaPlans';
+import { acaRetireePlan, hsaOnlyPlan, withHsa } from './__testutil__/hsaPlans';
+import * as golden from './__golden/plans';
+import type { Plan } from '../schemas/plan';
 import { hsaAcaFloorWarning } from './hsaWarnings';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 /** H-8: a retiree who keeps contributing to an HSA before 65 (D6). The contribution is a cash need paid
@@ -49,7 +51,7 @@ describe('HSA contributions in retirement (H-8)', () => {
     expect(on.rows[0].magi).toBeLessThan(off.rows[0].magi);
   });
 
-  it('leaves state tax alone: the deduction is federal only, in IL and in CA', () => {
+  it('leaves state tax alone in this fixture: its only state income is a pension IL exempts, and CA ignores the deduction', () => {
     for (const state of ['IL', 'CA'] as const) {
       const a = runProjection(acaRetireePlan({ state, contribute: true })).rows;
       const b = runProjection(acaRetireePlan({ state, contribute: false })).rows;
@@ -104,5 +106,108 @@ describe('ACA-floor warning (H-8)', () => {
 
   it('uses the plan household size for the threshold', () => {
     expect(federalPovertyLevel(1)).toBeLessThan(federalPovertyLevel(2));
+  });
+});
+
+/** The same early retiree living off a brokerage account instead of Roth: almost no ordinary income, so
+ *  the deduction is mostly larger than ordinary income and has to come off capital gains. */
+function brokerageRetiree(state: Plan['state'], contribute: boolean): Plan {
+  const p = acaRetireePlan({ state, contribute, pension: 0 });
+  return {
+    ...p,
+    withdrawalStrategy: 'taxfirst',
+    portfolio: { personA: { ...p.portfolio.personA, roth: 0, taxable: 900_000, taxableBasis: 450_000, hsaContribution: 5_400 } },
+  };
+}
+
+describe('retiree HSA deduction beyond ordinary income (audit 2026-10-20)', () => {
+  const on = runProjection(brokerageRetiree('IL', true)).rows[0];
+  const off = runProjection(brokerageRetiree('IL', false)).rows[0];
+  const c = on.hsaContribRet;
+  // Year 0 starts from the same balance and basis, so the gain share of a brokerage dollar is the same.
+  const gf = (off.ltcg - off.qualifiedDiv) / off.wdTax;
+  const extraGains = (on.wdTax - off.wdTax) * gf;
+
+  it('exercises the case: ordinary income is below the contribution', () => {
+    expect(c).toBeCloseTo(5_400, 6);
+    expect(off.ordIncome).toBeLessThan(c);
+    expect(on.ordIncome).toBe(0);
+  });
+
+  it('takes the rest of the deduction off capital gains, so AGI falls by the contribution less the gains that fund it', () => {
+    expect(on.magi).toBeCloseTo(off.magi - c + extraGains, 4);
+    expect(on.acaMagi).toBeCloseTo(off.acaMagi - c + extraGains, 4);
+    expect(on.acaMagi).toBeLessThan(off.acaMagi);
+    expect(on.acaPremium).toBeLessThan(off.acaPremium);
+  });
+
+  it('lowers state tax by the deduction in a conforming state (IL), not in California', () => {
+    // IL: flat 4.95% on non-exempt income (gains included), less the deduction
+    expect(off.stateTaxAmt - on.stateTaxAmt).toBeCloseTo(0.0495 * (c - extraGains), 4);
+    const caOn = runProjection(brokerageRetiree('CA', true)).rows[0];
+    const caOff = runProjection(brokerageRetiree('CA', false)).rows[0];
+    expect(caOn.stateTaxAmt).toBeGreaterThanOrEqual(caOff.stateTaxAmt);
+  });
+
+  it('holds every invariant', () => {
+    for (const state of ['IL', 'CA', 'NY'] as const) {
+      const plan = brokerageRetiree(state, true);
+      assertProjectionInvariants(runProjection(plan), plan);
+    }
+  });
+});
+
+describe('a retiree contribution the HSA itself would have to fund is not made (audit 2026-10-20)', () => {
+  const contrib = (election: boolean) => {
+    const p = hsaOnlyPlan();
+    return { ...p, portfolio: { ...p.portfolio, personA: { ...p.portfolio.personA, hsaContribution: 4_400, hsaContribInRetirement: election } } };
+  };
+  const on = runProjection(contrib(true));
+  const off = runProjection(contrib(false));
+
+  it('cancels the contribution in years when every other account is empty', () => {
+    const retiredPre65 = on.rows.filter((r) => r.ageA >= 55 && r.ageA < 65);
+    expect(retiredPre65.length).toBe(10);
+    for (const r of retiredPre65) expect(r.hsaContribRet).toBe(0);
+  });
+
+  it('leaves the HSA, the penalty and the tax exactly as with no election', () => {
+    for (let i = 0; i < on.rows.length; i++) {
+      const a = on.rows[i], b = off.rows[i];
+      expect(a.endHSA, `age ${a.ageA}`).toBeCloseTo(b.endHSA, 4);
+      expect(a.hsaNonQualWD).toBeCloseTo(b.hsaNonQualWD, 4);
+      expect(a.hsaPenalty).toBeCloseTo(b.hsaPenalty, 4);
+      expect(a.fedTax).toBeCloseTo(b.fedTax, 4);
+    }
+    assertProjectionInvariants(on, contrib(true));
+  });
+});
+
+describe('the HSA pays IRMAA only from an owner 65 or over (Pub 969, audit 2026-10-20)', () => {
+  // A (66) has a large pension and pays IRMAA; B (60) holds the HSA, policy "always", no medical rows.
+  const plan = (): Plan => {
+    const p = golden.planA_simple();
+    const q: Plan = {
+      ...p,
+      personA: { ...p.personA, dob: '1960-01-01', retirementAge: 60 },
+      personB: { ...p.personB!, dob: '1966-01-01', retirementAge: 55 },
+      incomeStreams: [{ id: 'pension', description: 'Pension', whose: 'A', type: 'Pension', startAge: 60, end: { mode: 'life' }, survivorPct: 1,
+        annualAmount: 300_000, growthPct: { mode: 'fixed', rate: 0.025 }, taxablePct: 1, stateTaxablePct: 1 }],
+    } as Plan;
+    return withHsa(q, { b: { hsa: 200_000 }, policyAge: 0 });
+  };
+  const rows = runProjection(plan()).rows;
+
+  it('pays none of A\'s IRMAA while B is under 65', () => {
+    const young = rows.filter((r) => r.ageB !== undefined && r.ageB < 65 && r.irmaa > 0);
+    expect(young.length).toBeGreaterThan(3);
+    for (const r of young) expect(r.hsaQualifiedWD, `B ${r.ageB}`).toBe(0);
+  });
+
+  it('pays it from B\'s 65th year on', () => {
+    const r = rows.find((x) => x.ageB === 65)!;
+    expect(r.irmaa).toBeGreaterThan(0);
+    expect(r.hsaQualifiedWD).toBeCloseTo(r.irmaa, 4);
+    assertProjectionInvariants(runProjection(plan()), plan());
   });
 });

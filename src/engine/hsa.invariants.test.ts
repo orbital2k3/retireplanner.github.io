@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import * as golden from './__golden/plans';
 import { samplePlan, type Plan } from '../schemas/plan';
@@ -6,7 +6,7 @@ import { assertProjectionInvariants } from './__invariants__/assertions';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { hsaOnlyPlan, medicalPlan, medicalRow, withExpenses, withHsa } from './__testutil__/hsaPlans';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 /** H-7: the engine's dollar-flow invariants (HSA mass balance, no overdraw, endTotal identity,

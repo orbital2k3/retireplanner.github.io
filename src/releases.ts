@@ -23,11 +23,12 @@ export const RELEASES: Release[] = [
       {
         kind: 'feature',
         title: 'Qualified charitable distributions (QCDs)',
-        text: 'Each expense row now has a Category: General, Medical or Charitable. From age 70½, charitable giving is paid straight from your IRA. It counts toward your required withdrawal and is left out of your taxable income, which can lower tax on Social Security, Medicare surcharges and state tax. Couples use each spouse\u2019s own $111,000 limit. Untick "Paid directly to a public charity" for gifts to donor-advised funds or private foundations.',
+        text: 'Each expense row now has a Category: General, Medical or Charitable. From age 70½, charitable giving is paid straight from your IRA. It counts toward your required withdrawal and is left out of your taxable income, which can lower tax on Social Security, Medicare surcharges and state tax. Couples use each spouse\u2019s own $111,000 limit.',
         bullets: [
-          'The Projections table has new QCD and Charity deduction columns, and the RMD tooltip shows how much went to charity.',
-          'The cash-flow charts and the Sankey show QCDs going to charity instead of counting them as cash.',
+          'The Projections table has a new Giving column group: Giving (all Charitable rows, with a tooltip splitting QCD from other giving), QCD and Charity deduction. The RMD tooltip shows how much went to charity.',
+          'The Sankey has a Charity node for all your giving: QCDs flow to it straight from Pre-tax, and other giving (before 70\u00bd, above the limit, or to a donor-advised fund) from your other money. The cash-flow charts show QCDs going to charity instead of counting them as cash.',
           'The Taxes page shows what QCDs save you compared with paying the same gifts in cash.',
+          'Only gifts paid directly to a public charity qualify. For a donor-advised fund or private foundation, untick "Paid directly to a public charity" on the row. The gift is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. Unlike a General row, it still shows as giving in the Sankey and the Giving column.',
           'New plan notes appear when a charitable row can\u2019t be paid as QCDs because the IRA is empty, or when a gift is marked as not paid to a public charity.',
         ],
       },
@@ -39,10 +40,11 @@ export const RELEASES: Release[] = [
       {
         kind: 'feature',
         title: 'Health savings account (HSA)',
-        text: 'Enter an HSA for each person in Portfolio: balance, yearly contribution, self or family coverage, and unreimbursed receipts. Mark expense rows as Medical and the HSA pays them tax-free, plus any Medicare income surcharge, from the age you choose (65 by default). Bills paid from other accounts before then are kept as receipts you can claim later. If your other accounts run out, the HSA is the last resort, with tax and a 20% penalty before 65 on anything that isn\u2019t medical.',
+        text: 'Enter an HSA for each person in Portfolio: balance, yearly contribution, self or family coverage, and unreimbursed receipts. Mark expense rows as Medical and the HSA pays them tax-free, plus any Medicare income surcharge once the HSA owner is 65, from the age you choose (65 by default). Bills paid from other accounts before then are kept as receipts you can claim later. If your other accounts run out, the HSA is the last resort, with tax and a 20% penalty before 65 on anything that isn\u2019t medical.',
         bullets: [
+          'Unreimbursed receipts are one pot for the household. Medical bills paid from other accounts before the HSA starts paying are added to it. The tool cashes receipts in only if your other accounts run out: tax-free, and before any taxed non-medical draw. Until then they matter at the end of the plan, where the part of the HSA covered by receipts counts as tax-free in your after-tax ending value. Receipts are a fixed dollar amount and don\u2019t grow with inflation.',
           'Contributions follow the 2026 limits, with the $1,000 catch-up from 55, and stop at 65 (or at your Social Security claim age if later).',
-          'Retiring before 65? Tick "Keep contributing after I retire" to model an HSA-eligible ACA plan. The contribution is deducted from your income, which lowers ACA income and can raise your subsidy.',
+          'Retiring before 65? Tick "Keep contributing after I retire" to model an HSA-eligible ACA plan. The contribution is deducted from your federal income and, outside California, your state income, which can lower ACA income and raise your subsidy. The Taxes page shows the net effect over all the contribution years.',
           'The HSA counts in your balances, charts, Monte Carlo runs and the after-tax ending value (the part above your receipts is taxed like pre-tax money).',
           'The Projections table has an HSA column group, the Sankey shows HSA money going to medical bills, and the Taxes page shows what the HSA does for you.',
           'New plan notes cover contributions over the limit, contributions after Medicare, spouses sharing one family limit, early non-medical draws, and California\u2019s different HSA rules.',
@@ -53,7 +55,9 @@ export const RELEASES: Release[] = [
         title: 'TIPS ladder',
         text: 'Enter your inflation-protected bonds as rungs in Portfolio (or paste them from a spreadsheet): maturity year, adjusted principal, coupon, par, and the account that holds them. The bonds follow inflation rather than market returns, so the years they cover are the same in every market scenario. Taxable rungs owe federal tax each year on the inflation increase, even though you get no cash until maturity, and that income is exempt from state tax. Rungs in an IRA count toward your required withdrawals, and rungs in a Roth are never taxed.',
         bullets: [
-          'Your balances are assumed to already include the bonds, so the tool sets them apart to avoid counting them twice. Untick the box if they are on top.',
+          'Three ways to start: + Enter bonds I own (one row per bond from your statement), Paste from CSV, or Build a ladder\u2026 (plans new bonds for an income you choose).',
+          '"My account balances above already include these bonds" is ticked by default, because a brokerage statement shows one total. The plan takes the rungs out of that account and only the rest is invested at market returns; each tile on the card shows what stays invested. Untick it if the bonds are extra money on top of the balances you entered.',
+          'Who owns a rung: taxable and Roth balances are pooled for the household, so those rungs are Household. A pre-tax rung must belong to one person. It comes out of that person\u2019s pre-tax balance, counts toward their required withdrawal, and passes to the survivor.',
           'Bonds are held to maturity and never sold early. At maturity a bond pays at least its par value.',
           'The ladder shows as a hatched band inside its account\u2019s color on the charts, and the Projections table has a TIPS column group (balance, coupon, inflation accrual, maturity, taxable income, unmet RMD).',
           'Monte Carlo runs and historical stress tests carry the ladder, so its value shows there. The Monte Carlo page suggests raising Equity % for the rest of your portfolio.',
@@ -65,6 +69,7 @@ export const RELEASES: Release[] = [
         title: 'TIPS ladder builder',
         text: 'Build a ladder\u2026 on the TIPS card sizes the rungs for you. Enter an income per year in today\u2019s dollars, the ages it should cover, the real yield and the account to buy from. It shows each rung, the cost today and the account\u2019s balance before and after, then adds the rungs to any you already have.',
         bullets: [
+          'It opens with example values (about $40,000 a year for eight years from your retirement age), so the table you see first is a preview, not a ladder you already have. Change the inputs and it updates. Nothing is added until you click Add rungs to ladder at the bottom; the rungs then appear on the TIPS card, where you can edit or remove them. If the button is greyed out, the message above it says why.',
           'Each rung is bought at par with a coupon equal to the real yield, and each year\u2019s rungs pay the target income in that year\u2019s dollars.',
           'The money stays in your balance and the plan sets the bonds apart from it. The builder won\u2019t spend more than the account has left.',
         ],

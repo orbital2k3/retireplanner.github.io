@@ -18,11 +18,16 @@ export interface HsaBenefit {
     perYear: number;
     /** Whether the plan models ACA premiums (the ACA figures below mean nothing otherwise). */
     acaModeled: boolean;
-    /** How much the contribution lowers ACA income per year, floored at 0. It is net of the extra income from
-     *  the withdrawals that fund the contribution: paid from pre-tax money it can cancel out entirely. */
+    /** Contributing years in which ACA income is actually lower than without the contribution. The extra
+     *  income from the withdrawals that fund it can cancel the deduction (pre-tax money cancels it
+     *  entirely), and spending taxable money sooner can raise income in a later year. */
+    yearsLowered: number;
+    /** Average amount ACA income is lowered by, over the `yearsLowered` years. */
     acaMagiLowered: number;
-    /** How much it lowers the net ACA premium per year. */
+    /** Average net ACA premium saved, over the `yearsLowered` years. */
     subsidyRaised: number;
+    /** Net ACA premium saved over all the contributing years (negative = the contribution costs subsidy). */
+    premiumNet: number;
   };
 }
 
@@ -57,19 +62,24 @@ export function computeHsaBenefit(livePlan: Plan): HsaBenefit | null {
     };
     const off = runProjection(without).rows;
     const years = contributing.length;
-    let magi = 0, premium = 0;
+    let yearsLowered = 0, magi = 0, premium = 0, premiumNet = 0;
     for (const r of contributing) {
       const b = off[r.year - 1];
       if (!b) continue;
-      magi += real(b.acaMagi - r.acaMagi, r);
-      premium += real(b.acaPremium - r.acaPremium, r);
+      const dPremium = real(b.acaPremium - r.acaPremium, r);
+      premiumNet += dPremium;
+      const dMagi = real(b.acaMagi - r.acaMagi, r);
+      if (dMagi >= 1) { yearsLowered++; magi += dMagi; premium += dPremium; }
     }
+    const aca = plan.assumptions.modelACA;
     out.contribution = {
       years,
       perYear: sum(contributing, (r) => r.hsaContribRet) / years,
-      acaModeled: plan.assumptions.modelACA,
-      acaMagiLowered: plan.assumptions.modelACA ? Math.max(0, magi / years) : 0,
-      subsidyRaised: plan.assumptions.modelACA ? Math.max(0, premium / years) : 0,
+      acaModeled: aca,
+      yearsLowered: aca ? yearsLowered : 0,
+      acaMagiLowered: aca && yearsLowered > 0 ? magi / yearsLowered : 0,
+      subsidyRaised: aca && yearsLowered > 0 ? Math.max(0, premium / yearsLowered) : 0,
+      premiumNet: aca ? premiumNet : 0,
     };
   }
   return out;
@@ -90,9 +100,17 @@ export function hsaBenefitCopy(b: HsaBenefit): { title: string; body: string } {
   }
   if (c) {
     const gives = `Contributing ${fmtFull(round100(c.perYear))} a year on an HSA-eligible plan before 65`;
-    if (c.acaMagiLowered >= 1 && c.subsidyRaised >= 50) {
+    if (c.yearsLowered > 0 && c.yearsLowered < c.years) {
+      // Mixed: lower in some years, higher in others (e.g. taxable money runs out sooner).
+      parts.push(`${gives} lowers your ACA income by about ${fmtFull(round100(c.acaMagiLowered))} a year in ${c.yearsLowered} of those ${c.years} years.`);
+      if (c.premiumNet <= -50) {
+        parts.push(`In the other years the withdrawals that replace that money raise it, and over all ${c.years} years your ACA premiums come to about ${fmtFull(round100(-c.premiumNet))} more than without contributing.`);
+      } else if (c.premiumNet >= 50) {
+        parts.push(`Over all ${c.years} years it saves about ${fmtFull(round100(c.premiumNet))} in ACA premiums.`);
+      }
+    } else if (c.yearsLowered > 0 && c.subsidyRaised >= 50) {
       parts.push(`${gives} lowers your ACA income by about ${fmtFull(round100(c.acaMagiLowered))} and raises your subsidy by about ${fmtFull(round100(c.subsidyRaised))} a year.`);
-    } else if (c.acaMagiLowered >= 1) {
+    } else if (c.yearsLowered > 0) {
       parts.push(`${gives} lowers your ACA income by about ${fmtFull(round100(c.acaMagiLowered))} a year.`);
     } else if (c.acaModeled) {
       // The deduction is real, but the withdrawals that pay for it count as income too (pre-tax money

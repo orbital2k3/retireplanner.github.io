@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allocateHsaContribution, hsaBaseLimit, hsaCatchUp, hsaContribEligible, hsaLimit, hsaPayAge, HSA_DEFAULT_PAY_AGE,
+  allocateHsaContribution, effectiveHsaCoverage, hsaBaseLimit, hsaCatchUp, hsaContribEligible, hsaLimit, hsaPayAge,
+  hsaQualifiedPayment, HSA_DEFAULT_PAY_AGE,
 } from './hsa';
 import { HSA_CATCHUP, HSA_LIMIT_FAMILY_2026, HSA_LIMIT_SELF_2026 } from './taxConstants';
 import { samplePlan } from '../schemas/plan';
@@ -126,5 +127,70 @@ describe('hsaLastResortDraw (H-5)', () => {
   it('does nothing without a need or a balance', () => {
     expect(hsaLastResortDraw({ ...base, need: 0 })).toMatchObject({ qualified: 0, reimbursed: 0, nonQual: 0, fromA: 0 });
     expect(hsaLastResortDraw({ ...base, need: 100, balA: 0 })).toMatchObject({ nonQual: 0, fromA: 0 });
+  });
+});
+
+describe('family coverage on either spouse (§223(b)(5), audit 2026-10-20)', () => {
+  it('treats both spouses as family when either is', () => {
+    expect(effectiveHsaCoverage('self', 'family')).toBe('family');
+    expect(effectiveHsaCoverage(undefined, 'family')).toBe('family');
+    expect(effectiveHsaCoverage('family', undefined)).toBe('family');
+    expect(effectiveHsaCoverage('self', 'self')).toBe('self');
+    expect(effectiveHsaCoverage(undefined, undefined)).toBeUndefined();
+  });
+  it('shares one family pool when only one spouse has family coverage', () => {
+    // Before the fix this returned 8,750 + 4,400 = 13,150, over the legal total.
+    expect(allocateHsaContribution(1, { ask: 8_750, coverage: 'family', age: 50 }, { ask: 4_400, coverage: 'self', age: 50 }))
+      .toEqual({ a: 8_750, b: 0 });
+    expect(allocateHsaContribution(1, { ask: 4_400, coverage: 'self', age: 50 }, { ask: 8_750, coverage: 'family', age: 50 }))
+      .toEqual({ a: 4_400, b: 4_350 });
+  });
+  it('lifts a self-only spouse to the family limit when the other spouse is on family coverage', () => {
+    expect(allocateHsaContribution(1, { ask: 8_000, coverage: 'self', age: 50 }, { ask: 0, coverage: 'family', age: 50 }).a).toBe(8_000);
+  });
+  it('keeps each spouse own catch-up inside the shared pool', () => {
+    const r = allocateHsaContribution(1, { ask: 20_000, coverage: 'family', age: 56 }, { ask: 20_000, coverage: 'self', age: 57 });
+    expect(r.a + r.b).toBe(HSA_LIMIT_FAMILY_2026 + 2 * HSA_CATCHUP);
+  });
+  it('ignores a spouse whose coverage is passed as absent (died)', () => {
+    expect(allocateHsaContribution(1, { ask: 8_000, coverage: 'self', age: 50 }, { ask: 0, coverage: undefined, age: 50 }).a).toBe(HSA_LIMIT_SELF_2026);
+  });
+});
+
+describe('hsaQualifiedPayment: IRMAA only from an owner 65 or over (Pub 969, audit 2026-10-20)', () => {
+  const owner = (avail: number, medicare: boolean) => ({ avail, medicare });
+  it('is the plain pro-rata split when every owner with money is 65+ or there is no IRMAA', () => {
+    expect(hsaQualifiedPayment(1_000, 3_000, owner(6_000, true), owner(2_000, true))).toEqual({ total: 4_000, a: 3_000, b: 1_000 });
+    expect(hsaQualifiedPayment(1_000, 0, owner(6_000, false), owner(2_000, true))).toEqual({ total: 1_000, a: 750, b: 250 });
+  });
+  it('pays no IRMAA from an under-65 owner, even for the older spouse', () => {
+    // A is 66 with no HSA; B (60) holds it: only the medical bill is qualified.
+    expect(hsaQualifiedPayment(1_000, 3_000, owner(0, true), owner(50_000, false))).toEqual({ total: 1_000, a: 0, b: 1_000 });
+    expect(hsaQualifiedPayment(0, 3_000, owner(0, true), owner(50_000, false)).total).toBe(0);
+  });
+  it('pays medical from the under-65 owner first so the 65+ money covers IRMAA', () => {
+    const r = hsaQualifiedPayment(1_000, 3_000, owner(4_000, true), owner(1_000, false));
+    expect(r).toEqual({ total: 4_000, a: 3_000, b: 1_000 });
+  });
+  it('never pays more than either owner has', () => {
+    const r = hsaQualifiedPayment(5_000, 3_000, owner(2_000, true), owner(1_000, false));
+    expect(r.total).toBe(3_000);
+    expect(r.a).toBeLessThanOrEqual(2_000);
+    expect(r.b).toBeLessThanOrEqual(1_000);
+  });
+});
+
+describe('hsaLastResortDraw: unpaid IRMAA only from owners 65 and over', () => {
+  it('takes unpaid IRMAA from the 65+ owner only while the other is under 65', () => {
+    const d = hsaLastResortDraw({ need: 3_000, balA: 5_000, balB: 5_000, qualNeedLeft: 3_000, irmaaNeedLeft: 2_000, receipts: 0, penalizedA: false, penalizedB: true });
+    // medical 1,000 split by balance (500 each), IRMAA 2,000 from A alone
+    expect(d).toMatchObject({ qualified: 3_000, nonQual: 0, fromA: 2_500, fromB: 500 });
+    const dOnlyYoung = hsaLastResortDraw({ need: 10_000, balA: 0, balB: 5_000, qualNeedLeft: 3_000, irmaaNeedLeft: 2_000, receipts: 0, penalizedA: false, penalizedB: true });
+    expect(dOnlyYoung.qualified).toBe(1_000);
+  });
+  it('is unchanged when both owners are 65+', () => {
+    const a = hsaLastResortDraw({ need: 10_000, balA: 5_000, balB: 5_000, qualNeedLeft: 3_000, irmaaNeedLeft: 2_000, receipts: 0, penalizedA: false, penalizedB: false });
+    const b = hsaLastResortDraw({ need: 10_000, balA: 5_000, balB: 5_000, qualNeedLeft: 3_000, receipts: 0, penalizedA: false, penalizedB: false });
+    expect(a).toEqual(b);
   });
 });

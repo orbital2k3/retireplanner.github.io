@@ -1,10 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { runProjection } from './projection';
 import { samplePlan as defaultPlan } from '../schemas/plan';
 import type { Plan, IncomeStream } from '../schemas/plan';
 import { acaRetireePlan, medicalRow, withExpenses, withHsa } from './__testutil__/hsaPlans';
 import { ladderRungs, rung, thisYear, tipsRetireePlan, withTips } from './__testutil__/tipsPlans';
 import { planL_survivorARMD } from './__golden/plans';
+import { pinDate, unpinDate } from './__regression__/snapshotUtil';
+
+// Projections start in the current calendar year; pin it so the fixtures' ages hold after New Year.
+pinDate();
+afterAll(unpinDate);
 
 /** Sensitivity contract: every UI-editable field that the projection consumes
  *  must move at least one observable output metric (endBalance or lifetimeFedTax)

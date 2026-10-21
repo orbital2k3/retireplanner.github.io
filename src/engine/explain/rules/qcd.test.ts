@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { qcdRule } from './qcd';
 import { runProjection } from '../../projection';
 import { planA_simple, planQ_qcdGiver, planB_largeTradSingle } from '../../__golden/plans';
@@ -6,7 +6,7 @@ import { generateInsights, insightsForSurface } from '../index';
 import { pinDate, unpinDate } from '../../__regression__/snapshotUtil';
 import type { Plan } from '../../../schemas/plan';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 describe('qcdRule', () => {

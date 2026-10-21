@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import * as golden from './__golden/plans';
 import { type Plan } from '../schemas/plan';
@@ -6,7 +6,7 @@ import { assertProjectionInvariants } from './__invariants__/assertions';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { ladderRungs, rung, thisYear, tipsIdlePlan, tipsRetireePlan, tipsRmdPlan, withTips } from './__testutil__/tipsPlans';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 /** T-4: the dollar-flow invariants (sleeve mass balance, cash split, IRA/Roth availability including

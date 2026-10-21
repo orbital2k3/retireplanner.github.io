@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runMonteCarlo } from './monteCarlo';
 import { planB_largeTradSingle } from './__golden/plans';
 import type { Plan } from '../schemas/plan';
@@ -6,7 +6,7 @@ import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { rung, thisYear, withExpenses, withTips } from './__testutil__/tipsPlans';
 import { planWithoutLadder } from './tipsLadder';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 /** T-5 / TU-3: the claim the Monte Carlo page makes about a ladder, checked on a real fixture. A retiree

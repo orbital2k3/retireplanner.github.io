@@ -66,6 +66,8 @@ export function parseTipsCsv(
     seen++;
     const year = Number((cells[0] ?? '').match(/\b(19|20|21)\d{2}\b/)?.[0]);
     if (!Number.isInteger(year)) { errors.push({ line, message: 'Maturity: no year found' }); return; }
+    // Same bound as the schema, so a pasted rung can always be exported and imported again.
+    if (year < 1990) { errors.push({ line, message: 'Maturity year must be 1990 or later' }); return; }
     const principal = money(cells[1] ?? '');
     if (!(principal > 0)) { errors.push({ line, message: 'Adjusted principal must be a positive amount' }); return; }
     const rate = coupon(cells[2] ?? '');

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { runAndCompare, runAndCompareHsa, runAndCompareTips } from './harness';
 import { runProjection } from '../projection';
+import { pinDate, unpinDate } from '../__regression__/snapshotUtil';
 import {
   planA_simple, planB_largeTradSingle, planC_bracketFillConv,
   planD_singleFIRE, planE_allRothCouple, planF_allTradCouple,
@@ -18,7 +19,14 @@ import {
  *
  * NOTE: When real Excel-validated CSVs are available, replace the .csv files in this folder
  * to convert these from regression checks into Excel-parity checks.
+ *
+ * The projection starts in the current calendar year (ages, RMD/QCD eligibility, OBBBA years, ladder
+ * maturities), so the clock is pinned to the year the CSVs were captured; otherwise every golden would
+ * fail on January 1.
  */
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
+afterAll(unpinDate);
+
 describe('Golden projection snapshots', () => {
   it('Plan A — Simple couple, taxfirst, IL', () => {
     const r = runAndCompare('planA_simple', planA_simple());

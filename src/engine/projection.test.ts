@@ -1,10 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { runProjection } from './projection';
 import { samplePlan as defaultPlan } from '../schemas/plan';
 import type { Plan } from '../schemas/plan';
 import type { BlendPolicy } from './blendPolicy';
 import { assertProjectionInvariants, assertDeterministic } from './__invariants__/assertions';
 import { IRA_CONTRIB_LIMIT, IRA_CATCHUP } from './taxConstants';
+import { pinDate, unpinDate } from './__regression__/snapshotUtil';
+
+// Projections start in the current calendar year; pin it so the fixtures' ages hold after New Year.
+pinDate();
+afterAll(unpinDate);
 
 describe('runProjection (smoke)', () => {
   const result = runProjection(defaultPlan());

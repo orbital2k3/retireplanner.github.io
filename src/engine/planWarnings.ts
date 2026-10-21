@@ -4,7 +4,7 @@ import { calendarYearAge } from '../lib/ageUtils';
 import { INHERITED_DEADLINE_YEARS } from './taxConstants';
 import { resolveStrategy } from './strategy/resultSettings';
 import { qcdEligible } from './qcd';
-import { hsaBaseLimit, hsaCatchUp, hsaLimit, HSA_MEDICARE_AGE } from './hsa';
+import { effectiveHsaCoverage, hsaBaseLimit, hsaCatchUp, hsaLimit, HSA_MEDICARE_AGE } from './hsa';
 import { tipsLadderIssues } from './tipsValidation';
 
 /**
@@ -130,7 +130,7 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       warnings.push({
         id: `qcd-optout-${s.id}`,
         severity: 'info',
-        message: `"${s.description}" is marked as not paid directly to a public charity, so it is paid from your other accounts and gets no QCD tax treatment.`,
+        message: `"${s.description}" is marked as not paid directly to a public charity (for example a donor-advised fund), so it is taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. It still shows as giving in Projections.`,
       });
       continue;
     }
@@ -171,7 +171,8 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       });
       continue;
     }
-    const limit = hsaLimit(o.pf.hsaCoverage, o.age, 1);
+    const spouse = hsaWho.find((x) => x !== o);
+    const limit = hsaLimit(effectiveHsaCoverage(o.pf.hsaCoverage, spouse?.pf.hsaCoverage), o.age, 1);
     if (c > limit + 0.5) {
       warnings.push({
         id: `hsa-limit-${o.name}`,
@@ -180,8 +181,9 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       });
     }
   }
-  // Spouses on family coverage share one family limit (each keeps their own catch-up).
-  if (hsaWho.length === 2 && hsaWho.every((o) => o.pf.hsaCoverage === 'family')) {
+  // When either spouse is on family coverage they share one family limit (§223(b)(5); each keeps
+  // their own catch-up).
+  if (hsaWho.length === 2 && hsaWho.some((o) => o.pf.hsaCoverage === 'family')) {
     const pool = hsaBaseLimit('family', 1) + hsaWho.reduce((s, o) => s + hsaCatchUp(o.age), 0);
     const asked = hsaWho.reduce((s, o) => s + (o.pf.hsaContribution ?? 0), 0);
     const eachWithin = hsaWho.every((o) => (o.pf.hsaContribution ?? 0) <= hsaLimit('family', o.age, 1) + 0.5);
@@ -189,7 +191,7 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       warnings.push({
         id: 'hsa-family-pool',
         severity: 'warn',
-        message: `${hsaWho[0].name} and ${hsaWho[1].name} are both on family coverage, so they share one limit: together they can put in ${money(pool)}, but ${money(asked)} is entered. The second contribution is capped.`,
+        message: `${hsaWho[0].name} and ${hsaWho[1].name} share one family limit because ${hsaWho.every((o) => o.pf.hsaCoverage === 'family') ? 'both are' : 'one of them is'} on family coverage: together they can put in ${money(pool)}, but ${money(asked)} is entered. The second contribution is capped.`,
       });
     }
   }
@@ -215,7 +217,11 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
         message: `TIPS rungs in ${i.place} (${money(i.total ?? 0)}) exceed the ${bal} (${money(i.balance ?? 0)}). The plan caps them at the balance.`,
       });
     } else if (i.code === 'matured') {
-      warnings.push({ id: `tips-matured-${i.rungId}`, severity: 'warn', message: `${i.message} Remove it or update its maturity year.` });
+      warnings.push({ id: `tips-matured-${i.rungId}`, severity: 'warn', message: i.message });
+    } else if (i.code === 'face') {
+      warnings.push({ id: `tips-face-${i.rungId}`, severity: 'warn', message: i.message });
+    } else if (i.code === 'basis') {
+      warnings.push({ id: 'tips-basis', severity: 'info', message: i.message });
     } else {
       warnings.push({ id: `tips-owner-${i.rungId}`, severity: 'warn', message: `${i.message} Pick whose IRA holds it.` });
     }

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { computePlanWarnings } from './planWarnings';
 import { computeHsaProjectionWarnings, hsaEarlyDrawWarning } from './hsaWarnings';
 import { runProjection } from './projection';
@@ -6,7 +6,7 @@ import * as golden from './__golden/plans';
 import { acaRetireePlan, hsaOnlyPlan, withHsa } from './__testutil__/hsaPlans';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 // planA pinned to 2026: A is 53 (claims 67), B is 51 (claims 67).
@@ -41,9 +41,17 @@ describe('HSA plan warnings (HU-4)', () => {
   it('flag two family-coverage spouses asking for more than one shared limit', () => {
     const p = withHsa(golden.planA_simple(), { a: { hsaContribution: 8_000, hsaCoverage: 'family' }, b: { hsaContribution: 8_000, hsaCoverage: 'family' } });
     const w = computePlanWarnings(p).find((x) => x.id === 'hsa-family-pool')!;
-    expect(w.message).toMatch(/share one limit/);
+    expect(w.message).toMatch(/share one family limit because both are on family coverage/);
     const fine = withHsa(golden.planA_simple(), { a: { hsaContribution: 5_000, hsaCoverage: 'family' }, b: { hsaContribution: 3_000, hsaCoverage: 'family' } });
     expect(ids(fine)).not.toContain('hsa-family-pool');
+  });
+
+  it('share the family limit when only one spouse is on family coverage (§223(b)(5))', () => {
+    const p = withHsa(golden.planA_simple(), { a: { hsaContribution: 8_000, hsaCoverage: 'family' }, b: { hsaContribution: 4_400 } });
+    expect(computePlanWarnings(p).find((x) => x.id === 'hsa-family-pool')?.message).toMatch(/because one of them is on family coverage/);
+    // The self-only spouse is held to the family limit, so 6,000 is not "over the self limit".
+    const b = withHsa(golden.planA_simple(), { a: { hsaCoverage: 'family' }, b: { hsaContribution: 6_000 } });
+    expect(ids(b).some((id) => id.startsWith('hsa-limit-'))).toBe(false);
   });
 
   it("show the California non-conformity notice only for a CA plan with an HSA", () => {

@@ -99,9 +99,16 @@ export const usePlanStore = create<PlanState>()(
           portfolio: { ...s.plan.portfolio, personB: { taxable: 0, taxableBasis: 0, traditional: 0, roth: 0, annualContribution: 0, contribGrowth: { mode: 'cpi' }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } } },
         },
       })),
-      removePersonB: () => set((s) => ({
-        plan: { ...s.plan, personB: undefined, portfolio: { ...s.plan.portfolio, personB: undefined } },
-      })),
+      // B's pre-tax TIPS rungs sit in B's IRA, which leaves with B (like B's HSA), so they go too; an
+      // emptied ladder is stored as absent, as setTipsLadder does.
+      removePersonB: () => set((s) => {
+        const { tipsLadder, ...rest } = s.plan.portfolio;
+        const rungs = tipsLadder?.rungs.filter((r) => !(r.account === 'traditional' && r.whose === 'B'));
+        const portfolio = tipsLadder && rungs && rungs.length > 0
+          ? { ...rest, tipsLadder: rungs.length === tipsLadder.rungs.length ? tipsLadder : { ...tipsLadder, rungs } }
+          : rest;
+        return { plan: { ...s.plan, personB: undefined, portfolio: { ...portfolio, personB: undefined } } };
+      }),
       setAssumptions: (patch) => set((s) => ({ plan: { ...s.plan, assumptions: { ...s.plan.assumptions, ...patch } } })),
       setPersonAPortfolio: (patch) => set((s) => ({
         plan: { ...s.plan, portfolio: { ...s.plan.portfolio, personA: { ...s.plan.portfolio.personA, ...patch } } },

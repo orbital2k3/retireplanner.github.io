@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection, type ProjectionRow } from './projection';
 import type { ExpenseStream, IncomeStream, Plan } from '../schemas/plan';
 import * as golden from './__golden/plans';
@@ -12,7 +12,7 @@ import type { BlendPolicy } from './blendPolicy';
  *  non-itemizer deduction, and the cases that must NOT change a plan.
  *  Dates are pinned (2026-06-15), so a person born 1950-01-01 is 76 in the first plan year. */
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 const flat = { mode: 'fixed' as const, rate: 0 };

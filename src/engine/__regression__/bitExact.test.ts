@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { runProjection, type ProjectionResult } from '../projection';
@@ -34,7 +34,7 @@ type Snap = Record<string, Entry>;
 const snapshot: Snap = !UPDATE && fs.existsSync(SNAP_FILE) ? JSON.parse(fs.readFileSync(SNAP_FILE, 'utf8')) : {};
 const produced: Snap = {};
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(() => {
   unpinDate();
   if (UPDATE) {

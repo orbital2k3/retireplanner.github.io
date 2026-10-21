@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { computePlanWarnings } from './planWarnings';
 import { computeTipsProjectionWarnings } from './tipsWarnings';
 import { runProjection } from './projection';
@@ -6,7 +6,7 @@ import { planF_allTradCouple, planL_survivorARMD } from './__golden/plans';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { ladderRungs, rung, thisYear, tipsRmdPlan, withTips } from './__testutil__/tipsPlans';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 const Y = thisYear();
 const tipsIds = (p: Parameters<typeof computePlanWarnings>[0]) => computePlanWarnings(p).filter((w) => w.id.startsWith('tips'));

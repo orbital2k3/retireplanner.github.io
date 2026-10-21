@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runMonteCarlo } from './monteCarlo';
 import { runProjection } from './projection';
 import { mulberry32, parametricNormal } from './returnModels';
@@ -7,7 +7,7 @@ import { hsaOnlyPlan, withExpenses, withHsa } from './__testutil__/hsaPlans';
 import { planR_hsaEarlyRetiree } from './__golden/plans';
 import type { Plan } from '../schemas/plan';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 /** H-11: Monte Carlo runs the same projection with a stochastic return path, so the HSA must compound on

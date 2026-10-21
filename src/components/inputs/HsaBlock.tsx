@@ -18,13 +18,15 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
   /** Age now, used for the catch-up hint. */
   age: number | undefined;
   retirementAge: number;
-  /** Spouse's name when both spouses are on family coverage (they share one limit). */
+  /** Spouse's name when the spouse is on family coverage: under §223(b)(5) both then share one
+   *  family limit, whatever this person's own coverage. */
   sharedWith?: string;
 }) {
   const [open, setOpen] = useState((data.hsa ?? 0) > 0 || (data.hsaContribution ?? 0) > 0);
   const [helpOpen, setHelpOpen] = useState(false);
   const coverage = data.hsaCoverage ?? 'self';
-  const max = hsaLimit(coverage, age ?? 0, 1);
+  const limitCoverage = sharedWith ? 'family' : coverage;
+  const max = hsaLimit(limitCoverage, age ?? 0, 1);
   const contribution = data.hsaContribution ?? 0;
   const catchUp = (age ?? 0) >= 55;
 
@@ -57,8 +59,8 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
             <div className="helper-text" style={contribution > max ? { color: 'var(--warning)' } : undefined}>
               {contribution > max
                 ? `Above the limit. The plan caps it at ${fmtFull(max)}.`
-                : `Max ${fmtFull(max)} (${coverage}${catchUp ? ' + 55+ catch-up' : ''})`}
-              {sharedWith && coverage === 'family' ? ` · shared with ${sharedWith}` : ''}
+                : `Max ${fmtFull(max)} (${limitCoverage}${catchUp ? ' + 55+ catch-up' : ''})`}
+              {sharedWith ? ` · shared with ${sharedWith}` : ''}
             </div>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>

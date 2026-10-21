@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SavedPlanSchema, type SavedPlan } from '../schemas/savedPlan';
@@ -30,7 +30,7 @@ const legacy = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures__/e
 const migrateStore = (plan: unknown, from: number) =>
   (usePlanStore.persist.getOptions().migrate!({ plan, scenarios: [] }, from) as { plan: SavedPlan }).plan;
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 describe('v36 → v37 on captured plans', () => {

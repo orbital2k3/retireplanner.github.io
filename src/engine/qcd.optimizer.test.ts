@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import * as golden from './__golden/plans';
 import type { Plan } from '../schemas/plan';
 import { optimizeStrategy } from './optimizer';
@@ -9,7 +9,7 @@ import { enc, pinDate, unpinDate } from './__regression__/snapshotUtil';
 /** Opt tier: how the optimizer behaves when a plan has charitable giving that can be paid as QCDs.
  *  planG (CA couple) is the cheap fixture; each optimized run is ~17s, so keep the count low. */
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 const withGiving = (base: Plan, category: 'charitable' | 'general', extra: Partial<Plan> = {}): Plan => ({

@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import { samplePlan, PlanSchema, type ExpenseStream, type Plan } from '../schemas/plan';
 import * as golden from './__golden/plans';
@@ -8,7 +8,7 @@ import { digestProjection, enc, pinDate, unpinDate } from './__regression__/snap
 /** Phase 1A foundation (F-1..F-3): expense `category` / `qcd` are tags. They feed the
  *  medicalSpend / charitableSpend row fields and change nothing else until the QCD engine lands. */
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 const tagAll = (p: Plan, tag: (e: ExpenseStream, i: number) => Partial<ExpenseStream>): Plan => ({

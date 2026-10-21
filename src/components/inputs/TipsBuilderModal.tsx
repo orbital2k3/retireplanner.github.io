@@ -56,6 +56,10 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
     : fundingKey === 'traditional-B' ? `${nameB ?? 'Person B'} pre-tax`
     : fundingKey === 'taxable' ? 'Taxable' : 'Roth';
   const n = built.rungs.length;
+  // fmtK renders 0 as an em dash, which reads as "unknown" here; the balance really is $0.
+  const after = Math.max(0, before) - built.cost;
+  const kOrZero = (v: number) => (Math.abs(v) < 500 ? '$0' : fmtK(v));
+  const existing = portfolio.tipsLadder?.rungs.length ?? 0;
 
   return (
     <div
@@ -73,7 +77,12 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
           <button onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', fontSize: 20, color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
 
-        <div style={{ padding: '12px 14px 14px' }}>
+        <div style={{ padding: '12px 14px 0' }}>
+          <div className="helper-text" style={{ marginTop: 0, marginBottom: 10 }}>
+            Plan new bonds that pay the income you choose. The preview starts from example values; change any input and it updates.
+            Nothing is added until you click Add at the bottom. The rungs then appear on the TIPS card, where you can edit or remove them.
+            {existing > 0 && ` Your ladder already has ${existing} ${existing === 1 ? 'rung' : 'rungs'}; these are added alongside.`}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 8 }}>
             <div>
               <div style={label}>Income per year (today's $)</div>
@@ -110,9 +119,9 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
             </div>
           </div>
 
-          <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: 1, color: 'var(--text-muted)', margin: '10px 0 4px' }}>PREVIEW</div>
+          <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: 1, color: 'var(--text-muted)', margin: '10px 0 4px' }}>PREVIEW · NOT ADDED YET</div>
           {n === 0 ? (
-            <div className="helper-text">Pick an income above $0 and a through age no earlier than the from age.</div>
+            <div className="helper-text">No rungs for these inputs.</div>
           ) : (
             <>
               <div style={{ ...grid4, fontWeight: 500, color: 'var(--text-secondary)', borderBottom: '2px solid var(--border-light)', paddingBottom: 3 }}>
@@ -139,16 +148,19 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
             </div>
             <div style={tile}>
               <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Comes out of</div>
-              <div style={{ fontWeight: 500, fontSize: 14 }}>{sourceName}: {fmtK(Math.max(0, before))} → {fmtK(before - built.cost)}</div>
+              <div style={{ fontWeight: 500, fontSize: 14 }}>{sourceName}: {kOrZero(Math.max(0, before))} → {after >= 0 ? kOrZero(after) : `short by ${fmtFull(-after)}`}</div>
             </div>
           </div>
           <div className="helper-text" style={{ marginTop: 4 }}>
-            The money stays in your balance above; the plan sets these bonds apart from it. Adds to any rungs you already have.
+            The money stays in your balance on the Portfolio panel; the plan sets these bonds apart from it.
           </div>
+        </div>
 
-          {blocker && <div className="plan-warning error" style={{ marginTop: 8 }}>{blocker}</div>}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+        {/* Footer stays in view while the dialog scrolls, so the Add button and why it is off are never hidden. */}
+        <div style={{ position: 'sticky', bottom: 0, background: '#fff', borderTop: '1px solid var(--border-light)', padding: '10px 14px 12px', marginTop: 12 }}>
+          {blocker && <div className="plan-warning error" style={{ marginBottom: 8 }}>{blocker}</div>}
+          {n === 0 && <div className="helper-text" style={{ marginTop: 0, marginBottom: 8 }}>Nothing to add yet: pick an income above $0 and a through age no earlier than the from age.</div>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
             <button
               type="button"

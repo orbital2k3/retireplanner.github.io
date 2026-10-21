@@ -37,6 +37,16 @@ const qcdGiver = (born: string): Plan => {
   }];
   return p;
 };
+/** The same giving marked as not paid to a public charity (donor-advised fund). */
+const daf = (p: Plan): Plan => ({ ...p, expenseStreams: p.expenseStreams.map((e) => (e.category === 'charitable' ? { ...e, qcd: false } : e)) });
+/** A $60k giver whose other spending (x4) runs the accounts dry, so later years have a shortfall and giving. */
+const shortfallGiver = (qcd: boolean): Plan => {
+  const p = qcdGiver('1950-01-01');
+  p.expenseStreams = p.expenseStreams.map((e) => (e.category === 'charitable'
+    ? { ...e, annualAmount: 60_000, ...(qcd ? {} : { qcd: false }) }
+    : { ...e, annualAmount: e.annualAmount * 4 }));
+  return p;
+};
 
 function mixedTips(): Plan {
   const Y = thisYear();
@@ -56,6 +66,10 @@ const extra: [string, Plan][] = [
   ['conversion + pay tax from brokerage', convBrok()],
   ['QCD inside the RMD', qcdGiver('1950-01-01')],
   ['QCD beyond the RMD (70, no RMD yet)', qcdGiver('1956-01-01')],
+  ['giving before 70½', qcdGiver('1975-01-01')],
+  ['giving to a donor-advised fund', daf(qcdGiver('1950-01-01'))],
+  ['shortfall years with donor-advised giving', shortfallGiver(false)],
+  ['shortfall years with QCD-eligible giving', shortfallGiver(true)],
   ['HSA pays medical + IRMAA', medicalPlan({ a: { hsa: 400_000 }, policyAge: 0 })],
   ['HSA last resort with penalty', hsaOnlyPlan(20_000)],
   ['HSA retiree contribution (ACA)', acaRetireePlan()],
@@ -125,10 +139,25 @@ describe('buildSankeyFlows', () => {
       const f = buildSankeyFlows(row, false);
       expect(f.links.filter((l) => l.source === 'qcd').map((l) => l.target)).toEqual(['charity']);
       expect(f.sources.find((s) => s.id === 'qcd')?.value).toBeCloseTo(row.qcd, 6);
-      expect(f.uses.find((u) => u.id === 'charity')?.value).toBeCloseTo(row.qcd, 6);
+      expect(f.uses.find((u) => u.id === 'charity')?.value).toBeCloseTo(row.charitableSpend, 6);
       expect(f.sources.find((s) => s.id === 'rmd')?.value ?? 0).toBeCloseTo(row.rmd - (row.qcd - row.qcdBeyondRmd), 6);
-      // Net Spending excludes the QCD-funded giving, so spending + charity = the row's netSpend.
-      expect((f.uses.find((u) => u.id === 'spend')?.value ?? 0) + row.qcd).toBeCloseTo(row.netSpend, 6);
+      // Net Spending excludes all giving, so spending + charity = the row's netSpend.
+      expect((f.uses.find((u) => u.id === 'spend')?.value ?? 0) + row.charitableSpend).toBeCloseTo(row.netSpend, 6);
+    }
+  });
+
+  it('giving that is not a QCD (before 70½, or to a donor-advised fund) is a Charity use paid from the pool', () => {
+    for (const [label, plan] of [['before 70½', qcdGiver('1975-01-01')], ['DAF', daf(qcdGiver('1950-01-01'))]] as const) {
+      const rows = runProjection(plan).rows.filter((r) => r.charitableSpend > 0 && r.qcd === 0);
+      expect(rows.length, label).toBeGreaterThan(0);
+      for (const row of rows) {
+        const f = buildSankeyFlows(row, false);
+        expect(f.uses.find((u) => u.id === 'charity')?.value, label).toBeCloseTo(row.charitableSpend, 6);
+        expect(f.uses.find((u) => u.id === 'charity')?.label).toBe('Charity');
+        expect(f.links.some((l) => l.source === 'qcd')).toBe(false);
+        const intoCharity = f.links.filter((l) => l.target === 'charity').reduce((s, l) => s + l.amount, 0);
+        expect(intoCharity, label).toBeCloseTo(row.charitableSpend, 1);
+      }
     }
   });
 
@@ -155,6 +184,25 @@ describe('buildSankeyFlows', () => {
       checkRow(row, true);
       const gapLinks = buildSankeyFlows(row).links.filter((l) => l.source === 'gap');
       expect(gapLinks.map((l) => l.target)).toEqual(['spend']);
+    }
+  });
+
+  it('shortfall years with giving split the unfunded amount between Net Spending and Charity', () => {
+    for (const qcd of [false, true]) {
+      const rows = runProjection(shortfallGiver(qcd)).rows.filter((r) => r.shortfall > 0 && r.charitableSpend > r.qcd);
+      expect(rows.length, `qcd ${qcd}`).toBeGreaterThan(0);
+      for (const row of rows) {
+        const f = buildSankeyFlows(row, false);
+        const gap = f.links.filter((l) => l.source === 'gap');
+        expect(gap.map((l) => l.target).sort(), `age ${row.ageA}`).toEqual(['charity', 'spend']);
+        expect(gap.reduce((s, l) => s + l.amount, 0)).toBeCloseTo(row.shortfall, 6);
+        // Each use gets the same unfunded share of what the pool had to pay for it.
+        const spend = f.uses.find((u) => u.id === 'spend')!.value;
+        const gifts = row.charitableSpend - row.qcd;
+        const toSpend = gap.find((l) => l.target === 'spend')!.amount;
+        const toCharity = gap.find((l) => l.target === 'charity')!.amount;
+        expect(toSpend / spend).toBeCloseTo(toCharity / gifts, 9);
+      }
     }
   });
 

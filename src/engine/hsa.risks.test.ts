@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection, type ProjectionRow } from './projection';
 import { assertProjectionInvariants } from './__invariants__/assertions';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
@@ -6,7 +6,7 @@ import { hsaOnlyPlan, medicalRow, withExpenses, withHsa } from './__testutil__/h
 import * as golden from './__golden/plans';
 import type { Plan } from '../schemas/plan';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 /** H-9. R7: the HSA paying IRMAA must not break gross-up convergence. R9: last-resort draw order and

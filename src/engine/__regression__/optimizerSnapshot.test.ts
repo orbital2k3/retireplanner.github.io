@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Plan } from '../../schemas/plan';
@@ -33,7 +33,7 @@ interface OptSnap {
 const snapshot: Record<string, OptSnap> = !UPDATE && fs.existsSync(SNAP_FILE) ? JSON.parse(fs.readFileSync(SNAP_FILE, 'utf8')) : {};
 const produced: Record<string, OptSnap> = {};
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(() => {
   unpinDate();
   if (UPDATE) {

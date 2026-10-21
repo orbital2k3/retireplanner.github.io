@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import { rmdDivisor } from './rmd';
 import { planL_survivorARMD } from './__golden/plans';
@@ -6,7 +6,7 @@ import type { Plan, IncomeStream } from '../schemas/plan';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { ladderRungs, rung, thisYear, tipsIdlePlan, tipsRetireePlan, withTips } from './__testutil__/tipsPlans';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 const Y = thisYear();

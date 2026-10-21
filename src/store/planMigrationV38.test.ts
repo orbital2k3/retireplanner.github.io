@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SavedPlanSchema, type SavedPlan } from '../schemas/savedPlan';
@@ -27,10 +27,22 @@ const baselines = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures_
 interface LegacyBaseline { n: string; status: string; key: string; endTotalReal: number; lifetimeFedTax: number; lifetimeConversion: number }
 const legacy = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures__/exports/v35-legacy-imports.json'), 'utf8')) as LegacyBaseline[];
 
+/** Plans whose numbers moved through a deliberate engine change made after this baseline was captured
+ *  (2026-10-20 audit: the retiree HSA deduction now also comes off capital gains and state income, the
+ *  family pool, the IRMAA age rule). Their key and status are still checked against the baseline; their
+ *  numbers against the same saved plan on today's engine, which is what shows the load path is neutral. */
+const ENGINE_CHANGED = new Set(['planR_hsaEarlyRetiree']);
+const expectedNumbers = (b: { name: string; endTotalReal: number; lifetimeFedTax: number; saved: SavedPlan }) => {
+  if (!ENGINE_CHANGED.has(b.name)) return b;
+  const p = runProjection(enginePlan(b.saved));
+  expect(p.endTotalReal, 'remove the plan from ENGINE_CHANGED: its numbers match the baseline again').not.toBe(b.endTotalReal);
+  return { endTotalReal: p.endTotalReal, lifetimeFedTax: p.lifetimeFedTax };
+};
+
 const migrateStore = (plan: unknown, from: number) =>
   (usePlanStore.persist.getOptions().migrate!({ plan, scenarios: [] }, from) as { plan: SavedPlan }).plan;
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 describe('v37 → v38 on captured plans', () => {
@@ -53,8 +65,9 @@ describe('v37 → v38 on captured plans', () => {
       expect(after.strategy.result!.inputKey).toBe(b.resultKey);
       expect(planStatus(after)).toBe('fresh');
       const proj = runProjection(enginePlan(after));
-      expect(proj.endTotalReal).toBe(b.endTotalReal);
-      expect(proj.lifetimeFedTax).toBe(b.lifetimeFedTax);
+      const want = expectedNumbers(b);
+      expect(proj.endTotalReal).toBe(want.endTotalReal);
+      expect(proj.lifetimeFedTax).toBe(want.lifetimeFedTax);
     });
 
     it(`${b.name}: a v37 export imports fresh with the same key and projection`, () => {
@@ -63,7 +76,7 @@ describe('v37 → v38 on captured plans', () => {
       expect(r.ok).toBe(true);
       expect(savedOptimizerKey(r.plan!)).toBe(b.key);
       expect(planStatus(r.plan!)).toBe('fresh');
-      expect(runProjection(enginePlan(r.plan!)).endTotalReal).toBe(b.endTotalReal);
+      expect(runProjection(enginePlan(r.plan!)).endTotalReal).toBe(expectedNumbers(b).endTotalReal);
     });
   }
 

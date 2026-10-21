@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { computeHsaBenefit, hsaBenefitCopy } from './hsaBenefit';
 import { hsaRule } from './explain/rules/hsa';
 import { generateInsights, insightsForSurface } from './explain/index';
@@ -7,7 +7,7 @@ import * as golden from './__golden/plans';
 import { acaRetireePlan, medicalPlan, withHsa } from './__testutil__/hsaPlans';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 describe('computeHsaBenefit (HU-5)', () => {
@@ -45,17 +45,17 @@ describe('computeHsaBenefit (HU-5)', () => {
 describe('hsaBenefitCopy and hsaRule (HU-5)', () => {
   it('writes a title and body only from numbers that exist', () => {
     const both = hsaBenefitCopy({ qualifiedTotal: 184_040, irmaaPaid: 5_000, firstPayAge: 65,
-      contribution: { years: 10, perYear: 9_750, acaModeled: true, acaMagiLowered: 9_750, subsidyRaised: 3_120 } });
+      contribution: { years: 10, perYear: 9_750, acaModeled: true, yearsLowered: 10, acaMagiLowered: 9_750, subsidyRaised: 3_120, premiumNet: 31_200 } });
     expect(both.title).toBe('Your HSA covers Medicare surcharges and medical bills from 65');
     expect(both.body).toContain("$184,000 of medical costs paid tax-free over the plan (today's $).");
     expect(both.body).toContain('lowers your ACA income by about $9,800 and raises your subsidy by about $3,100 a year');
-    const only = hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { years: 3, perYear: 4_400, acaModeled: true, acaMagiLowered: 4_400, subsidyRaised: 0 } });
+    const only = hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { years: 3, perYear: 4_400, acaModeled: true, yearsLowered: 3, acaMagiLowered: 4_400, subsidyRaised: 0, premiumNet: 0 } });
     expect(only.title).toMatch(/lowers your ACA income/);
     expect(only.body).not.toMatch(/subsidy/);
-    const noAca = hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { years: 3, perYear: 4_400, acaModeled: false, acaMagiLowered: 0, subsidyRaised: 0 } });
+    const noAca = hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { years: 3, perYear: 4_400, acaModeled: false, yearsLowered: 0, acaMagiLowered: 0, subsidyRaised: 0, premiumNet: 0 } });
     expect(noAca.body).toMatch(/deducted from your taxable income/);
     // ACA modeled but the funding withdrawals cancel the deduction: no promise of a lower ACA income
-    const cancelled = hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { years: 3, perYear: 4_400, acaModeled: true, acaMagiLowered: 0, subsidyRaised: 0 } });
+    const cancelled = hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { years: 3, perYear: 4_400, acaModeled: true, yearsLowered: 0, acaMagiLowered: 0, subsidyRaised: 0, premiumNet: 0 } });
     expect(cancelled.body).toMatch(/doesn't lower your ACA income in this plan/);
   });
 
@@ -71,13 +71,30 @@ describe('hsaBenefitCopy and hsaRule (HU-5)', () => {
   });
 });
 
-describe('computeHsaBenefit on planR (HU-5 finding)', () => {
-  it('reports no ACA-income reduction when taxable/pre-tax withdrawals fund the contribution', () => {
+describe('computeHsaBenefit on planR (audit 2026-10-20: the deduction also comes off capital gains)', () => {
+  it('lowers ACA income while the brokerage funds it, and nets out the year the brokerage runs out sooner', () => {
     const b = computeHsaBenefit(golden.planR_hsaEarlyRetiree())!;
-    expect(b.contribution?.acaModeled).toBe(true);
-    // taxfirst: the contribution is paid from gains-bearing brokerage money, then pre-tax money, whose
-    // withdrawal income cancels the deduction, so the card must not claim a lower ACA income
-    expect(b.contribution!.acaMagiLowered).toBeLessThan(1);
-    expect(hsaBenefitCopy(b).body).toMatch(/doesn't lower your ACA income/);
+    const c = b.contribution!;
+    expect(c.acaModeled).toBe(true);
+    // taxfirst: the contribution is paid from brokerage money, of which only the gain part is income, so
+    // ACA income falls by most of the contribution in the brokerage years
+    expect(c.yearsLowered).toBeGreaterThan(0);
+    expect(c.yearsLowered).toBeLessThan(c.years);
+    expect(c.acaMagiLowered).toBeGreaterThan(0.4 * c.perYear);
+    expect(c.acaMagiLowered).toBeLessThan(c.perYear);
+    const copy = hsaBenefitCopy(b).body;
+    expect(copy).toMatch(new RegExp(`in ${c.yearsLowered} of those ${c.years} years`));
+    expect(copy).not.toMatch(/doesn't lower your ACA income/);
+    // the net premium sentence matches the sign of the net effect
+    if (c.premiumNet <= -50) expect(copy).toMatch(/premiums come to about \$[\d,]+ more/);
+    if (c.premiumNet >= 50) expect(copy).toMatch(/saves about \$[\d,]+ in ACA premiums/);
+  });
+
+  it('mixed-year copy states the net premium effect either way', () => {
+    const base = { years: 10, perYear: 8_750, acaModeled: true, yearsLowered: 7, acaMagiLowered: 5_000, subsidyRaised: 700 };
+    expect(hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { ...base, premiumNet: -26_000 } }).body)
+      .toMatch(/in 7 of those 10 years\. .*premiums come to about \$26,000 more/);
+    expect(hsaBenefitCopy({ qualifiedTotal: 0, irmaaPaid: 0, contribution: { ...base, premiumNet: 4_900 } }).body)
+      .toMatch(/saves about \$4,900 in ACA premiums/);
   });
 });

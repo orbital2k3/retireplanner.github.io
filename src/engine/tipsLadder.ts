@@ -1,5 +1,5 @@
 import type { Portfolio, TipsRung } from '../schemas/plan';
-import { ladderInBalances } from './tipsValidation';
+import { ladderInBalances, TIPS_MAX_FACE_RATIO } from './tipsValidation';
 
 /** TIPS ladder mechanics (pure). The projection calls `resolveTipsLadder` once and `tipsLadderYear`
  *  once per year, only when the plan has a ladder, so a plan without one pays nothing.
@@ -10,8 +10,8 @@ import { ladderInBalances } from './tipsValidation';
  *  - Principal of a live rung is `adjustedPrincipal * idx`. The year's indexation (`accrual`) is the
  *    change over the year; it is paid out only at maturity, never as cash during the life of the bond.
  *  - Coupon = real coupon rate x indexed principal at year end.
- *  - Maturity pays the greater of indexed principal and `faceValue` (the deflation floor).
- *    `floorBonus` is the part above indexed principal.
+ *  - Maturity pays the greater of indexed principal and `faceValue` (the deflation floor), with
+ *    `faceValue` capped at TIPS_MAX_FACE_RATIO x principal. `floorBonus` is the part above indexed principal.
  *  - The sleeve ignores market returns entirely; it follows only CPI. */
 
 export type TipsAccount = TipsRung['account'];
@@ -44,7 +44,7 @@ export function rungYear(
   const coupon = rung.couponRate * endPrin;
   const accrual = endPrin - begVal;
   if (!isMaturity) return { begVal, coupon, accrual, payout: 0, floorBonus: 0, endVal: endPrin };
-  const face = rung.faceValue ?? rung.adjustedPrincipal;
+  const face = rung.faceValue === undefined ? rung.adjustedPrincipal : Math.min(rung.faceValue, rung.adjustedPrincipal * TIPS_MAX_FACE_RATIO);
   const floorBonus = Math.max(0, face - endPrin);
   return { begVal, coupon, accrual, payout: endPrin + floorBonus, floorBonus, endVal: 0 };
 }
@@ -145,6 +145,9 @@ export interface TipsYear {
   accrual: number;
   /** Principal paid at maturity (includes `floorBonus`). */
   maturity: number;
+  /** Entered (un-indexed) principal of the taxable rungs maturing this year: the share of the carve-out
+   *  whose basis comes back as cash, used to realize any gain the entered basis did not cover. */
+  maturedTaxablePrincipal: number;
   floorBonus: number;
   /** Cash that reaches the household from taxable rungs (coupons + maturities). */
   cash: number;
@@ -170,7 +173,7 @@ export function tipsLadderYear(
   aliveB: boolean,
 ): TipsYear {
   const y: TipsYear = {
-    beg: 0, begTradA: 0, begTradB: 0, coupon: 0, accrual: 0, maturity: 0, floorBonus: 0,
+    beg: 0, begTradA: 0, begTradB: 0, coupon: 0, accrual: 0, maturity: 0, maturedTaxablePrincipal: 0, floorBonus: 0,
     cash: 0, toTradA: 0, toTradB: 0, toRoth: 0, ordInc: 0, endTaxable: 0, endTrad: 0, endRoth: 0,
   };
   for (const r of ladder.rungs) {
@@ -184,6 +187,7 @@ export function tipsLadderYear(
     y.floorBonus += ry.floorBonus;
     if (r.account === 'taxable') {
       y.cash += paid;
+      if (calendarYear === r.maturityYear) y.maturedTaxablePrincipal += r.adjustedPrincipal;
       y.ordInc += taxableRungIncome(ry);
       y.endTaxable += ry.endVal;
     } else if (r.account === 'roth') {

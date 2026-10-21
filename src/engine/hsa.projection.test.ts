@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import * as golden from './__golden/plans';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { withHsa, medicalPlan, hsaOnlyPlan } from './__testutil__/hsaPlans';
 
-beforeAll(pinDate);
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
 
 // planA (pinned to 2026): A is 53 (retires 65, claims 67), B is 51 (retires 63, claims 67).

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import { useProjection, usePlanStore } from '../store/usePlanStore';
 import StalePlanBanner from '../components/StalePlanBanner';
 import type { DisplayMode } from '../store/usePlanStore';
@@ -61,6 +61,15 @@ const deductionApplies = (r: Row) => r.ordIncome + r.ltcg > 0;
 const inheritedIncome = (r: Row) => (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0)
   + (r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0);
 
+/** Splits a year's Charitable spending into the QCD part and the part paid from other accounts. */
+const givingTooltip = (r: Row): string => {
+  if (!(r.charitableSpend > 0)) return '';
+  const other = Math.max(0, r.charitableSpend - r.qcd);
+  return r.qcd > 0
+    ? `${fmtFull(r.qcd)} paid from your IRA as a QCD; ${fmtFull(other)} paid from your other accounts.`
+    : 'Paid from your other accounts (no QCD this year). Included in Net Spending.';
+};
+
 /** Explains a year where part of the RMD (or more) was paid straight to charity as a QCD. */
 const rmdTooltip = (r: Row): string => {
   if (!(r.qcd > 0)) return '';
@@ -118,14 +127,15 @@ const COLUMNS: Column[] = [
   { key: 'niit',         label: 'NIIT',        group: 'taxes', essential: false, fmt: 'money', get: (r) => r.niit,                                   bg: BG.taxes },
   { key: 'effRate',      label: 'Eff Rate',    group: 'taxes', essential: false, fmt: 'pct',   get: (r) => r.effRate * 100,                          bg: BG.taxes },
 
-  // QCD — charitable giving paid straight from an IRA, and the cash-gift deduction. Shown by default
-  // only when the plan pays QCDs (see `qcdAuto`); always available in the column chooser and the CSV.
+  // Giving — all Charitable-tagged spending, the part paid straight from an IRA as a QCD, and the cash-gift
+  // deduction. Shown by default only when the plan has giving (see `qcdAuto`); always in the chooser and CSV.
+  { key: 'giving',           label: 'Giving',       group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charitableSpend, tooltip: givingTooltip, bg: BG.qcd },
   { key: 'qcd',              label: 'QCD',          group: 'qcd', essential: false, fmt: 'money', get: (r) => r.qcd, tooltip: (r) => r.qcd > 0 ? `Paid from your IRA straight to charity, so it is not taxed. ${fmtFull(r.qcd - r.qcdBeyondRmd)} of it counts toward your RMD.` : '', bg: BG.qcd },
   { key: 'charityDeduction', label: 'Charity ded.', group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charityDeduction, tooltip: (r) => r.charityDeduction > 0 ? 'Deduction for cash gifts to public charities when you don\'t itemize (from 2026: up to $1,000, or $2,000 joint). Included in the standard deduction total.' : '', bg: BG.qcd },
 
   // HSA — opt-in through the column chooser (and the CSV). Shown to every plan, but all zero without an HSA.
   { key: 'endHSA',          label: 'HSA Bal.',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.endHSA, tooltip: (r) => r.endHSA > 0 ? `Year-end HSA balance (included in End Total). Receipts on file: ${fmtFull(r.hsaReceiptsBal)}.` : '', bg: BG.hsa },
-  { key: 'hsaContrib',      label: 'HSA Contrib',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaContrib, tooltip: (r) => r.hsaContribRet > 0 ? `Includes ${fmtFull(r.hsaContribRet)} paid from your portfolio after retiring. That part is deducted from income, which lowers your ACA income.` : '', bg: BG.hsa },
+  { key: 'hsaContrib',      label: 'HSA Contrib',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaContrib, tooltip: (r) => r.hsaContribRet > 0 ? `Includes ${fmtFull(r.hsaContribRet)} paid from your portfolio after retiring. That part is deducted from income (state income too, except in California), which can lower your ACA income.` : '', bg: BG.hsa },
   { key: 'hsaQualifiedWD',  label: 'HSA Paid',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaQualifiedWD, tooltip: (r) => r.hsaQualifiedWD > 0 ? `Medical bills and Medicare surcharges paid tax-free from the HSA (medical bills this year: ${fmtFull(r.medicalSpend)}).` : '', bg: BG.hsa },
   { key: 'hsaReimbursed',   label: 'HSA Reimb.',   group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReimbursed, tooltip: (r) => r.hsaReimbursed > 0 ? 'Past medical bills reimbursed from the HSA tax-free. Used only after your other accounts ran out.' : '', bg: BG.hsa },
   { key: 'hsaNonQualWD',    label: 'HSA Non-qual', group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaNonQualWD, tooltip: (r) => r.hsaNonQualWD > 0 ? 'Taken from the HSA for non-medical spending: taxed as ordinary income, plus a 20% penalty before 65.' : '', bg: BG.hsa },
@@ -159,7 +169,7 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   withdrawals: 'Withdrawals',
   spending:    'Spending',
   taxes:       'Taxes',
-  qcd:         'QCD',
+  qcd:         'Giving',
   hsa:         'HSA',
   tips:        'TIPS',
   balances:    'Balances',
@@ -219,9 +229,9 @@ export default function Projections() {
   const [qcdTouched, setQcdTouched] = useState<boolean>(() => {
     try { return typeof window !== 'undefined' && localStorage.getItem(QCD_TOUCHED_KEY) === '1'; } catch { return false; }
   });
-  // QCD columns are on by default only when this plan pays QCDs, until the user chooses otherwise.
-  const lifetimeQcd = proj.rows.reduce((s, r) => s + r.qcd, 0);
-  const qcdAuto = lifetimeQcd > 0 && !qcdTouched;
+  // Giving columns are on by default only when this plan has charitable giving, until the user chooses otherwise.
+  const lifetimeGiving = proj.rows.reduce((s, r) => s + r.charitableSpend, 0);
+  const qcdAuto = lifetimeGiving > 0 && !qcdTouched;
   const effectiveVisible = useMemo(
     () => (qcdAuto ? new Set([...visibleKeys, ...QCD_KEYS]) : visibleKeys),
     [qcdAuto, visibleKeys],
@@ -488,8 +498,8 @@ export default function Projections() {
                   const isExpanded = expandedYear === r.year;
                   const leftOffsets = [0, 60, 120, 180];
                   return (
-                    <>
-                      <tr key={r.year}>
+                    <Fragment key={r.year}>
+                      <tr>
                         {visibleColumns.map((c, i) => {
                           const sticky = c.group === 'identity';
                           const v = c.get(r);
@@ -541,7 +551,7 @@ export default function Projections() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>

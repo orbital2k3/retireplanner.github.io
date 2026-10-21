@@ -5,7 +5,8 @@ import { rmdCashOf } from '../../engine/qcd';
 /** Where a source's money may go.
  *  - general: pays its tax share, then spreads across spending, ACA, and savings
  *  - brokTax: pays tax first; anything left over joins the general pool
- *  - toRoth / deposit / spend / save / charity / medical: pinned to that single use */
+ *  - toRoth / deposit / save / charity / medical: pinned to that single use
+ *  - spend: the shortfall, shared by Net Spending and any gifts the pool would have paid */
 export type SankeyRoute = 'general' | 'brokTax' | 'toRoth' | 'deposit' | 'spend' | 'save' | 'charity' | 'medical';
 
 /** A source of money on the left. `taxBase` is the slice of this source that lands in
@@ -49,7 +50,8 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const ordDriversExSS = row.otherIncomeTaxable + row.wdTrd + rmdCash + row.rothConv
     + row.lumpSumOrdinaryIncome + row.ordinaryDiv + row.hsaNonQualWD - row.hsaContribRet + (row.tipsOrdInc ?? 0);
   const taxableSS = Math.max(0, row.ordIncome - ordDriversExSS);
-  const realizedGains = Math.max(0, row.ltcg - row.qualifiedDiv);
+  const tipsGain = row.tipsGain ?? 0;
+  const realizedGains = Math.max(0, row.ltcg - row.qualifiedDiv - tipsGain);
 
   const brokTaxPull = Math.min(row.taxFromBrokerage ?? 0, row.wdTax);
   const wdTaxNet = row.wdTax - brokTaxPull;
@@ -83,7 +85,7 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
     // indexation (phantom income), which brings no cash, so tax is allocated by it but capped at the cash.
     // IRA and Roth rungs pay back into their own accounts, so they are not household cash.
     { id: 'tips', label: 'TIPS · Coupons & maturities', value: row.tipsCash ?? 0, color: palette.bucketTaxable,
-      taxBase: row.tipsOrdInc ?? 0, route: 'general' },
+      taxBase: (row.tipsOrdInc ?? 0) + tipsGain, route: 'general' },
     { id: 'wdRth', label: 'Withdrawal · Roth', value: row.wdRth - inhRthFromWd, color: palette.bucketRoth,
       taxBase: 0, route: 'general' },
     { id: 'ss', label: 'Social Security', value: row.totalSS, color: palette.goldLight,
@@ -111,9 +113,13 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const fedTax = scale(row.fedTax);
   const otherTax = scale(row.stateTaxAmt + row.irmaa + row.niit - hsaIrmaa);
   const aca = scale(row.acaPremium ?? 0);
-  // QCD-funded giving is its own use (Pre-tax → Charity); the rest of net spending is paid from the pool.
-  const charity = scale(row.qcd ?? 0);
-  const spending = scale(row.netSpend - (row.qcd ?? 0) - hsaMed);
+  // All Charitable-tagged spending is its own use. The QCD part flows Pre-tax → Charity; the rest
+  // (gifts before 70½, above the QCD limit, or to a donor-advised fund) is paid from the pool.
+  const qcd = row.qcd ?? 0;
+  const giving = Math.max(qcd, row.charitableSpend ?? 0);
+  const charity = scale(giving);
+  const giftsFromPool = scale(giving - qcd);
+  const spending = scale(row.netSpend - giving - hsaMed);
   const medical = scale(row.hsaQualifiedWD);
   const hsaContrib = scale(row.hsaContribRet);
   const hsaPenalty = scale(row.hsaPenalty);
@@ -160,9 +166,14 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const afterTax = (s: SankeySource) => Math.max(0, s.value - taxAlloc.get(s.id)!);
   const pooled = sources.filter((n) => n.route === 'general' || n.route === 'brokTax');
   const poolAfterTax = pooled.reduce((s, n) => s + afterTax(n), 0);
+  // Unfunded spending is shared pro rata by Net Spending and the gifts the pool would have paid,
+  // so neither use can receive more of the shortfall than its own size.
   const fromGap = sources.filter((n) => n.route === 'spend').reduce((s, n) => s + n.value, 0);
-  const spendFromPool = Math.max(0, spending - fromGap);
-  const savingsFromPool = poolAfterTax - spendFromPool - aca - hsaContrib - hsaPenalty;
+  const gapToSpend = giftsFromPool > EPS ? fromGap * (spending / (spending + giftsFromPool)) : fromGap;
+  const gapToGifts = fromGap - gapToSpend;
+  const spendFromPool = Math.max(0, spending - gapToSpend);
+  const giftsPaid = Math.max(0, giftsFromPool - gapToGifts);
+  const savingsFromPool = poolAfterTax - spendFromPool - giftsPaid - aca - hsaContrib - hsaPenalty;
 
   // Safety node: uses outrunning sources means the row drew on the portfolio in a way its
   // cash fields do not name. It should never appear for a valid plan.
@@ -181,7 +192,7 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
 
   const uses: SankeyUse[] = [
     { id: 'spend', label: 'Net Spending', value: spending, color: palette.danger },
-    { id: 'charity', label: 'Charity (QCD)', value: charity, color: palette.goldLight },
+    { id: 'charity', label: qcd > EPS && giftsFromPool > EPS ? 'Charity (QCD + other)' : qcd > EPS ? 'Charity (QCD)' : 'Charity', value: charity, color: palette.goldLight },
     { id: 'medical', label: 'Medical & IRMAA (HSA)', value: medical, color: palette.bucketHSA },
     { id: 'fed', label: 'Federal Tax', value: fedTax, color: palette.warning },
     { id: 'state', label: 'State + IRMAA + NIIT', value: otherTax, color: palette.taxOther },
@@ -197,6 +208,7 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
   const poolShare = (target: string) => {
     if (pool <= 0) return 0;
     if (target === 'spend') return spendFromPool / pool;
+    if (target === 'charity') return giftsPaid / pool;
     if (target === 'aca') return aca / pool;
     if (target === 'hsaContrib') return hsaContrib / pool;
     if (target === 'hsaPenalty') return hsaPenalty / pool;
@@ -213,6 +225,9 @@ export function buildSankeyFlows(row: ProjectionRow, real = true): SankeyFlows {
         if (u.id === 'fed') amount = tax * fedShare;
         else if (u.id === 'state') amount = tax * (1 - fedShare);
         else amount = rest * poolShare(u.id);
+      } else if (src.route === 'spend') {
+        if (u.id === 'spend') amount = src.value * (gapToSpend / fromGap);
+        else if (u.id === 'charity') amount = src.value * (gapToGifts / fromGap);
       } else if (u.id === src.route) {
         amount = src.value;
       }

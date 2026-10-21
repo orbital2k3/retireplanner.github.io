@@ -8,12 +8,16 @@ import { parseTipsCsv, type TipsCsvError } from '../../engine/tipsCsv';
 import { ladderInBalances, tipsLadderIssues } from '../../engine/tipsValidation';
 import { TipsBuilderModal } from './TipsBuilderModal';
 
-/** TIPS ladder card on the Portfolio panel (mockup M3). Until a rung exists it is a single "+ Add TIPS
- *  ladder" link. Every edit writes through `onChange`; an emptied ladder is stored as absent, and the
+/** TIPS ladder card on the Portfolio panel (mockup M3). Until a rung exists it offers three ways in:
+ *  "+ Enter bonds I own", "Paste from CSV" and "Build a ladder…". Every edit writes through `onChange`; an emptied ladder is stored as absent, and the
  *  "balances include the ladder" flag is stored only when it is switched off. */
 
 const headerStyle: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', whiteSpace: 'nowrap' };
 const smallBtn: React.CSSProperties = { border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px', fontSize: 11, background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' };
+const linkBtn: React.CSSProperties = { background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'underline', textUnderlineOffset: 2, textAlign: 'left', justifySelf: 'start' };
+const entryGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'max-content 1fr', columnGap: 12, rowGap: 6, alignItems: 'baseline', marginBottom: 8 };
+const entryHint: React.CSSProperties = { fontSize: 11, color: 'var(--text-muted)' };
+const WHOSE_TIP = 'A pre-tax rung sits in one person\'s IRA: it counts toward that person\'s required withdrawal and passes to the survivor. Taxable and Roth balances are pooled for the household in this plan, so those rungs have no single owner.';
 const ACCOUNT_LABEL: Record<TipsRung['account'], string> = { taxable: 'Taxable', traditional: 'Pre-tax', roth: 'Roth' };
 
 const normalize = (rungs: TipsRung[], include: boolean): TipsLadder | undefined =>
@@ -73,17 +77,17 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
   if (rungs.length === 0 && !csvOpen) {
     return (
       <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-        <button className="add-row-btn" onClick={() => write([newRung(startYear + 1)])}>+ Add TIPS ladder</button>
-        <button
-          type="button"
-          onClick={() => setCsvOpen(true)}
-          style={{ background: 'transparent', border: 'none', padding: 0, marginLeft: 14, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 }}
-        >
-          Paste from CSV
-        </button>
-        {builderBtn({ background: 'transparent', border: 'none', padding: 0, marginLeft: 14, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 })}
+        <div className="subsection-label" style={{ margin: '0 0 2px' }}>TIPS ladder</div>
+        <div className="helper-text" style={{ marginBottom: 6 }}>Treasury inflation-protected bonds you hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.</div>
+        <div style={entryGrid}>
+          <button className="add-row-btn" style={{ margin: 0 }} onClick={() => write([newRung(startYear + 1)])}>+ Enter bonds I own</button>
+          <span style={entryHint}>Type each bond from your statement, one row per bond.</span>
+          <button type="button" style={linkBtn} onClick={() => setCsvOpen(true)}>Paste from CSV</button>
+          <span style={entryHint}>Add many bonds at once from a spreadsheet.</span>
+          {builderBtn(linkBtn)}
+          {ageA !== undefined && <span style={entryHint}>Plan new bonds that pay an income you choose, bought from one of your accounts.</span>}
+        </div>
         {builder}
-        <div className="helper-text">Treasury inflation-protected bonds you hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.</div>
         {helpLink}
         {helpOpen && <LearnMoreModal topic={TIPS_HELP} onClose={() => setHelpOpen(false)} />}
       </div>
@@ -101,6 +105,10 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
   const roth = sum((r) => r.account === 'roth');
   const hasTaxable = rungs.some((r) => r.account === 'taxable');
   const of = (balance: number) => (include ? ` of ${fmtFull(balance)}` : '');
+  const rest = (held: number, balance: number) => include && held > 0 && (
+    <div style={{ color: 'var(--text-muted)' }}>{fmtFull(Math.max(0, balance - held))} stays invested</div>
+  );
+  const allTaxable = a.taxable + (b?.taxable ?? 0), allRoth = a.roth + (b?.roth ?? 0);
 
   const importCsv = () => {
     const res = parseTipsCsv(csvText, { a: nameA, b: nameB });
@@ -127,6 +135,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
       {builder}
       <div className="helper-text" style={{ marginBottom: 8 }}>
         Treasury inflation-protected bonds you hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.
+        Edit any rung below, or use Build a ladder… to plan new rungs for an income you choose; they are added to this list.
       </div>
 
       {helpLink}
@@ -165,7 +174,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
             <div style={headerStyle}>Face (par)</div>
             <div style={headerStyle}>Coupon</div>
             <div style={headerStyle}>Account</div>
-            <div style={headerStyle}>Whose</div>
+            <div style={headerStyle} title={WHOSE_TIP}>Whose ⓘ</div>
             <div></div>
           </div>
           {rungs.map((r) => (
@@ -201,7 +210,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
                   {b && <option value="B">{nameB ?? 'Person B'}</option>}
                 </select>
               ) : (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Household</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }} title={WHOSE_TIP}>Household</div>
               )}
               <button className="remove-btn" aria-label="Remove rung" onClick={() => write(rungs.filter((x) => x.id !== r.id))}>×</button>
             </div>
@@ -224,16 +233,19 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
             {preA > 0 && <div>{nameA}: {fmtFull(preA)}{of(a.traditional)}</div>}
             {preB > 0 && b && <div>{nameB ?? 'Person B'}: {fmtFull(preB)}{of(b.traditional)}</div>}
           </div>
+          {rest(preA + preB, a.traditional + (b?.traditional ?? 0))}
         </div>
         <div style={{ background: 'var(--cream)', borderRadius: 6, padding: '6px 8px' }}>
           <div style={{ color: 'var(--text-muted)' }}>In taxable</div>
           <div style={{ fontWeight: 500, fontSize: 13 }}>{fmtFull(taxable)}</div>
-          <div style={{ color: 'var(--text-muted)' }}>{include && taxable > 0 ? `of ${fmtFull(a.taxable + (b?.taxable ?? 0))}` : ''}</div>
+          <div style={{ color: 'var(--text-muted)' }}>{include && taxable > 0 ? `of ${fmtFull(allTaxable)}` : ''}</div>
+          {rest(taxable, allTaxable)}
         </div>
         <div style={{ background: 'var(--cream)', borderRadius: 6, padding: '6px 8px' }}>
           <div style={{ color: 'var(--text-muted)' }}>In Roth</div>
           <div style={{ fontWeight: 500, fontSize: 13 }}>{fmtFull(roth)}</div>
-          <div style={{ color: 'var(--text-muted)' }}>{include && roth > 0 ? `of ${fmtFull(a.roth + (b?.roth ?? 0))}` : ''}</div>
+          <div style={{ color: 'var(--text-muted)' }}>{include && roth > 0 ? `of ${fmtFull(allRoth)}` : ''}</div>
+          {rest(roth, allRoth)}
         </div>
       </div>
 
@@ -245,15 +257,19 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
           style={{ accentColor: 'var(--gold)', width: 13, height: 13, marginTop: 1, flexShrink: 0 }}
         />
         <span>
-          My account balances above already include these bonds. We'll set the ladder apart from them so nothing is counted twice.
-          {!include && <span style={{ color: 'var(--text-muted)' }}> Unticked: the bonds are treated as extra money on top of your balances.</span>}
+          My account balances above already include these bonds.
+          <span style={{ color: 'var(--text-muted)' }}>
+            {include
+              ? ` Ticked: the plan takes the ${fmtFull(total)} of bonds out of those balances (see "stays invested" above), so nothing is counted twice. Most statements show one total that includes bonds.`
+              : ` Unticked: the ${fmtFull(total)} of bonds is extra money on top of your balances, and Build a ladder… can't buy from an account.`}
+          </span>
         </span>
       </label>
 
       {issues.length > 0 && (
         <div className="plan-warnings-strip" style={{ marginTop: 8, marginBottom: 0 }}>
           {issues.map((i, k) => (
-            <div key={k} className={`plan-warning ${i.code === 'overflow' ? 'error' : 'warn'}`}>{i.message}</div>
+            <div key={k} className={`plan-warning ${i.code === 'overflow' ? 'error' : i.code === 'basis' ? 'info' : 'warn'}`}>{i.message}</div>
           ))}
         </div>
       )}

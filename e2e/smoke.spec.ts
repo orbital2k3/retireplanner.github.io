@@ -392,7 +392,7 @@ test('Inputs: adding a TIPS ladder is saved, and removing the last rung leaves n
   await page.goto('/#/inputs');
   // Nothing ladder-ish until a rung exists.
   await expect(page.getByText('Adj. principal')).toHaveCount(0);
-  await page.getByRole('button', { name: '+ Add TIPS ladder' }).click();
+  await page.getByRole('button', { name: '+ Enter bonds I own' }).click();
   await expect(page.getByText('Adj. principal')).toBeVisible();
   const ladder = (await storedPlan(page)).portfolio.tipsLadder!;
   expect(ladder.rungs).toHaveLength(1);

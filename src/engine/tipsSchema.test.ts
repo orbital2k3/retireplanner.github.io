@@ -91,7 +91,7 @@ describe('tipsLadderIssues', () => {
       rung({ id: 'a', adjustedPrincipal: a + 1 }),
       rung({ id: 't', account: 'taxable', whose: 'Household', adjustedPrincipal: taxable + 1 }),
     ]), year);
-    expect(issues.map((i) => `${i.code}:${i.account}`).sort()).toEqual(['overflow:taxable', 'overflow:traditional']);
+    expect(issues.filter((i) => i.code === 'overflow').map((i) => `${i.code}:${i.account}`).sort()).toEqual(['overflow:taxable', 'overflow:traditional']);
     expect(issues.find((i) => i.account === 'traditional')!.message).toContain('Person A');
   });
 

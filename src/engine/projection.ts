@@ -12,7 +12,7 @@ import {
 import { filingStatusForYear, type FilingStatus } from './filingStatus';
 import { rmdDivisor, rmdStartAgeForDob, inheritedRmdDivisor } from './rmd';
 import { allocateQcd, qcdAvailable, qcdEligible, qcdLimit } from './qcd';
-import { allocateHsaContribution, hsaContribEligible, hsaLastResortDraw, hsaPayAge, splitHsaPayment, HSA_MEDICARE_AGE } from './hsa';
+import { allocateHsaContribution, hsaContribEligible, hsaLastResortDraw, hsaPayAge, hsaQualifiedPayment, HSA_MEDICARE_AGE } from './hsa';
 import { resolveTipsLadder, tipsLadderYear, type TipsYear } from './tipsLadder';
 import { householdSS } from './socialSecurity';
 import { yearFederalTax, standardDeduction, taxableSocialSecurity, seniorBonusDeduction } from './tax';
@@ -24,7 +24,7 @@ import type { BlendPolicy } from './blendPolicy';
 import { findWindow } from './blendPolicy';
 import { annualIRMAACost } from './irmaa';
 import { annualNIIT } from './niit';
-import { stateTax, STATE_PROFILES } from './stateTax';
+import { stateTax, STATE_PROFILES, HSA_NONCONFORMING_STATES } from './stateTax';
 import { acaNetPremium } from './aca';
 import { buildYearDecisions, type YearDecision } from './explain/yearDecisions';
 import { irmaaHeadroomNote, acaCliffNote } from './explain/headroom';
@@ -64,7 +64,7 @@ export interface ProjectionRow {
   rmd: number;
   rothConv: number;
   ordIncome: number;       // taxable ordinary income (pre-deduction gross)
-  ltcg: number;
+  ltcg: number;           // taxable LTCG + qualified dividends (net of any retiree HSA deduction ordinary income could not absorb)
   ordinaryDiv: number;     // ordinary (non-qualified) dividends from taxable account
   qualifiedDiv: number;    // qualified dividends from taxable account (subset of ltcg)
   distributedCash: number; // yield paid out in cash (not reinvested); taxed same as reinvested yield
@@ -142,6 +142,7 @@ export interface ProjectionRow {
   tipsToTrad: number;         // coupons + maturities from pre-tax rungs, returned to the IRAs
   tipsToRoth: number;         // coupons + maturities from Roth rungs, returned to the Roth
   tipsOrdInc: number;         // federal ordinary income from taxable rungs (state-exempt); counted once someone has retired
+  tipsGain: number;           // capital gain realized as taxable rungs mature: the part of them the entered basis didn't cover (in ltcg)
   rmdUnmet: number;           // RMD that the liquid IRA balance could not cover (ladder rungs are illiquid)
 }
 
@@ -223,7 +224,7 @@ const NO_EXPENSES: ExpenseSums = { total: 0, medical: 0, charitable: 0, charitab
 
 /** Every ladder quantity for a plan without one: adding these zeros leaves the arithmetic untouched. */
 const NO_TIPS: TipsYear = {
-  beg: 0, begTradA: 0, begTradB: 0, coupon: 0, accrual: 0, maturity: 0, floorBonus: 0,
+  beg: 0, begTradA: 0, begTradB: 0, coupon: 0, accrual: 0, maturity: 0, maturedTaxablePrincipal: 0, floorBonus: 0,
   cash: 0, toTradA: 0, toTradB: 0, toRoth: 0, ordInc: 0, endTaxable: 0, endTrad: 0, endRoth: 0,
 };
 
@@ -365,11 +366,16 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
   // hasTips gates every ladder step; without one nothing below changes.
   const tipsLadder = resolveTipsLadder(plan.portfolio, startYear);
   const hasTips = tipsLadder !== null;
+  // Taxable rungs take basis dollar for dollar. Any part the entered basis can't cover is unrealized gain
+  // held in the rungs: it is realized as capital gain, pro rata to principal, as those rungs mature, so
+  // the carve-out never erases a gain (their cash otherwise comes back at full basis).
+  let tipsGainPerPrincipal = 0;
   if (tipsLadder) {
     taxable -= tipsLadder.carve.taxable;
     roth -= tipsLadder.carve.roth;
     tradA -= tipsLadder.carve.tradA;
     tradB -= tipsLadder.carve.tradB;
+    if (tipsLadder.carve.taxable > taxableBasis) tipsGainPerPrincipal = (tipsLadder.carve.taxable - taxableBasis) / tipsLadder.carve.taxable;
     taxableBasis = Math.max(0, taxableBasis - tipsLadder.carve.taxable);
   }
 
@@ -482,6 +488,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Ladder income is taxed once someone has retired, the same rule as portfolio dividends: the engine
     // models no working-year income taxes, and the phantom (non-cash) part has nothing to pay the tax from.
     const tipsTaxed = (retiredA || retiredB) ? tips.ordInc : 0;
+    const tipsGain = tipsGainPerPrincipal > 0 && (retiredA || retiredB) ? tips.maturedTaxablePrincipal * tipsGainPerPrincipal : 0;
     const contribToTax  = cA.tax  + cB.tax;
     const contribToTrad = cA.trad + cB.trad + tips.toTradA + tips.toTradB;
     const contribToRoth = cA.roth + cB.roth + tips.toRoth;
@@ -490,7 +497,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // portfolio like a payroll deduction, so they never pass through contribA/B or contribSplit.
     // A retired person who elected to keep contributing (on an HSA-eligible ACA plan, before 65) pays
     // from the portfolio instead: a cash need that is also an above-the-line deduction.
-    // The household shares one family limit when both spouses are on family coverage.
+    // The household shares one family limit when either spouse is on family coverage (§223(b)(5)).
     let hsaContribExtA = 0, hsaContribExtB = 0, hsaContribRetA = 0, hsaContribRetB = 0;
     if (hasHSA) {
       const hsaAsk = (pf: PersonPortfolio | undefined, age: number | undefined, claimAge: number | undefined, alive: boolean, retired: boolean) =>
@@ -499,19 +506,24 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
           ? (pf.hsaContribution ?? 0) * inflationFactor : 0;
       const alloc = allocateHsaContribution(
         inflationFactor,
-        { ask: hsaAsk(pfA, ageA, plan.personA.ssClaimAge, aliveA, retiredA), coverage: pfA.hsaCoverage, age: ageA },
+        { ask: hsaAsk(pfA, ageA, plan.personA.ssClaimAge, aliveA, retiredA), coverage: aliveA ? pfA.hsaCoverage : undefined, age: ageA },
         pfB && ageB !== undefined
-          ? { ask: hsaAsk(pfB, ageB, plan.personB?.ssClaimAge, aliveB, retiredB), coverage: pfB.hsaCoverage, age: ageB }
+          ? { ask: hsaAsk(pfB, ageB, plan.personB?.ssClaimAge, aliveB, retiredB), coverage: aliveB ? pfB.hsaCoverage : undefined, age: ageB }
           : undefined,
       );
       hsaContribExtA = retiredA ? 0 : alloc.a; hsaContribRetA = retiredA ? alloc.a : 0;
       hsaContribExtB = retiredB ? 0 : alloc.b; hsaContribRetB = retiredB ? alloc.b : 0;
     }
-    const hsaContribRet = hsaContribRetA + hsaContribRetB;
-    // Above-the-line deduction for the retiree contribution. It lowers the income that drives Social
-    // Security taxability, MAGI, IRMAA, ACA and the senior bonus, but is not passed to stateTax
-    // (state conformity varies, and CA ignores it). Taxable ordinary income cannot go below zero.
+    // `let`: cancelled in the top-up loop if only the HSA itself could fund it.
+    let hsaContribRet = hsaContribRetA + hsaContribRetB;
+    // Above-the-line deduction for the retiree contribution. It lowers AGI, so it drives Social
+    // Security taxability, MAGI, IRMAA, ACA and the senior bonus. It comes off ordinary income first
+    // and any part ordinary income cannot absorb comes off capital gains (hsaDedLtcg; both take the
+    // ordinary income before the deduction). State tax gets it too, except in non-conforming states.
     const hsaDed = (ordinary: number): number => hsaContribRet > 0 ? Math.max(0, ordinary - hsaContribRet) : ordinary;
+    const hsaDedLtcg = (ordinary: number, ltcg: number): number =>
+      hsaContribRet > ordinary ? Math.max(0, ltcg - (hsaContribRet - ordinary)) : ltcg;
+    const hsaStateDed = (): number => (hsaContribRet > 0 && !HSA_NONCONFORMING_STATES.has(plan.state) ? hsaContribRet : 0);
 
     // Social Security. If the user has SS-typed income streams, they override
     // the PIA-based actuarial calc per person/year (so editing the stream's
@@ -625,6 +637,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const hsaAvailB = hasHSA && plan.personB && aliveB && ageB !== undefined && ageB >= hsaPayFromAge
       ? Math.max(0, hsaB * (1 + gRateHsaYear) + hsaContribExtB + hsaContribRetB) : 0;
     const hsaAvail = hsaAvailA + hsaAvailB;
+    // Medicare premiums (IRMAA) are qualified only from an owner 65 or over (Pub 969).
+    const hsaOwnerA = { avail: hsaAvailA, medicare: ageA >= HSA_MEDICARE_AGE };
+    const hsaOwnerB = { avail: hsaAvailB, medicare: ageB !== undefined && ageB >= HSA_MEDICARE_AGE };
 
     // Standard deduction this year. For Single filers where B is the survivor, use B's age.
     const filerAge = (filingStatus === 'Single' && !aliveA && aliveB && ageB !== undefined) ? ageB : ageA;
@@ -861,7 +876,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // For CA/NY: retirement withdrawals + conversions are also taxable.
     // We compute it once per iter pass (after withdrawal sizing) to capture CA/NY retirement-tax dependence.
     const numPersons = (aliveA ? 1 : 0) + (aliveB ? 1 : 0);
-    let stateAmt = stateTax(plan.state, other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + lumpSumHSAIncomeEst, other.pensionAmt + lumpSumForcedTradDistEst, numPersons, inflationFactor, numAt65Plus, plan.customStateTaxRate, other.nonExemptSS); // initial pass; ltcg unknown until loop iter 1
+    let stateAmt = stateTax(plan.state, other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + lumpSumHSAIncomeEst, other.pensionAmt + lumpSumForcedTradDistEst, numPersons, inflationFactor, numAt65Plus, plan.customStateTaxRate, other.nonExemptSS, hsaStateDed()); // initial pass; ltcg unknown until loop iter 1
 
     // ACA marketplace premium (pre-Medicare years when the user has opted in).
     const acaPremiumFor = (surchargeMAGI: number, taxableSS: number): number => {
@@ -888,7 +903,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       // LTCG on the brokerage draw, which then increases the tax bill (NIIT, fed).
       // Qualified HSA payments cover medical bills and (at 65+) the IRMAA surcharge, so they reduce
       // the cash the rest of the portfolio has to produce.
-      const hsaQualIter = hasHSA ? Math.min(hsaAvail, spend.medical + prevIRMAA) : 0;
+      const hsaQualIter = hasHSA ? hsaQualifiedPayment(spend.medical, prevIRMAA, hsaOwnerA, hsaOwnerB).total : 0;
       const incomeAvailForTax = Math.max(0,
         ss.total + other.gross + distributedCash + trdForced + lumpSumOrdIncomeEst + lumpSumTaxFreeEst - netSpend + hsaQualIter - hsaContribRet + tips.cash
       );
@@ -910,13 +925,15 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       lastSpill = w.spill;
       if (w.bracketOverridden) overrideFiredThisYear = true;
 
-      const ltcg = wdTax * gainFraction + qualifiedDiv;
+      const gains = wdTax * gainFraction + qualifiedDiv + tipsGain;
       // SS taxability via IRC §86 provisional-income tiers (replaces flat 0.85).
       // annualDiv and §103 exempt interest count toward provisional income per IRC §86.
       const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDiv + 0.5 * ss.total - hsaContribRet + tipsTaxed;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
       // ordinaryDiv is ordinary income; qualifiedDiv is captured in ltcg (LTCG stack path).
-      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + ordinaryDiv + tipsTaxed);
+      const ordPreDed = taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + ordinaryDiv + tipsTaxed;
+      const ordIncome = hsaDed(ordPreDed);
+      const ltcg = hsaDedLtcg(ordPreDed, gains);  // taxable gains after any HSA deduction left over
       const magi = ordIncome + ltcg;  // NIIT + OBBBA senior bonus: exempt interest excluded
       const surchargeMAGI = magi + exemptIncome;  // IRMAA (§1395r(i)(4)) + ACA (§36B(d)(2)(B))
       seniorBonus = seniorBonusDeduction(filingStatus, filerAge, ageB, magi, calYear);
@@ -935,7 +952,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       irmaaMAGIFinal = irmaaMAGI;
       const irmaaFS = i >= 2 ? filingStatusHistory[i - 2] : filingStatus;
       irmaa = numAt65Plus > 0 ? annualIRMAACost(irmaaMAGI, inflationFactor, numAt65Plus, irmaaFS) : 0;
-      niit = annualNIIT(magi, ltcg + ordinaryDiv + tipsTaxed, filingStatus);
+      // The deduction lowers MAGI, not the investment income itself.
+      niit = annualNIIT(magi, gains + ordinaryDiv + tipsTaxed, filingStatus);
 
       // Refine state tax to include retirement distributions for states that tax them.
       // Include stateAmt in the convergence check — for CA/NY plans, state tax is a
@@ -943,7 +961,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       // (caught by Layer-1's SPENDING COVERAGE invariant on planG_californiaCouple).
       // ltcg goes into nonExemptOrdinaryIncome so IL (retirementExempt:true) still taxes it —
       // IL exempts retirement distributions but NOT capital gains.
-      stateAmt = stateTax(plan.state, other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + ltcg + lumpSumHSAIncomeEst, wdTrd + rmdTaxable + conv + other.pensionAmt + lumpSumForcedTradDistEst, numPersons, inflationFactor, numAt65Plus, plan.customStateTaxRate, other.nonExemptSS);
+      stateAmt = stateTax(plan.state, other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + gains + lumpSumHSAIncomeEst, wdTrd + rmdTaxable + conv + other.pensionAmt + lumpSumForcedTradDistEst, numPersons, inflationFactor, numAt65Plus, plan.customStateTaxRate, other.nonExemptSS, hsaStateDed());
 
       acaPremiumYear = acaPremiumFor(surchargeMAGI, taxableSS);
 
@@ -985,8 +1003,8 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     }
 
     // What the HSA actually pays this year: medical first, then the converged IRMAA surcharge.
-    const hsaQualFinal = hasHSA ? Math.min(hsaAvail, spend.medical + irmaa) : 0;
-    const hsaPay = splitHsaPayment(hsaQualFinal, hsaAvailA, hsaAvailB);
+    const hsaPay = hasHSA ? hsaQualifiedPayment(spend.medical, irmaa, hsaOwnerA, hsaOwnerB) : { total: 0, a: 0, b: 0 };
+    const hsaQualFinal = hsaPay.total;
 
     // Per-year decision attribution (gated on opts.explain so the optimizer never pays for it).
     // Build after the de-minimis clamp so notes cite the same values that appear in the row.
@@ -1127,10 +1145,12 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Re-solve every tax term from the year's actual withdrawals and inherited amounts.
     // Mirrors one pass of the gross-up loop body.
     const resolveYearTaxes = () => {
-      const ltcg = wdTax * gainFraction + qualifiedDiv;
+      const gains = wdTax * gainFraction + qualifiedDiv + tipsGain;
       const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + annualDiv + 0.5 * ss.total + hsaNonQual - hsaContribRet + tipsTaxed;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
-      const ordIncome = hsaDed(taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + ordinaryDiv + hsaNonQual + tipsTaxed);
+      const ordPreDed = taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + ordinaryDiv + hsaNonQual + tipsTaxed;
+      const ordIncome = hsaDed(ordPreDed);
+      const ltcg = hsaDedLtcg(ordPreDed, gains);
       const magi = ordIncome + ltcg;
       const surchargeMAGI = magi + exemptIncome;
       seniorBonus = seniorBonusDeduction(filingStatus, filerAge, ageB, magi, calYear);
@@ -1140,12 +1160,12 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       irmaaMAGIFinal = i >= 2 ? surchargeMagiHistory[i - 2] : surchargeMAGI;
       const irmaaFS = i >= 2 ? filingStatusHistory[i - 2] : filingStatus;
       irmaa = numAt65Plus > 0 ? annualIRMAACost(irmaaMAGIFinal, inflationFactor, numAt65Plus, irmaaFS) : 0;
-      niit = annualNIIT(magi, ltcg + ordinaryDiv + tipsTaxed, filingStatus);
+      niit = annualNIIT(magi, gains + ordinaryDiv + tipsTaxed, filingStatus);
       stateAmt = stateTax(
         plan.state,
-        other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + ltcg + lumpSumHSAIncome + hsaNonQual,
+        other.nonExempt + exemptInt * exemptStatePct + ordinaryDiv + gains + lumpSumHSAIncome + hsaNonQual,
         wdTrd + rmdTaxable + conv + other.pensionAmt + lumpSumForcedTradDist,
-        numPersons, inflationFactor, numAt65Plus, plan.customStateTaxRate, other.nonExemptSS,
+        numPersons, inflationFactor, numAt65Plus, plan.customStateTaxRate, other.nonExemptSS, hsaStateDed(),
       );
       acaPremiumYear = acaPremiumFor(surchargeMAGI, taxableSS);
     };
@@ -1202,10 +1222,25 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
         // Every other account is spent: the HSA is the last resort. Unpaid qualified spending first
         // (tax-free), then receipts (tax-free), then non-qualified money (taxed, 20% penalty under 65).
         if (!hasHSA || hsaA + hsaB <= 0) break;
+        // A retiree contribution the HSA itself would have to fund is pointless (the draw would be
+        // taxed and penalized), so it is cancelled first and the year re-solved without it.
+        if (hsaContribRet > 0) {
+          const undoA = Math.min(hsaContribRetA, hsaA), undoB = Math.min(hsaContribRetB, hsaB);
+          if (undoA + undoB > 0) {
+            hsaA -= undoA; hsaB -= undoB;
+            hsaContribRetA -= undoA; hsaContribRetB -= undoB;
+            hsaContribRet = hsaContribRetA + hsaContribRetB;
+            resolveYearTaxes();
+            residual = residualOf();
+            continue;
+          }
+        }
+        const qualNeedLeft = Math.max(0, spend.medical + irmaa - hsaQualFinal - hsaQualLR);
         const d = hsaLastResortDraw({
           need,
           balA: hsaA, balB: hsaB,
-          qualNeedLeft: Math.max(0, spend.medical + irmaa - hsaQualFinal - hsaQualLR),
+          qualNeedLeft,
+          irmaaNeedLeft: Math.min(qualNeedLeft, Math.max(0, irmaa - Math.max(0, hsaQualFinal + hsaQualLR - spend.medical))),
           receipts: hsaReceipts - hsaReimb,
           penalizedA: !(aliveA && ageA >= HSA_MEDICARE_AGE),
           penalizedB: !(aliveB && ageB !== undefined && ageB >= HSA_MEDICARE_AGE),
@@ -1385,6 +1420,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       tipsToTrad: tips.toTradA + tips.toTradB,
       tipsToRoth: tips.toRoth,
       tipsOrdInc: tipsTaxed,
+      tipsGain,
       rmdUnmet,
     });
   }
