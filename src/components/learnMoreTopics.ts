@@ -200,6 +200,7 @@ export const HSA_HELP: HelpTopic = {
       paras: [
         'California and New Jersey do not follow the federal HSA rules and tax the growth each year. The tool does not model that and shows a note for California plans. It also does not model your regular Medicare premiums, long-term-care premiums paid from the HSA, or the optimizer choosing how much to put in the HSA.',
         'At the end of the plan, an HSA above your receipts is counted at the same tax rate as pre-tax money, because a non-spouse heir owes ordinary tax on it. A spouse can keep it as their own HSA.',
+        'The part your receipts cover is counted as tax-free. That assumes you claim the receipts before you die: you can reimburse yourself at any time, and the cash then passes like any other savings. Receipts you never claim are lost. A non-spouse heir owes tax on the whole HSA balance and cannot use them. So when your health or age suggests the end is near, reimburse yourself for every receipt on file. The heir\'s tax is also figured at one flat rate, though they take the whole balance within a year, so a large HSA may be taxed at a higher rate than shown.',
       ],
     },
   ],

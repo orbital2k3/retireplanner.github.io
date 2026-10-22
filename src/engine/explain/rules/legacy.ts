@@ -13,7 +13,8 @@ export function legacyRule(ctx: InsightContext): Insight | null {
   const endRothReal = (last.endRoth + last.endTipsRoth) / last.inflationFactor;
   const endTotalReal = proj.endTotalReal;
   if (endTotalReal < 100_000) return null;
-  // HSA money backed by receipts can be reimbursed tax-free, so it counts with the Roth money.
+  // HSA money backed by receipts can be reimbursed tax-free, so it counts with the Roth money. That assumes the
+  // owner claims the receipts before death (the body says so): a non-spouse heir is taxed on the whole balance.
   const hsaFreeReal = hsaTaxFree(last.endHSA, last.hsaReceiptsBal) / last.inflationFactor;
   const taxFreeReal = endRothReal + hsaFreeReal;
 
@@ -25,7 +26,8 @@ export function legacyRule(ctx: InsightContext): Insight | null {
       severity: 'info',
       priority: 40,
       title: `Tax-free legacy: ${fmtUSD(taxFreeReal)}`,
-      body: `Plan ends with ${fmtUSD(endTotalReal)} total (today's $). ${fmtUSD(endRothReal)} is Roth, and ${fmtUSD(hsaFreeReal)} of your HSA is backed by medical receipts you can claim tax-free. That's ${pct}% of the ending balance.`,
+      body: `Plan ends with ${fmtUSD(endTotalReal)} total (today's $). ${fmtUSD(endRothReal)} is Roth, and ${fmtUSD(hsaFreeReal)} of your HSA is backed by medical receipts you can claim tax-free. That's ${pct}% of the ending balance. ` +
+        'Claim those receipts before you die: a spouse keeps the HSA as their own, but any other heir owes income tax on the whole balance and cannot use your receipts.',
     };
   }
 
