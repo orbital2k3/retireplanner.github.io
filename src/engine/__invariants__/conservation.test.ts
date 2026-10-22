@@ -126,11 +126,8 @@ describe('no-overdraw invariant in the injection year', () => {
       const year = proj.rows.find((r) => r.ageA === 66)!;
       expect((year.lumpSumForcedTradDist ?? 0) + (year.lumpSumForcedRothDist ?? 0)).toBeGreaterThan(0);
       expect(own === 'traditional' ? year.begTraditional : year.begRoth).toBe(0);
-      // Only the overdraw check: the same fixture also trips "inherited balance > account" because the tracked
-      // inherited balance grows in its injection year while the account does not (pre-existing, see M12).
-      let message = '';
-      try { assertProjectionInvariants(proj, p, { skipSpendingCoverage: true }); } catch (e) { message = (e as Error).message; }
-      expect(message).not.toMatch(/OVERDRAW/);
+      // The tracked inherited balance earns no growth in its injection year, like the account (M12).
+      expect(() => assertProjectionInvariants(proj, p, { skipSpendingCoverage: true })).not.toThrow();
     });
   }
 });

@@ -78,8 +78,13 @@ const rmdTooltip = (r: Row, $: Money): string => {
   const satisfied = r.qcd - r.qcdBeyondRmd;
   let text = `Required ${$(r.rmd)}. ${$(satisfied)} went straight to charity as a QCD (not taxed); ${$(Math.max(0, r.rmd - satisfied))} came to you as cash.`;
   if (r.qcdBeyondRmd > 0) text += ` A further ${$(r.qcdBeyondRmd)} QCD went to charity beyond the RMD.`;
+  if (r.qcdTaxable > 0) text += ` ${QCD_TAXED(r, $)}`;
   return text;
 };
+
+/** The part of a QCD the §408(d)(8)(A) rule taxes: deductible IRA contributions made from 70½ on. */
+const QCD_TAXED = (r: Row, $: Money): string =>
+  `${$(r.qcdTaxable)} of the QCD was taxed anyway, because deductible IRA contributions made from age 70½ reduce the tax-free amount.`;
 
 const COLUMNS: Column[] = [
   // Identity (always shown, sticky)
@@ -132,7 +137,7 @@ const COLUMNS: Column[] = [
   // Giving — all Charitable-tagged spending, the part paid straight from an IRA as a QCD, and the cash-gift
   // deduction. Shown by default only when the plan has giving (see `qcdAuto`); always in the chooser and CSV.
   { key: 'giving',           label: 'Giving',       group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charitableSpend, tooltip: givingTooltip, bg: BG.qcd },
-  { key: 'qcd',              label: 'QCD',          group: 'qcd', essential: false, fmt: 'money', get: (r) => r.qcd, tooltip: (r, $) => r.qcd > 0 ? `Paid from your IRA straight to charity, so it is not taxed. ${$(r.qcd - r.qcdBeyondRmd)} of it counts toward your RMD.` : '', bg: BG.qcd },
+  { key: 'qcd',              label: 'QCD',          group: 'qcd', essential: false, fmt: 'money', get: (r) => r.qcd, tooltip: (r, $) => r.qcd > 0 ? (r.qcdTaxable > 0 ? `Paid from your IRA straight to charity. ${QCD_TAXED(r, $)}` : 'Paid from your IRA straight to charity, so it is not taxed.') + ` ${$(r.qcd - r.qcdBeyondRmd)} of it counts toward your RMD.` : '', bg: BG.qcd },
   { key: 'charityDeduction', label: 'Charity ded.', group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charityDeduction, tooltip: (r) => r.charityDeduction > 0 ? 'Deduction for cash gifts to public charities when you don\'t itemize (from 2026: up to $1,000, or $2,000 joint). Included in the standard deduction total.' : '', bg: BG.qcd },
 
   // HSA — opt-in through the column chooser (and the CSV). Shown to every plan, but all zero without an HSA.

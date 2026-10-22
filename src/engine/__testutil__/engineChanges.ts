@@ -20,6 +20,10 @@ const CHANGES: { why: string; names: string[] }[] = [
       'fireopt-2026-05-29', 'fireopt-optimized', 'retirement-optimizer-2026-07-31',
     ],
   },
+  {
+    why: '2026-10-21 audit M12: inherited forced distributions are reserved before draws; no growth in the injection year',
+    names: ['richPlan'],
+  },
 ];
 export const ENGINE_CHANGED: ReadonlySet<string> = new Set(CHANGES.flatMap((c) => c.names));
 

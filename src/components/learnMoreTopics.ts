@@ -124,6 +124,7 @@ export const QCD_HELP: HelpTopic = {
       paras: [
         'You can start once you are 70½. The tool treats the whole year you turn 70½ as eligible; in fact only gifts made after your half-birthday count. The limit in 2026 is $111,000 a year for each person, and it rises with inflation. A couple has two limits.',
         'The money has to come from an IRA. If your savings are in a 401(k), assume they have been rolled into an IRA. Money in an inherited IRA is left out.',
+        'Deductible IRA contributions made for the year you turn 70½ or later make the same amount of your later QCDs taxable, dollar for dollar, until they are used up. The tool applies this to a spousal contribution to a traditional IRA. It treats contributions while you work as 401(k)-type deferrals, which do not count.',
         'The gift has to go directly to a public charity. Donor-advised funds, supporting organizations and most private foundations do not qualify (a private operating foundation can). Untick the box on a giving row to mark a gift like that. It is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. It still shows as giving in the Sankey and the Giving column of the Projections table.',
       ],
     },
@@ -150,7 +151,7 @@ export const QCD_HELP: HelpTopic = {
     {
       heading: 'What it leaves out',
       paras: [
-        'It does not model leaving part of an IRA to charity when you die, itemized deductions, or bunching several years of gifts into one.',
+        'It does not model leaving part of an IRA to charity when you die, itemized deductions, or bunching several years of gifts into one. The tax saving on the Taxes page assumes the standard deduction; if you itemize, cash gifts are deductible too, so the real saving is smaller.',
       ],
     },
   ],
@@ -171,7 +172,7 @@ export const HSA_HELP: HelpTopic = {
       heading: 'What you can put in',
       paras: [
         'In 2026 the limit is $4,400 for self-only coverage and $8,750 for family coverage. The base limit rises with inflation. If you are 55 or older you can add $1,000, and that catch-up does not rise with inflation. If either spouse is on family coverage, you both share one family limit, and each has their own catch-up.',
-        'You need an HSA-eligible health plan, and you cannot be on Medicare. The tool stops contributions at 65, or when you claim Social Security if that is later, because claiming enrolls you in Medicare Part A.',
+        'You need an HSA-eligible health plan, and you cannot be on Medicare. The tool stops contributions at 65, or when you claim Social Security if that is later, because claiming enrolls you in Medicare Part A. It does not prorate the last year: Part A coverage reaches back up to six months before you claim, so a late claimer should stop earlier than the tool shows, and the year you turn 65 gets no contribution even though the months before your birthday would count.',
         'You do not need a job to contribute. From 2026, bronze and catastrophic marketplace plans count as HSA-eligible, so an early retiree on one can keep contributing. Tick the box in the HSA section to model that.',
       ],
     },
@@ -237,7 +238,7 @@ export const TIPS_HELP: HelpTopic = {
     {
       heading: 'IRA bonds and required withdrawals',
       paras: [
-        'Bonds in an IRA count when your required withdrawal is figured, but the tool can only pay that withdrawal from cash in the IRA. If most of the IRA is tied up in bonds, the plan shows the part it could not pay as "RMD unmet" and warns you. Taking the bonds out in kind is not modeled. The bonds themselves are not converted to Roth; cash the bonds pay into the IRA can be.',
+        'Bonds in an IRA count when your required withdrawal is figured, but the tool can only pay that withdrawal from cash in the IRA. If most of the IRA is tied up in bonds, the plan shows the part it could not pay as "RMD unmet" and warns you. Taking the bonds out in kind is not modeled, and the unpaid part is never taxed and carries no 25% penalty, so in those years the tool understates your tax (in reality it is deferred, not avoided). The bonds themselves are not converted to Roth; cash the bonds pay into the IRA can be.',
       ],
     },
     {
@@ -258,6 +259,9 @@ export const TIPS_HELP: HelpTopic = {
       heading: 'What it leaves out',
       paras: [
         'Selling bonds before maturity, price changes from interest rates, reinvesting coupons into new bonds, I bonds, CDs and ladders of ordinary bonds.',
+        'The principal you enter is used both as what the bond cost and as what it is worth, so a bond bought at a discount or premium is taken out of your balance at its principal rather than at what you paid.',
+        'Rungs held in an IRA or Roth (including ones the builder places there) pay back into that account, not to you. Your withdrawal plan then decides whether that money is spent; with taxes-first ordering it can simply stay invested, and the ladder does not bridge the years it was built for.',
+        'The first plan year counts a full year of inflation on the principal, and phantom income in years before either of you retires is not taxed at all (the tool does not model income tax while you work).',
       ],
     },
   ],

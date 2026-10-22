@@ -25,6 +25,8 @@ export interface QcdBenefit {
   lowersTaxableSS: boolean;
   /** Years with an IRMAA surcharge without QCDs but none with them. */
   irmaaYearsAvoided: number;
+  /** Lifetime QCDs taxed anyway under §408(d)(8)(A) (deductible IRA contributions from 70½), today's $. */
+  totalQcdTaxed: number;
 }
 
 const real = (n: number, r: ProjectionRow) => n / r.inflationFactor;
@@ -70,6 +72,7 @@ export function compareWithWithoutQCD(livePlan: Plan): QcdBenefit | null {
     rmdCoveredShare: rmdInQcdYears > 0 ? Math.min(1, rmdSatisfied / rmdInQcdYears) : 0,
     lowersTaxableSS: sum(b, taxableSsOf) - sum(a, taxableSsOf) > 1,
     irmaaYearsAvoided,
+    totalQcdTaxed: sum(on.rows, (r) => r.qcdTaxable),
   };
 }
 
@@ -88,5 +91,12 @@ export function qcdBenefitCopy(b: QcdBenefit): { title: string; body: string } {
   const from = b.firstQcdName ? `Once ${b.firstQcdName} is ${b.firstQcdAge}` : `From age ${b.firstQcdAge}`;
   const lead = `${from}, ${fmtFull(round100(b.firstQcd))} a year of your giving goes straight from an IRA to charity.`;
   const effects = bits.length === 0 ? '' : ' ' + (bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(', ')} and ${bits[bits.length - 1]}`) + '.';
-  return { title, body: `${lead}${effects} Compared with paying the same gifts in cash, with the same withdrawal plan and Roth conversions.` };
+  const taxed = b.totalQcdTaxed >= 100
+    ? ` ${fmtFull(round100(b.totalQcdTaxed))} of the QCDs is taxed anyway: deductible IRA contributions made from age 70½ reduce the tax-free amount.`
+    : '';
+  return {
+    title,
+    body: `${lead}${effects}${taxed} Compared with paying the same gifts in cash, with the same withdrawal plan and Roth conversions,`
+      + ' and taking the standard deduction. If you itemize, cash gifts are deductible too, so the saving is smaller.',
+  };
 }

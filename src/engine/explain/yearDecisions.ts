@@ -51,6 +51,8 @@ export interface YearDecisionContext {
   rmdGross?: number;
   qcd?: number;
   qcdBeyondRmd?: number;
+  /** Part of the QCD taxed under the §408(d)(8)(A) anti-abuse rule. */
+  qcdTaxable?: number;
   bracketOverridden: boolean;
   spill?: { kind: SpillKind; amount: number; tradCap?: number };
   /** Active window percentages, present when a blend-policy window covers this age. */
@@ -169,6 +171,7 @@ function qcdRmd(ctx: YearDecisionContext): YearDecision {
   const beyond = ctx.qcdBeyondRmd ?? 0;
   const gross = ctx.rmdGross ?? 0;
   const covered = qcd - beyond;
+  const taxed = ctx.qcdTaxable ?? 0;
   const rmdPart = gross > 1
     ? `It covered ${fmtUSD(covered)} of your ${fmtUSD(gross)} required withdrawal, so only ${fmtUSD(rmdTaxable)} of it counted as income` +
       (beyond > 1 ? `, and a further ${fmtUSD(beyond)} went to charity beyond the requirement.` : '.')
@@ -178,8 +181,11 @@ function qcdRmd(ctx: YearDecisionContext): YearDecision {
     code: 'qcd-rmd',
     severity: 'info',
     binding: false,
-    text: `Age ${ageA} — ${fmtUSD(qcd)} went straight from your IRA to charity as a QCD, so it was not taxed. ${rmdPart}`,
-    amounts: { qcd, qcdBeyondRmd: beyond, rmdGross: gross, rmdTaxable },
+    text: taxed > 1
+      ? `Age ${ageA} — ${fmtUSD(qcd)} went straight from your IRA to charity as a QCD. ${fmtUSD(taxed)} of it was taxed anyway: ` +
+        `deductible IRA contributions made from age 70½ reduce the tax-free amount (IRC §408(d)(8)). ${rmdPart}`
+      : `Age ${ageA} — ${fmtUSD(qcd)} went straight from your IRA to charity as a QCD, so it was not taxed. ${rmdPart}`,
+    amounts: { qcd, qcdBeyondRmd: beyond, rmdGross: gross, rmdTaxable, ...(taxed > 0 ? { qcdTaxable: taxed } : {}) },
   };
 }
 

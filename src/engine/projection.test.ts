@@ -203,9 +203,10 @@ describe('Inherited account types — one-time income events', () => {
     }
 
     // Everything drawn from the account (required minimum + strategy draws) covers the inheritance.
+    // Here the strategy draws empty it in the injection year, before it has earned any growth.
     const totalDrawn = proj.rows.filter(r => r.ageA >= 65 && r.ageA <= 75)
       .reduce((s, r) => s + (r.lumpSumForcedTradDist ?? 0) + r.inheritedTradFromWd, 0);
-    expect(totalDrawn).toBeGreaterThan(100_000);
+    expect(totalDrawn).toBeGreaterThanOrEqual(100_000 - 0.01);
     for (const r of proj.rows) expect(r.inheritedTradFromWd).toBeLessThanOrEqual(r.wdTrd + 1e-6);
   });
 

@@ -76,7 +76,7 @@ describe('qcdBenefitCopy', () => {
   const base = {
     totalQcd: 500_000, firstQcdAge: 72, firstQcd: 25_000, taxSaved: 61_432,
     parts: { fed: 50_000, state: 10_000, irmaa: 1_432, niit: 0, aca: 0 },
-    rmdCoveredShare: 0.64, lowersTaxableSS: true, irmaaYearsAvoided: 9,
+    rmdCoveredShare: 0.64, lowersTaxableSS: true, irmaaYearsAvoided: 9, totalQcdTaxed: 0,
   };
 
   it('names the saving, the age, the giving and each real effect', () => {
@@ -86,7 +86,14 @@ describe('qcdBenefitCopy', () => {
     expect(body).toContain('64% of your required withdrawals');
     expect(body).toContain('lowers taxable Social Security');
     expect(body).toContain('IRMAA surcharges in 9 years');
-    expect(body).toContain('Compared with paying the same gifts in cash, with the same withdrawal plan and Roth conversions.');
+    expect(body).toContain('Compared with paying the same gifts in cash, with the same withdrawal plan and Roth conversions');
+    expect(body).toContain('If you itemize, cash gifts are deductible too, so the saving is smaller.');
+    expect(body).not.toContain('taxed anyway');
+  });
+
+  it('names the QCDs the post-70½ contribution rule taxes', () => {
+    expect(qcdBenefitCopy({ ...base, totalQcdTaxed: 24_030 }).body)
+      .toContain('$24,000 of the QCDs is taxed anyway: deductible IRA contributions made from age 70½ reduce the tax-free amount.');
   });
 
   it('leaves out effects that did not happen', () => {
