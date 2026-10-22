@@ -1,5 +1,6 @@
 import type { Portfolio, TipsRung } from '../schemas/plan';
 import { ladderInBalances } from './tipsValidation';
+import { fmtFull } from '../lib/format';
 
 /** TIPS ladder builder (pure). Sizes one rung per year so the ladder pays a fixed real income from
  *  `fromYear` through `throughYear`.
@@ -28,7 +29,8 @@ export interface TipsBuildInput {
   /** Real yield, e.g. 0.019. Also the coupon rate of every rung. */
   realYield: number;
   funding: BuilderFunding;
-  /** Years before this are skipped (a rung can't mature before the plan starts). */
+  /** The plan's start year. Rungs mature from the next year on: a rung maturing this year would earn the
+   *  engine's full year of CPI and coupon though it is bought part-way through it. */
   startYear: number;
 }
 
@@ -44,6 +46,16 @@ export interface TipsBuildResult {
   rows: TipsBuildRow[];
   /** Cost today: the sum of the rung principals. */
   cost: number;
+  /** Years in the range with no TIPS to buy (see `tipsMaturityIssued`): no rung, only the later rungs' coupons. */
+  unissued: number[];
+}
+
+/** Whether TIPS maturing in `year` can be bought in `startYear`. Ten-year notes are issued every year, so
+ *  every year through startYear + 10 has one; thirty-year bonds (issued every February since 2010) cover
+ *  2040 through startYear + 30. Between them (2037-2039 when the plan starts in 2026) and past the longest
+ *  bond, nothing matures yet. */
+export function tipsMaturityIssued(year: number, startYear: number): boolean {
+  return year <= startYear + 10 || (year >= 2040 && year <= startYear + 30);
 }
 
 /** Most rungs one build may add (a 40-year ladder is already longer than any real TIPS curve). */
@@ -53,15 +65,17 @@ const newId = (year: number, k: number): string =>
   `tips-b-${year}-${Date.now().toString(36)}-${k}-${Math.floor(Math.random() * 1e6)}`;
 
 export function buildTipsLadder(input: TipsBuildInput, makeId: (year: number, k: number) => string = newId): TipsBuildResult {
-  const first = Math.max(input.fromYear, input.startYear);
+  const first = Math.max(input.fromYear, input.startYear + 1);
   const last = Math.min(input.throughYear, first + MAX_BUILDER_RUNGS - 1);
   const c = input.realYield;
-  if (!(input.incomeReal > 0) || last < first || !(c >= 0)) return { rungs: [], rows: [], cost: 0 };
+  if (!(input.incomeReal > 0) || last < first || !(c >= 0)) return { rungs: [], rows: [], cost: 0, unissued: [] };
 
   const n = last - first + 1;
   const principal: number[] = new Array(n);
+  const unissued: number[] = [];
   let later = 0;
   for (let k = n - 1; k >= 0; k--) {
+    if (!tipsMaturityIssued(first + k, input.startYear)) { principal[k] = 0; unissued.unshift(first + k); continue; }
     // Whole dollars: brokerages quote TIPS in dollar amounts and the rounding moves a year's income by < $1.
     principal[k] = Math.max(0, Math.round((input.incomeReal - c * later) / (1 + c)));
     later += principal[k];
@@ -77,7 +91,7 @@ export function buildTipsLadder(input: TipsBuildInput, makeId: (year: number, k:
     rows.push({ year, principal: principal[k], paysReal: c * alive + principal[k] });
     alive -= principal[k];
   }
-  return { rungs: rungs.filter((r) => r.adjustedPrincipal > 0), rows, cost: later };
+  return { rungs: rungs.filter((r) => r.adjustedPrincipal > 0), rows, cost: later, unissued };
 }
 
 /** Money the funding account still has for new rungs: its balance less the live rungs already carved
@@ -103,7 +117,7 @@ export function builderBlocker(portfolio: Portfolio, funding: BuilderFunding, co
   }
   const avail = builderFundingAvailable(portfolio, funding, startYear);
   if (cost > avail + 0.005) {
-    return `This ladder costs $${Math.round(cost).toLocaleString('en-US')} but the account has $${Math.round(Math.max(0, avail)).toLocaleString('en-US')} left after the rungs it already holds.`;
+    return `This ladder costs ${fmtFull(Math.round(cost))} but the account has ${fmtFull(Math.round(Math.max(0, avail)))} left after the rungs it already holds.`;
   }
   return null;
 }

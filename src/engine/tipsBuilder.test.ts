@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import { planWithoutLadder } from './tipsLadder';
-import { buildTipsLadder, builderBlocker, builderFundingAvailable, MAX_BUILDER_RUNGS, yearAtAge } from './tipsBuilder';
+import { buildTipsLadder, builderBlocker, builderFundingAvailable, MAX_BUILDER_RUNGS, tipsMaturityIssued, yearAtAge } from './tipsBuilder';
 import { rung, thisYear, tipsIdlePlan, tipsRetireePlan, withTips } from './__testutil__/tipsPlans';
 import type { Plan, TipsRung } from '../schemas/plan';
 
@@ -33,15 +33,31 @@ describe('buildTipsLadder: bootstrap', () => {
     expect(r.rungs.every((x) => x.whose === 'B' && x.account === 'traditional')).toBe(true);
   });
 
-  it('skips years before the plan starts, caps the length and returns nothing for empty input', () => {
+  it('starts the year after the plan starts, caps the length and returns nothing for empty input', () => {
+    // A rung maturing in the start year would earn a full year of CPI and coupon though bought part-way in.
     const r = buildTipsLadder({ incomeReal: 1000, fromYear: 2020, throughYear: 2028, realYield: 0.01, funding: { account: 'taxable' }, startYear: 2026 }, ids);
-    expect(r.rungs[0].maturityYear).toBe(2026);
-    expect(r.rungs).toHaveLength(3);
+    expect(r.rungs.map((x) => x.maturityYear)).toEqual([2027, 2028]);
     const long = buildTipsLadder({ incomeReal: 1000, fromYear: 2026, throughYear: 2200, realYield: 0.01, funding: { account: 'taxable' }, startYear: 2026 }, ids);
-    expect(long.rungs).toHaveLength(MAX_BUILDER_RUNGS);
+    expect(long.rows).toHaveLength(MAX_BUILDER_RUNGS);
+    expect(long.rows[0].year).toBe(2027);
     for (const bad of [{ incomeReal: 0 }, { throughYear: 2025 }, { realYield: -0.01 }]) {
       expect(buildTipsLadder({ incomeReal: 1000, fromYear: 2026, throughYear: 2030, realYield: 0.01, funding: { account: 'taxable' }, startYear: 2026, ...bad }, ids).rungs).toEqual([]);
     }
+  });
+
+  it('buys no rung in a year with no TIPS: 2037-2039 and past the longest bond (2056 in 2026)', () => {
+    const r = buildTipsLadder({ incomeReal: 10_000, fromYear: 2035, throughYear: 2058, realYield: 0.02, funding: { account: 'roth' }, startYear: 2026 }, ids);
+    expect(r.unissued).toEqual([2037, 2038, 2039, 2057, 2058]);
+    expect(r.rungs.map((x) => x.maturityYear)).toEqual([2035, 2036, ...Array.from({ length: 17 }, (_, k) => 2040 + k)]);
+    // the gap years get only the coupons of the later rungs; each issued year still pays the target
+    for (const row of r.rows) {
+      if (r.unissued.includes(row.year)) expect(row.paysReal).toBeLessThan(10_000);
+      else expect(Math.abs(row.paysReal - 10_000)).toBeLessThan(1);
+    }
+    // a year later, the 2037 ten-year note exists and the longest bond is 2057
+    expect(buildTipsLadder({ incomeReal: 10_000, fromYear: 2035, throughYear: 2058, realYield: 0.02, funding: { account: 'roth' }, startYear: 2027 }, ids).unissued).toEqual([2038, 2039, 2058]);
+    expect(tipsMaturityIssued(2036, 2026)).toBe(true);
+    expect(tipsMaturityIssued(2037, 2026)).toBe(false);
   });
 
   it('yearAtAge maps an age to the engine calendar year', () => {
@@ -62,15 +78,15 @@ describe('buildTipsLadder through runProjection', () => {
 
   it.each(cases)('%s ladder: cash each year = target x year-end index (plan inflation)', (_n, account, whose, field) => {
     const funding = account === 'traditional' ? { account, whose: whose! } : { account } as { account: 'taxable' | 'roth' };
-    const built = buildTipsLadder({ incomeReal: I, fromYear: y, throughYear: y + 7, realYield: 0.019, funding, startYear: y });
+    const built = buildTipsLadder({ incomeReal: I, fromYear: y + 1, throughYear: y + 8, realYield: 0.019, funding, startYear: y });
     const plan = withTips(tipsIdlePlan({ taxable: 2e6, trad: 2e6, roth: 2e6 }), built.rungs);
     const rows = project(plan);
     const pi = plan.assumptions.inflation;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 1; i <= 8; i++) {
       const idxE = rows[i].inflationFactor * (1 + pi);
       expect(Math.abs((rows[i][field] as number) / idxE - I)).toBeLessThan(1);
     }
-    expect(rows[8][field]).toBe(0);
+    expect(rows[9][field]).toBe(0);
     // The carve-out takes exactly the cost from the funding account, and nothing from the others.
     expect(rows[0].begTips).toBeCloseTo(built.cost, 6);
     const bare = project(planWithoutLadder(plan, y)!)[0];

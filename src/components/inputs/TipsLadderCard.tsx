@@ -106,8 +106,10 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
   const roth = sum((r) => r.account === 'roth');
   const hasTaxable = rungs.some((r) => r.account === 'taxable');
   const of = (balance: number) => (include ? ` of ${fmtFull(balance)}` : '');
-  const rest = (held: number, balance: number) => include && held > 0 && (
-    <div style={{ color: 'var(--text-muted)' }}>{fmtFull(Math.max(0, balance - held))} stays invested</div>
+  // What stays invested, given as the sum of per-account remainders: pre-tax IRAs are separate, so one
+  // spouse's over-subscribed IRA can't borrow the other's balance.
+  const rest = (held: number, stays: number) => include && held > 0 && (
+    <div style={{ color: 'var(--text-muted)' }}>{fmtFull(stays)} stays invested</div>
   );
   const allTaxable = a.taxable + (b?.taxable ?? 0), allRoth = a.roth + (b?.roth ?? 0);
 
@@ -245,19 +247,19 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
             {preA > 0 && <div>{nameA}: {fmtFull(preA)}{of(a.traditional)}</div>}
             {preB > 0 && b && <div>{nameB ?? 'Person B'}: {fmtFull(preB)}{of(b.traditional)}</div>}
           </div>
-          {rest(preA + preB, a.traditional + (b?.traditional ?? 0))}
+          {rest(preA + preB, Math.max(0, a.traditional - preA) + Math.max(0, (b?.traditional ?? 0) - preB))}
         </div>
         <div style={{ background: 'var(--cream)', borderRadius: 6, padding: '6px 8px' }}>
           <div style={{ color: 'var(--text-muted)' }}>In taxable</div>
           <div style={{ fontWeight: 500, fontSize: 13 }}>{fmtFull(taxable)}</div>
           <div style={{ color: 'var(--text-muted)' }}>{include && taxable > 0 ? `of ${fmtFull(allTaxable)}` : ''}</div>
-          {rest(taxable, allTaxable)}
+          {rest(taxable, Math.max(0, allTaxable - taxable))}
         </div>
         <div style={{ background: 'var(--cream)', borderRadius: 6, padding: '6px 8px' }}>
           <div style={{ color: 'var(--text-muted)' }}>In Roth</div>
           <div style={{ fontWeight: 500, fontSize: 13 }}>{fmtFull(roth)}</div>
           <div style={{ color: 'var(--text-muted)' }}>{include && roth > 0 ? `of ${fmtFull(allRoth)}` : ''}</div>
-          {rest(roth, allRoth)}
+          {rest(roth, Math.max(0, allRoth - roth))}
         </div>
       </div>
 

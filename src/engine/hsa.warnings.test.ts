@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { computePlanWarnings } from './planWarnings';
 import { computeHsaProjectionWarnings, hsaEarlyDrawWarning } from './hsaWarnings';
 import { runProjection } from './projection';
@@ -13,6 +13,18 @@ afterAll(unpinDate);
 const ids = (p: Parameters<typeof computePlanWarnings>[0]) => computePlanWarnings(p).map((w) => w.id);
 
 describe('HSA plan warnings (HU-4)', () => {
+  it('names no calendar year for the limit, which is the 2026 figure in today\'s dollars whatever the clock says', () => {
+    vi.setSystemTime(new Date('2027-03-01T12:00:00Z'));
+    try {
+      const p = withHsa(golden.planA_simple(), { a: { hsaContribution: 11_000, hsaCoverage: 'family' } });
+      const w = computePlanWarnings(p).find((x) => x.id.startsWith('hsa-limit'))!;
+      expect(w.message).not.toMatch(/20\d\d limit/);
+      expect(w.message).toContain('$8,750');
+    } finally {
+      pinDate();
+    }
+  });
+
   it('say nothing for a plan without an HSA or with sensible contributions', () => {
     expect(ids(golden.planA_simple()).filter((i) => i.startsWith('hsa'))).toEqual([]);
     const ok = withHsa(golden.planA_simple(), { a: { hsa: 10_000, hsaContribution: 4_000 } });
@@ -23,7 +35,7 @@ describe('HSA plan warnings (HU-4)', () => {
     const p = withHsa(golden.planA_simple(), { a: { hsaContribution: 11_000, hsaCoverage: 'family' } });
     const w = computePlanWarnings(p).find((x) => x.id.startsWith('hsa-limit'))!;
     expect(w.severity).toBe('warn');
-    expect(w.message).toBe("Person A's HSA contribution of $11,000 is above the 2026 limit of $8,750. Capped at the limit.");
+    expect(w.message).toBe("Person A's HSA contribution of $11,000 is above the annual limit of $8,750 (today's dollars; the plan raises it with inflation). Capped at the limit.");
     // the catch-up raises the limit at 55
     const old = withHsa({ ...golden.planA_simple(), personA: { ...golden.planA_simple().personA, dob: '1970-01-01' } }, { a: { hsaContribution: 9_750, hsaCoverage: 'family' } });
     expect(ids(old).some((i) => i.startsWith('hsa-limit'))).toBe(false);

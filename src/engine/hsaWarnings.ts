@@ -2,6 +2,7 @@ import type { Plan } from '../schemas/plan';
 import type { ProjectionRow } from './projection';
 import type { PlanWarning } from './planWarnings';
 import { federalPovertyLevel } from './aca';
+import { fmtFull } from '../lib/format';
 
 /** Warnings that need the projection rows (the plan alone can't tell them). */
 
@@ -37,7 +38,7 @@ export function hsaEarlyDrawWarning(rows: ProjectionRow[]): PlanWarning | null {
   return {
     id: 'hsa-early-draw',
     severity: 'warn',
-    message: `Your other accounts run out ${span}, so the plan takes non-medical money from the HSA before 65. That is taxed as income and costs a 20% penalty (about $${Math.round(total).toLocaleString('en-US')} in today's dollars).`,
+    message: `Your other accounts run out ${span}, so the plan takes non-medical money from the HSA before 65. That is taxed as income and costs a 20% penalty (about ${fmtFull(Math.round(total))} in today's dollars).`,
   };
 }
 

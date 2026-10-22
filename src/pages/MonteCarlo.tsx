@@ -173,13 +173,18 @@ export default function MonteCarlo() {
   // computed for, so any new run (or a plan change, which clears the result) hides a stale comparison.
   const [ladderCompare, setLadderCompare] = useState<{ for: NonNullable<typeof result>; without: NonNullable<typeof result> } | null>(null);
   const [comparingLadder, setComparingLadder] = useState(false);
+  const [compareFailed, setCompareFailed] = useState(false);
   const ladderFree = useMemo(() => planWithoutLadder(enginePlan(robustnessPlan ?? mcBase), new Date().getFullYear()), [robustnessPlan, mcBase]);
   const compareLadder = async () => {
     if (!result || !ladderFree) return;
     setComparingLadder(true);
+    setCompareFailed(false);
     try {
       const without = await getEngineWorker().monteCarlo(ladderFree, { trials, model: 'historical', equityPct: equityPct / 100, seed });
       setLadderCompare({ for: result, without });
+    } catch {
+      // A worker error must not become an unhandled rejection; say so and let the user retry.
+      setCompareFailed(true);
     } finally {
       setComparingLadder(false);
     }
@@ -556,6 +561,7 @@ export default function MonteCarlo() {
               <div className="helper-text" style={{ marginTop: 4 }}>
                 Runs the same {trials.toLocaleString()} market histories with the ladder's money left in its accounts at your {mixLabel} mix.
               </div>
+              {compareFailed && <div className="plan-warning error" role="alert" style={{ marginTop: 6 }}>The comparison could not be run. Try Compare again.</div>}
               {ladderCompare?.for === result && (
                 <table style={{ marginTop: 8, fontSize: 12, borderCollapse: 'collapse' }} aria-label="With vs without the TIPS ladder">
                   <thead>

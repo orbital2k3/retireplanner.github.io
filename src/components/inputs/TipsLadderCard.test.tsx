@@ -152,4 +152,12 @@ describe('TipsLadderCard', () => {
     }
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("'stays invested' adds each IRA's own remainder: one over-subscribed IRA can't borrow the other's balance", () => {
+    const pf = samplePlan().portfolio;
+    const a = pf.personA.traditional, b = pf.personB!.traditional;
+    // A's rungs are 10k more than A's IRA; B holds 5k of rungs.
+    setup(portfolio([rung({ adjustedPrincipal: a + 10_000 }), rung({ id: 'r2', whose: 'B', adjustedPrincipal: 5_000 })]));
+    expect(screen.getByText(`$${(b - 5_000).toLocaleString()} stays invested`)).toBeInTheDocument();
+  });
 });

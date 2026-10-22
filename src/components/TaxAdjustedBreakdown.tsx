@@ -1,7 +1,7 @@
 import type { ProjectionResult } from '../engine/projection';
 import type { Plan } from '../schemas/plan';
 import { taxAdjustedRates, hsaTaxableBalance } from '../engine/taxAdjusted';
-import { fmtFull, fmtM } from '../lib/format';
+import { fmtFull, fmtM, fmtPct } from '../lib/format';
 
 interface Props {
   proj: ProjectionResult;
@@ -42,14 +42,14 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
     {
       label: 'Taxable unrealized gain',
       balance: unrealizedGain,
-      rateLabel: `${(ltcgRate * 100).toFixed(0)}% cap-gains rate`,
+      rateLabel: `${fmtPct(ltcgRate, 0)} cap-gains rate`,
       result: gainAdj,
       note: basisExceeds ? 'Basis clamped to balance (basis exceeded balance at plan end)' : undefined,
     },
     {
       label: 'Pre-tax (401k/IRA) balance',
       balance: endTraditional,
-      rateLabel: `${(ordRate * 100).toFixed(0)}% blended effective rate`,
+      rateLabel: `${fmtPct(ordRate, 0)} blended effective rate`,
       result: tradAdj,
     },
   ];
@@ -60,7 +60,7 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
       {
         label: 'HSA above receipts',
         balance: hsaTaxable,
-        rateLabel: `${(ordRate * 100).toFixed(0)}% blended effective rate`,
+        rateLabel: `${fmtPct(ordRate, 0)} blended effective rate`,
         result: hsaTaxable * (1 - ordRate),
         note: 'A non-spouse heir owes ordinary tax on an inherited HSA',
       },
@@ -75,7 +75,7 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
     rows.push({
       label: 'TIPS ladder in pre-tax accounts',
       balance: tipsTrad,
-      rateLabel: `${(ordRate * 100).toFixed(0)}% blended effective rate`,
+      rateLabel: `${fmtPct(ordRate, 0)} blended effective rate`,
       result: tipsTrad * (1 - ordRate),
     });
   }

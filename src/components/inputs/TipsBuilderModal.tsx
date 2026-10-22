@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Portfolio, TipsRung } from '../../schemas/plan';
 import { NumberInput } from './NumberInput';
 import { fmtFull, fmtK } from '../../lib/format';
@@ -17,6 +17,17 @@ const fundingOf = (k: FundingKey): BuilderFunding =>
 const label: React.CSSProperties = { fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 3 };
 const hint: React.CSSProperties = { fontSize: 11, color: 'var(--text-muted)', marginTop: 2 };
 const tile: React.CSSProperties = { background: 'var(--cream)', borderRadius: 6, padding: '6px 8px' };
+/** 2037, 2038, 2039, 2057 -> "2037-2039 and 2057". */
+const yearSpans = (years: number[]): string => {
+  const spans: string[] = [];
+  for (let i = 0; i < years.length;) {
+    let j = i;
+    while (j + 1 < years.length && years[j + 1] === years[j] + 1) j++;
+    spans.push(i === j ? `${years[i]}` : `${years[i]}-${years[j]}`);
+    i = j + 1;
+  }
+  return spans.length <= 1 ? spans.join('') : `${spans.slice(0, -1).join(', ')} and ${spans[spans.length - 1]}`;
+};
 const grid4: React.CSSProperties = { display: 'grid', gridTemplateColumns: '.6fr .6fr 1fr 1fr', gap: 6, fontSize: 12 };
 
 export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, defaultFromAge, ssClaimAgeA, onAdd, onClose }: {
@@ -32,11 +43,28 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
   onAdd: (rungs: TipsRung[]) => void;
   onClose: () => void;
 }) {
+  // Modal focus: move focus into the dialog on open, keep Tab inside it, and give it back to whatever had
+  // it (the "Build a ladder…" button) on close. Escape closes.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const opener = document.activeElement as HTMLElement | null;
+    const focusables = () => [...(dialogRef.current?.querySelectorAll<HTMLElement>('input, select, button:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])];
+    focusables().find((el) => el.tagName !== 'BUTTON')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeRef.current(); return; }
+      if (e.key !== 'Tab') return;
+      const els = focusables();
+      if (els.length === 0) return;
+      const first = els[0], last = els[els.length - 1];
+      const inside = dialogRef.current?.contains(document.activeElement) ?? false;
+      if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => { window.removeEventListener('keydown', onKey); opener?.focus?.(); };
+  }, []);
 
   const [income, setIncome] = useState(40_000);
   const [fromAge, setFromAge] = useState(Math.max(ageA, defaultFromAge));
@@ -62,14 +90,16 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
   const existing = portfolio.tipsLadder?.rungs.length ?? 0;
 
   return (
+    // The backdrop does not close the dialog: a stray click (or a drag that ends outside) would discard the
+    // inputs. Cancel, × and Escape close it.
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(13,27,46,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-      onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Build a TIPS ladder"
-        onClick={(e) => e.stopPropagation()}
         style={{ background: '#fff', borderRadius: 14, maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }}
       >
         <div style={{ background: 'var(--gold-pale)', padding: '8px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 500, letterSpacing: 0.6 }}>
@@ -138,6 +168,11 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
                 Each rung is bought at par with a coupon equal to the real yield.{built.rows[0].year > startYear && ' The rungs also pay coupons in the years before the first one matures.'}
                 Projections in today's dollars show each payment about one year of inflation higher, because the plan values bond payments at the year's end.
               </div>
+              {built.unissued.length > 0 && (
+                <div className="plan-warning warn" style={{ marginTop: 6 }}>
+                  No TIPS mature in {yearSpans(built.unissued)} yet, so those years get no rung, only the later rungs' coupons. A common fix is to buy more of the nearest bonds on either side and hold the extra until then.
+                </div>
+              )}
             </>
           )}
 

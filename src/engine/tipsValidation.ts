@@ -1,4 +1,5 @@
 import type { Portfolio, TipsRung } from '../schemas/plan';
+import { fmtFull } from '../lib/format';
 
 /** Plan-level checks for a TIPS ladder. They are kept out of the Zod schema on purpose: a rung that
  *  matures next year is valid today and stale tomorrow, and a saved plan must never fail to load
@@ -17,7 +18,7 @@ export interface TipsIssue {
   balance?: number;
 }
 
-const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
+const money = (n: number): string => fmtFull(Math.round(n));
 
 /** Par above the adjusted principal only happens after deflation since the bond was issued, so it is
  *  checked above `TIPS_FACE_CHECK_RATIO` and the engine never uses more than `TIPS_MAX_FACE_RATIO`

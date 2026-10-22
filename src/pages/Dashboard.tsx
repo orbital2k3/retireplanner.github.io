@@ -83,7 +83,9 @@ export default function Dashboard() {
   const planLasts = depAge === null;
 
   const lifetimeSS = proj.rows.reduce((s, r) => s + (real ? r.totalSS / r.inflationFactor : r.totalSS), 0);
-  const lifetimeAllInTax = proj.rows.reduce((s, r) => s + (real ? (r.fedTax + r.stateTaxAmt + r.irmaa + r.niit) / r.inflationFactor : r.fedTax + r.stateTaxAmt + r.irmaa + r.niit), 0);
+  // The HSA early-draw penalty is an additional federal tax (Form 8889), kept out of the row's fedTax.
+  const allInTax = (r: (typeof proj.rows)[number]) => r.fedTax + r.stateTaxAmt + r.irmaa + r.niit + r.hsaPenalty;
+  const lifetimeAllInTax = proj.rows.reduce((s, r) => s + (real ? allInTax(r) / r.inflationFactor : allInTax(r)), 0);
   const lifetimeIRMAA = proj.rows.reduce((s, r) => s + (real ? r.irmaa / r.inflationFactor : r.irmaa), 0);
   const retirementYears = A.planThroughAge - A.retirementAge;
   const yearsFunded = planLasts ? retirementYears : (depAge ?? A.planThroughAge) - A.retirementAge;

@@ -63,4 +63,40 @@ describe('TipsBuilderModal (TB-2)', () => {
     expect(within(screen.getByRole('dialog')).getByText(/on top of your balances/)).toBeInTheDocument();
     expect(addButton()).toBeDisabled();
   });
+
+  it('is a modal dialog: focus moves in, Tab stays in, the backdrop does not discard it, and focus returns on close', () => {
+    setup(portfolio());
+    const opener = screen.getByText('Build a ladder…');
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    const focusables = [...dialog.querySelectorAll<HTMLElement>('input, select, button:not([disabled])')];
+    focusables[focusables.length - 1].focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(focusables[0]);
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(focusables[focusables.length - 1]);
+    fireEvent.click(dialog.parentElement!);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByText('Build a ladder…'));
+  });
+
+  it('notes the years with no TIPS to buy and buys no rung in them', () => {
+    const onChange = setup(portfolio({ personA: { ...samplePlan().portfolio.personA, taxable: 5_000_000 } }));
+    fireEvent.click(screen.getByText('Build a ladder…'));
+    const dialog = screen.getByRole('dialog');
+    const [, from, through] = within(dialog).getAllByRole('textbox');
+    // ageA 60 in 2026: 70 -> 2036, 74 -> 2040
+    for (const [input, v] of [[through, '74'], [from, '70']] as const) {
+      fireEvent.focus(input); fireEvent.change(input, { target: { value: v } }); fireEvent.blur(input);
+    }
+    fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'taxable' } });
+    expect(within(dialog).getByText(/No TIPS mature in 2037-2039 yet/)).toBeInTheDocument();
+    fireEvent.click(addButton());
+    expect(onChange.mock.calls[0][0]!.rungs.map((r) => r.maturityYear)).toEqual([2036, 2040]);
+  });
 });

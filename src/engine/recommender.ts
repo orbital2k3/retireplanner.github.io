@@ -17,9 +17,9 @@ export const REC_GOALS: Record<RecGoal, RecGoalSpec> = {
   'min-tax': {
     key: 'min-tax',
     label: 'Minimize Lifetime Taxes',
-    description: 'Sum of federal + state + IRMAA across all years.',
+    description: 'Sum of federal + state + IRMAA + NIIT across all years, including any HSA early-draw penalty.',
     direction: 'min',
-    score: (r) => r.rows.reduce((s, x) => s + x.fedTax + x.stateTaxAmt + x.irmaa + x.niit, 0),
+    score: (r) => r.rows.reduce((s, x) => s + x.fedTax + x.stateTaxAmt + x.irmaa + x.niit + x.hsaPenalty, 0),
     format: fmtK,
   },
   'max-end': {

@@ -6,6 +6,7 @@ import { resolveStrategy } from './strategy/resultSettings';
 import { qcdEligible } from './qcd';
 import { effectiveHsaCoverage, hsaBaseLimit, hsaCatchUp, hsaLimit, HSA_MEDICARE_AGE } from './hsa';
 import { tipsLadderIssues } from './tipsValidation';
+import { fmtFull } from '../lib/format';
 
 /**
  * Ages (Person A's frame) with a non-zero manual Roth conversion that will actually run before the
@@ -171,8 +172,7 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       ? [{ name: plan.personB.name || 'Person B', age: currentAgeB, claim: plan.personB.ssClaimAge, pf: plan.portfolio.personB }]
       : []),
   ];
-  const taxYear = new Date().getFullYear();
-  const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  const money = (n: number) => fmtFull(Math.round(n));
   for (const o of hsaWho) {
     const c = o.pf.hsaContribution ?? 0;
     if (c <= 0) continue;
@@ -190,7 +190,7 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       warnings.push({
         id: `hsa-limit-${o.name}`,
         severity: 'warn',
-        message: `${o.name}'s HSA contribution of ${money(c)} is above the ${taxYear} limit of ${money(limit)}. Capped at the limit.`,
+        message: `${o.name}'s HSA contribution of ${money(c)} is above the annual limit of ${money(limit)} (today's dollars; the plan raises it with inflation). Capped at the limit.`,
       });
     }
   }

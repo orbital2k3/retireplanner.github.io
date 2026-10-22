@@ -15,9 +15,9 @@ export function taxRule(ctx: InsightContext): Insight | null {
   const startBal = totals.taxable + totals.traditional + totals.roth + onTop;
   if (startBal <= 0) return null;
 
-  // Lifetime federal tax in today's $.
+  // Lifetime federal tax in today's $, with the HSA early-draw penalty (an additional federal tax).
   let lifetimeReal = 0;
-  for (const r of proj.rows) lifetimeReal += r.fedTax / r.inflationFactor;
+  for (const r of proj.rows) lifetimeReal += (r.fedTax + r.hsaPenalty) / r.inflationFactor;
 
   const ratio = lifetimeReal / startBal;
   const pct = Math.round(ratio * 100);
