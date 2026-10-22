@@ -17,8 +17,28 @@ describe('qcdRule', () => {
     expect(insight!.id).toBe('qcdRmd');
     expect(insight!.surfaces).toEqual(expect.arrayContaining(['taxes', 'strategy']));
     expect(insight!.body).toMatch(/covers \d+% of your required withdrawals/);
-    expect(insight!.body).toContain('fewer Roth conversions');
+    expect(insight!.body).toContain('(once Person A is 74)');
     expect(insight!.body).not.toContain('70½');
+    // planQ's conversions are off, so the insight makes no claim about them.
+    expect(insight!.body).not.toContain('Roth conversions');
+  });
+
+  it('mentions fewer conversions only when the optimizer sizes them', () => {
+    const p = planQ_qcdGiver();
+    const optimized: Plan = {
+      ...p,
+      conversion: { ...p.conversion, optimize: true },
+      customPolicy: { source: 'optimizer', goal: 'max-end-balance', windows: [{ fromAge: 65, toAge: 95, pctTaxable: 1, pctTraditional: 0, pctRoth: 0, convAmt: 20_000 }] },
+    };
+    expect(qcdRule({ plan: optimized, proj: runProjection(optimized) })!.body).toContain('the optimizer usually schedules fewer Roth conversions');
+    const bracketFill: Plan = { ...p, conversion: { ...p.conversion, mode: 'bracket-fill', endAge: 80 } };
+    expect(qcdRule({ plan: bracketFill, proj: runProjection(bracketFill) })!.body).not.toContain('Roth conversions');
+  });
+
+  it("quotes the giver's age when Person B pays the first QCD", () => {
+    const p = planQ_qcdGiver();
+    const plan: Plan = { ...p, portfolio: { ...p.portfolio, personA: { ...p.portfolio.personA, traditional: 0 } } };
+    expect(qcdRule({ plan, proj: runProjection(plan) })!.body).toContain('(once Person B is 72)');
   });
 
   it('is silent when the plan has no charitable giving', () => {

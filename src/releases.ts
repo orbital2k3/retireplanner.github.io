@@ -23,12 +23,12 @@ export const RELEASES: Release[] = [
       {
         kind: 'feature',
         title: 'Qualified charitable distributions (QCDs)',
-        text: 'Each expense row now has a Category: General, Medical or Charitable. From age 70½, charitable giving is paid straight from your IRA. It counts toward your required withdrawal and is left out of your taxable income, which can lower tax on Social Security, Medicare surcharges and state tax. Couples use each spouse\u2019s own $111,000 limit.',
+        text: 'Each expense row now has a Category: General, Medical or Charitable. From age 70½, charitable giving is paid straight from your IRA. It is left out of your taxable income (and, once required withdrawals start, counts toward them), which can lower tax on Social Security, Medicare surcharges and state tax. Couples use each spouse\u2019s own $111,000 limit.',
         bullets: [
           'The Projections table has a new Giving column group: Giving (all Charitable rows, with a tooltip splitting QCD from other giving), QCD and Charity deduction. The RMD tooltip shows how much went to charity.',
           'The Sankey has a Charity node for all your giving: QCDs flow to it straight from Pre-tax, and other giving (before 70\u00bd, above the limit, or to a donor-advised fund) from your other money. The cash-flow charts show QCDs going to charity instead of counting them as cash.',
           'The Taxes page shows what QCDs save you compared with paying the same gifts in cash.',
-          'Only gifts paid directly to a public charity qualify. For a donor-advised fund or private foundation, untick "Paid directly to a public charity" on the row. The gift is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. Unlike a General row, it still shows as giving in the Sankey and the Giving column.',
+          'Only gifts paid directly to a public charity qualify. For a donor-advised fund or a private (non-operating) foundation, untick "Paid directly to a public charity" on the row. The gift is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. Unlike a General row, it still shows as giving in the Sankey and the Giving column.',
           'New plan notes appear when a charitable row can\u2019t be paid as QCDs because the IRA is empty, or when a gift is marked as not paid to a public charity.',
         ],
       },

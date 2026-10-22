@@ -302,8 +302,8 @@ export default function InputsPage() {
   );
   const hasTips = (flatPlan.portfolio.tipsLadder?.rungs.length ?? 0) > 0;
   const tipsProjectionWarnings = useMemo(
-    () => (hasTips ? computeTipsProjectionWarnings(runProjection(flatPlan).rows) : []),
-    [hasTips, flatPlan],
+    () => (hasTips ? computeTipsProjectionWarnings(runProjection(flatPlan).rows, { a: nameA, b: B ? nameB : undefined }) : []),
+    [hasTips, flatPlan, nameA, nameB, B],
   );
   const planWarnings = [...computePlanWarnings(flatPlan), ...hsaProjectionWarnings, ...tipsProjectionWarnings];
   const minStartAge = (whose: string) => {
@@ -754,10 +754,10 @@ export default function InputsPage() {
                     <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', padding: '2px 0 4px 4px' }}>
                       <input type="checkbox" checked={s.qcd !== false} onChange={(e) => updateExpenseStream(s.id, { qcd: e.target.checked ? undefined : false })} style={{ accentColor: 'var(--gold)', width: 13, height: 13, marginTop: 1, flexShrink: 0 }} />
                       <span>
-                        Paid directly to a public charity. From age 70½ this is paid straight from your IRA as a QCD: it counts toward your required withdrawal and isn't taxed.
+                        Paid directly to a public charity. From age 70½ this is paid straight from your IRA as a QCD and isn't taxed; once required withdrawals start, it counts toward them.
                         {s.qcd === false
                           ? <strong style={{ fontWeight: 500 }}> Unticked: taxed like a General expense, paid from your other accounts with no QCD and no charity deduction. Still shown as giving in Projections.</strong>
-                          : ' Untick for a donor-advised fund or private foundation, which can\'t receive a QCD.'}
+                          : ' Untick for a donor-advised fund or a private (non-operating) foundation, which can\'t receive a QCD.'}
                       </span>
                     </label>
                   )}

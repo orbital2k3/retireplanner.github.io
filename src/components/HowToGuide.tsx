@@ -479,7 +479,7 @@ export function GuideContent() {
       <FieldTable rows={[
         ["General", "Ordinary spending. Nothing special happens.", "Food, travel, housing"],
         ["Medical", "Medical spending. If you have an HSA, it pays these bills tax-free from the age you choose (65 by default) and keeps receipts for bills paid earlier. See Health savings account in Portfolio.", "Healthcare"],
-        ["Charitable", "Giving. From age 70½ it is paid straight from your IRA as a qualified charitable distribution (QCD), which counts toward your required withdrawal and is not taxed. For a donor-advised fund or private foundation, untick \"Paid directly to a public charity\": those can't receive a QCD, so the gift is taxed like General spending (no QCD, no charity deduction) but still shows as giving in the Sankey and the Projections table.", "Church and charities"],
+        ["Charitable", "Giving. From age 70½ it is paid straight from your IRA as a qualified charitable distribution (QCD), which is not taxed and, once your required withdrawals start, counts toward them. For a donor-advised fund or a private (non-operating) foundation, untick \"Paid directly to a public charity\": those can't receive a QCD, so the gift is taxed like General spending (no QCD, no charity deduction) but still shows as giving in the Sankey and the Projections table.", "Church and charities"],
       ]} />
       <Tip>
         Before you are eligible for QCDs, or for gifts a QCD can&apos;t cover, cash gifts to public

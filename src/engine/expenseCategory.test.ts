@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
 import { samplePlan, PlanSchema, type ExpenseStream, type Plan } from '../schemas/plan';
 import * as golden from './__golden/plans';
+import { EXPENSE_TEMPLATES, type TemplateCtx } from './streamTemplates';
 import { assertProjectionInvariants } from './__invariants__/assertions';
 import { digestProjection, enc, pinDate, unpinDate } from './__regression__/snapshotUtil';
 
@@ -89,5 +90,15 @@ describe('expense category schema', () => {
     const parsed = PlanSchema.parse(JSON.parse(JSON.stringify(plan)));
     expect(parsed.expenseStreams.map((e) => [e.category, e.qcd])).toEqual(plan.expenseStreams.map((e) => [e.category, e.qcd]));
     expect(PlanSchema.safeParse({ ...plan, expenseStreams: [{ ...plan.expenseStreams[0], category: 'bogus' }] }).success).toBe(false);
+  });
+});
+
+describe('stock expense templates', () => {
+  it('tag only HSA-qualified costs as Medical: premiums are General, out-of-pocket costs are Medical', () => {
+    const make = (id: string) => EXPENSE_TEMPLATES.find((t) => t.id === id)!.make({ retirementAge: 60, planThroughAge: 95 } as TemplateCtx);
+    expect(make('healthcare').category).toBeUndefined();
+    expect(make('healthcare').description).toMatch(/premiums/i);
+    expect(make('medical').category).toBe('medical');
+    expect(make('healthcare').annualAmount + make('medical').annualAmount).toBe(18_000);
   });
 });

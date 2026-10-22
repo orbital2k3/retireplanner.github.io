@@ -116,22 +116,22 @@ export const QCD_HELP: HelpTopic = {
       heading: 'What a QCD is',
       paras: [
         'A qualified charitable distribution, or QCD, sends money straight from your IRA to a charity. The money never passes through your hands, so it is not added to your income.',
-        'Once you are 70½, a QCD also counts toward your required withdrawal for the year. That is the useful part: you meet the requirement without paying income tax on that money.',
+        'Once your required withdrawals start (at 73 or 75, depending on your birth year), a QCD also counts toward them. That is the useful part: you meet the requirement without paying income tax on that money.',
       ],
     },
     {
       heading: 'The rules this tool follows',
       paras: [
-        'You can start in the year you turn 70½. The limit in 2026 is $111,000 a year for each person, and it rises with inflation. A couple has two limits.',
+        'You can start once you are 70½. The tool treats the whole year you turn 70½ as eligible; in fact only gifts made after your half-birthday count. The limit in 2026 is $111,000 a year for each person, and it rises with inflation. A couple has two limits.',
         'The money has to come from an IRA. If your savings are in a 401(k), assume they have been rolled into an IRA. Money in an inherited IRA is left out.',
-        'The gift has to go directly to a public charity. Donor-advised funds and private foundations do not qualify. Untick the box on a giving row to mark a gift like that. It is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. It still shows as giving in the Sankey and the Giving column of the Projections table.',
+        'The gift has to go directly to a public charity. Donor-advised funds, supporting organizations and most private foundations do not qualify (a private operating foundation can). Untick the box on a giving row to mark a gift like that. It is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. It still shows as giving in the Sankey and the Giving column of the Projections table.',
       ],
     },
     {
       heading: 'What happens in your plan',
       paras: [
         'Mark an expense row as Charitable. Once you are eligible, the tool pays that giving from your IRA. It covers your required withdrawal first, then any extra up to the limit. Anything left over is paid from your other accounts the usual way.',
-        'The part that goes to charity is left out of your taxable income. It counts toward your required withdrawal, but you do not receive it as cash.',
+        'The part that goes to charity is left out of your taxable income. Once your required withdrawals start, it counts toward them, but you do not receive it as cash.',
       ],
     },
     {
@@ -244,7 +244,7 @@ export const TIPS_HELP: HelpTopic = {
       heading: 'How the tool models it',
       paras: [
         'The ladder follows inflation, not market returns: in Monte Carlo runs and historical stress tests the rungs pay the same real amounts in every scenario. Each bond is held to maturity. The plan never sells early, so a ladder cannot rescue a year that comes before its rung, and the plan warns you if you would run short while still holding bonds.',
-        'Every flow in a year is figured at the year-end price level. If prices fall over the life of a bond, the principal falls too, but at maturity it is never worth less than par, and a deflation adjustment can only offset that year\'s coupons, never your other income.',
+        'Every flow in a year is figured at the year-end price level. If prices fall over the life of a bond, the principal falls too, but at maturity it is never worth less than par, and in this tool a deflation adjustment only offsets that year\'s coupons. That is a simplification: the tax rules also let deflation beyond the year\'s coupons offset TIPS income you reported in earlier years, and carry any rest forward, so on a deflation path the tool overstates the tax a little.',
       ],
     },
     {

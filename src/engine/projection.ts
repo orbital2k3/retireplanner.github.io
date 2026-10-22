@@ -116,6 +116,7 @@ export interface ProjectionRow {
   // it (and of any excess) sent to charity untaxed, and `qcdBeyondRmd` is the excess over the RMD.
   qcd: number;
   qcdBeyondRmd: number;
+  qcdB: number;               // part of qcd paid from Person B's IRA (the rest is A's)
   charityDeduction: number;   // OBBBA non-itemizer deduction included in stdDeduction
   // Owned HSA (both persons combined). Zero on plans without one; kept out of the bit-exact whitelist.
   begHSA: number;
@@ -144,6 +145,7 @@ export interface ProjectionRow {
   tipsOrdInc: number;         // federal ordinary income from taxable rungs (state-exempt); counted once someone has retired
   tipsGain: number;           // capital gain realized as taxable rungs mature: the part of them the entered basis didn't cover (in ltcg)
   rmdUnmet: number;           // RMD that the liquid IRA balance could not cover (ladder rungs are illiquid)
+  rmdUnmetB: number;          // part of rmdUnmet that is Person B's
 }
 
 export interface ProjectionResult {
@@ -290,6 +292,10 @@ export interface ProjectionOptions {
   /** Pay charitable gifts as ordinary spending instead of QCDs. Counterfactual for the "tax saved by
    *  QCD" comparison; not a plan field. */
   disableQCD?: boolean;
+  /** Per-year nominal Roth conversions to use instead of the plan's (still capped at what the IRA holds).
+   *  Holds another run's conversions fixed in a counterfactual, as the "tax saved by QCD" comparison does;
+   *  not a plan field. */
+  conversionOverrides?: number[];
   /** Test hook: when given, the number of gross-up iterations used each year is appended to
    *  `grossUpIters`. Never set in app code. */
   stats?: { grossUpIters: number[] };
@@ -415,6 +421,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
   // True when any charitable row can be paid as a QCD. Hoisted so plans without one skip the QCD step.
   const charitableOn = rExpense.some(({ e }) => e.category === 'charitable' && e.qcd !== false);
   const qcdOn = !opts?.disableQCD && charitableOn;
+  const convOverrides = opts?.conversionOverrides;
   const taxableDivYield    = plan.assumptions.taxableDivYield    ?? 0;
   const taxableQualifiedPct = plan.assumptions.taxableQualifiedPct ?? 0.80;
   const taxableExemptYield  = plan.assumptions.taxableExemptYield  ?? 0;
@@ -598,12 +605,12 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       ? (Math.max(0, tradB - inheritedInTradB) + tips.begTradB) / rmdDivisor(ageB) : 0;
     // The bonds cannot be distributed in cash. When the RMD is larger than the liquid IRA money, the
     // RMD is clamped to it and the rest is recorded as unmet (D11); in-kind distributions are not modeled.
-    let rmdUnmet = 0;
+    let rmdUnmet = 0, rmdUnmetB = 0;
     if (hasTips) {
       const liqA = qcdAvailable(tradA, inheritedInTradA, gRateTradYear, cA.trad, tips.toTradA);
       const liqB = qcdAvailable(tradB, inheritedInTradB, gRateTradYear, cB.trad, tips.toTradB);
       if (rmdA > liqA) { rmdUnmet += rmdA - liqA; rmdA = liqA; }
-      if (rmdB > liqB) { rmdUnmet += rmdB - liqB; rmdB = liqB; }
+      if (rmdB > liqB) { rmdUnmetB = rmdB - liqB; rmdUnmet += rmdUnmetB; rmdB = liqB; }
     }
     const rmdAmt = rmdA + rmdB;
     lifetimeRMD += rmdAmt;
@@ -776,7 +783,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Total §103 exempt interest: stream contributions + portfolio yield.
     // other.exemptInterest is gated by the stream's own age window (not retirement) by design.
     const exemptIncome = other.exemptInterest + exemptInt;
-    if (eitherRetired && policyConv != null) {
+    if (convOverrides) {
+      conv = Math.min(maxConv, convOverrides[i] ?? 0);
+    } else if (eitherRetired && policyConv != null) {
       conv = Math.min(maxConv, policyConv * inflationFactor);
     } else if (!eitherRetired && (plan.conversion.optimize ?? true)) {
       // The optimizer owns conversions (`conversion.optimize`), and its search space starts at
@@ -1404,6 +1413,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       charitableSpend: spend.charitable,
       qcd: qcdTotal,
       qcdBeyondRmd: qcdTotal > 0 ? trdForced - rmdAmt : 0,
+      qcdB,
       charityDeduction: charDed,
       begHSA,
       endHSA: hsaA + hsaB,
@@ -1428,6 +1438,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       tipsOrdInc: tipsTaxed,
       tipsGain,
       rmdUnmet,
+      rmdUnmetB,
     });
   }
 

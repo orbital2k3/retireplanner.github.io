@@ -93,21 +93,33 @@ export const EXPENSE_TEMPLATES: ExpenseTemplate[] = [
       annualAmount: 0, inflationPct: { mode: 'cpi' },
     }),
   },
+  // Split in two because an HSA can pay only one of them: marketplace and Medigap premiums are not
+  // qualified medical expenses (Pub 969), out-of-pocket costs are. Only the second is tagged Medical.
   {
     id: 'healthcare',
-    label: 'Healthcare (5.5% infl)',
-    hint: 'Premiums + out-of-pocket; inflates faster than CPI',
+    label: 'Health insurance premiums (5.5% infl)',
+    hint: 'Marketplace or Medigap premiums; an HSA cannot pay these',
     make: ({ retirementAge }) => ({
-      id: nid('expense'), description: 'Healthcare',
+      id: nid('expense'), description: 'Health insurance premiums',
       whose: 'Household', startAge: retirementAge, end: { mode: 'lastSurvivor' as const }, survivorPct: 1,
-      annualAmount: 18000, inflationPct: { mode: 'fixed', rate: 0.055 },
+      annualAmount: 12000, inflationPct: { mode: 'fixed', rate: 0.055 },
+    }),
+  },
+  {
+    id: 'medical',
+    label: 'Out-of-pocket medical (5.5% infl)',
+    hint: 'Deductibles, copays, prescriptions, dental; an HSA can pay these tax-free',
+    make: ({ retirementAge }) => ({
+      id: nid('expense'), description: 'Out-of-pocket medical',
+      whose: 'Household', startAge: retirementAge, end: { mode: 'lastSurvivor' as const }, survivorPct: 1,
+      annualAmount: 6000, inflationPct: { mode: 'fixed', rate: 0.055 },
       category: 'medical',
     }),
   },
   {
     id: 'giving',
     label: 'Charitable giving',
-    hint: 'Gifts to public charities; paid from your IRA as QCDs from age 70½',
+    hint: 'Gifts to public charities; paid from an IRA as QCDs from age 70½',
     make: ({ retirementAge }) => ({
       id: nid('expense'), description: 'Charitable giving',
       whose: 'Household', startAge: retirementAge, end: { mode: 'lastSurvivor' as const }, survivorPct: 1,

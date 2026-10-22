@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { computePlanWarnings } from './planWarnings';
 import { computeTipsProjectionWarnings } from './tipsWarnings';
 import { runProjection } from './projection';
-import { planF_allTradCouple, planL_survivorARMD } from './__golden/plans';
+import { planF_allTradCouple, planL_survivorARMD, planQ_qcdGiver } from './__golden/plans';
 import { pinDate, unpinDate } from './__regression__/snapshotUtil';
 import { ladderRungs, rung, thisYear, tipsRmdPlan, withTips } from './__testutil__/tipsPlans';
 
@@ -60,6 +60,22 @@ describe('TIPS projection warnings', () => {
     const w = computeTipsProjectionWarnings(runProjection(plan).rows).find((x) => x.id === 'tips-rmd-unmet')!;
     expect(w.severity).toBe('warn');
     expect(w.message).toMatch(/can't be paid in cash/);
+  });
+
+  it("quotes B's ages when the unmet RMD is B's", () => {
+    const q = planQ_qcdGiver();   // A 74, B 72 (RMDs from 73)
+    const plan = withTips({
+      ...q,
+      expenseStreams: q.expenseStreams.filter((e) => e.category !== 'charitable'),
+      portfolio: { personA: { ...q.portfolio.personA, traditional: 0 }, personB: { ...q.portfolio.personB!, traditional: 1_000_000 } },
+    }, [rung({ maturityYear: Y + 8, adjustedPrincipal: 1_000_000, couponRate: 0.01, account: 'traditional', whose: 'B' })]);
+    const rows = runProjection(plan).rows;
+    const years = rows.filter((r) => r.rmdUnmet > 1);
+    expect(years.length).toBeGreaterThan(0);
+    expect(years.every((r) => r.rmdUnmetB === r.rmdUnmet)).toBe(true);
+    const w = computeTipsProjectionWarnings(rows, { a: 'Alex', b: 'Jordan' }).find((x) => x.id === 'tips-rmd-unmet')!;
+    const span = years.length === 1 ? `at ${years[0].ageB}` : `from ${years[0].ageB} to ${years[years.length - 1].ageB}`;
+    expect(w.message).toContain(`Jordan's required withdrawals ${span} are bigger than the cash in the IRA`);
   });
 
   it('flags a year the plan cannot fund spending while bonds are still held to maturity', () => {

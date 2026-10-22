@@ -30,9 +30,39 @@ describe('compareWithWithoutQCD', () => {
   it('matches the difference of two projections directly', () => {
     const plan = golden.planQ_qcdGiver();
     const b = compareWithWithoutQCD(plan)!;
-    const on = runProjection(plan), off = runProjection(plan, { disableQCD: true });
+    const on = runProjection(plan), off = runProjection(plan, { disableQCD: true, conversionOverrides: on.rows.map((r) => r.rothConv) });
     const fedReal = (rows: typeof on.rows) => rows.reduce((s, r) => s + r.fedTax / r.inflationFactor, 0);
     expect(b.parts.fed).toBeCloseTo(fedReal(off.rows) - fedReal(on.rows), 6);
+  });
+
+  it('holds the QCD run\'s conversions fixed, so bracket-fill does not re-size them in the cash run', () => {
+    const p = golden.planQ_qcdGiver();
+    const plan: Plan = { ...p, conversion: { ...p.conversion, mode: 'bracket-fill', endAge: 80 } };
+    const on = runProjection(plan);
+    expect(on.lifetimeConversion).toBeGreaterThan(0);
+    const b = compareWithWithoutQCD(plan)!;
+    const fixed = runProjection(plan, { disableQCD: true, conversionOverrides: on.rows.map((r) => r.rothConv) });
+    expect(fixed.lifetimeConversion).toBeCloseTo(on.lifetimeConversion, 6);
+    const fedReal = (rows: typeof on.rows) => rows.reduce((s, r) => s + r.fedTax / r.inflationFactor, 0);
+    expect(b.parts.fed).toBeCloseTo(fedReal(fixed.rows) - fedReal(on.rows), 6);
+    // A re-sized cash run (the old counterfactual) converts less: the taxable RMD fills the bracket that the
+    // QCD left free for conversions, so its "saving" nets out conversions the QCD made room for.
+    expect(runProjection(plan, { disableQCD: true }).lifetimeConversion).toBeLessThan(on.lifetimeConversion - 1_000);
+  });
+
+  it('conversionOverrides with a run\'s own conversions reproduces that run exactly', () => {
+    for (const plan of [golden.planC_bracketFillConv(), golden.planQ_qcdGiver(), golden.planG_californiaCouple()]) {
+      const on = runProjection(plan);
+      expect(runProjection(plan, { conversionOverrides: on.rows.map((r) => r.rothConv) }).rows).toEqual(on.rows);
+    }
+  });
+
+  it('quotes the age and name of the spouse who pays the first QCD', () => {
+    const p = golden.planQ_qcdGiver();
+    const b = compareWithWithoutQCD({ ...p, portfolio: { ...p.portfolio, personA: { ...p.portfolio.personA, traditional: 0 } } })!;
+    expect(b.firstQcdName).toBe('Person B');
+    expect(b.firstQcdAge).toBe(72);   // B, born 1954, in 2026; A is 74
+    expect(qcdBenefitCopy(b).body).toMatch(/^Once Person B is 72, /);
   });
 
   it('a QCD-eligible plan with a donor-advised-fund gift has no benefit card', () => {
@@ -56,7 +86,7 @@ describe('qcdBenefitCopy', () => {
     expect(body).toContain('64% of your required withdrawals');
     expect(body).toContain('lowers taxable Social Security');
     expect(body).toContain('IRMAA surcharges in 9 years');
-    expect(body).toContain('Same withdrawal plan, compared with paying the same gifts in cash.');
+    expect(body).toContain('Compared with paying the same gifts in cash, with the same withdrawal plan and Roth conversions.');
   });
 
   it('leaves out effects that did not happen', () => {
