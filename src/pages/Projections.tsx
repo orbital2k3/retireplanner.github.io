@@ -32,7 +32,8 @@ interface Column {
   essential: boolean;
   fmt?: 'money' | 'pct' | 'raw';
   get: (r: Row) => number | string;
-  tooltip?: (r: Row) => string;
+  /** `money` formats a nominal amount in the active display mode (deflated in real mode). */
+  tooltip?: (r: Row, money: (nominal: number) => string) => string;
   bg: string;
 }
 
@@ -73,7 +74,7 @@ const COLUMNS: Column[] = [
   { key: 'exemptInterest',      label: 'Tax-Exempt Int',  group: 'income', essential: false, fmt: 'money', get: (r) => r.exemptInterest ?? 0,                                                                    bg: BG.income },
   { key: 'distributedCash',     label: 'Div Paid Out',    group: 'income', essential: false, fmt: 'money', get: (r) => r.distributedCash ?? 0,                                                                   bg: BG.income },
   { key: 'lumpSumInject',       label: 'Lump Sum',        group: 'income', essential: true,  fmt: 'money', get: (r) => (r.lumpSumInjectTaxable ?? 0) + (r.lumpSumInjectTrad ?? 0) + (r.lumpSumInjectRoth ?? 0), bg: BG.income },
-  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: inheritedIncome, tooltip: (r) => `Required minimum: ${fmtFull((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0))} · Extra from your withdrawal strategy: ${fmtFull((r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0))}`, bg: BG.income },
+  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: inheritedIncome, tooltip: (r, money) => `Required minimum: ${money((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0))} · Extra from your withdrawal strategy: ${money((r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0))}`, bg: BG.income },
   { key: 'contribA',            label: 'Contrib A',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribA,                                                                              bg: BG.income },
   { key: 'contribB',            label: 'Contrib B',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribB,                                                                              bg: BG.income },
   // Spousal IRA portion of Contrib A/B — without this, the contribution column drops from a
@@ -92,7 +93,7 @@ const COLUMNS: Column[] = [
 
   // Spending — what you actually consume
   { key: 'netSpend',   label: 'Net Spend',   group: 'spending', essential: true,  fmt: 'money', get: (r) => r.netSpend,   bg: BG.spending },
-  { key: 'acaPremium', label: 'ACA Premium', group: 'spending', essential: false, fmt: 'money', get: (r) => r.acaPremium, tooltip: (r) => `ACA MAGI (AGI + non-taxable SS): ${fmtFull(r.acaMagi)}`, bg: BG.spending },
+  { key: 'acaPremium', label: 'ACA Premium', group: 'spending', essential: false, fmt: 'money', get: (r) => r.acaPremium, tooltip: (r, money) => `ACA MAGI (AGI + non-taxable SS): ${money(r.acaMagi)}`, bg: BG.spending },
 
   // Taxes — inputs first (what creates the liability), then outputs (what you pay)
   { key: 'ordIncome',    label: 'Ord Income',  group: 'taxes', essential: true,  fmt: 'money', get: (r) => r.ordIncome,                              bg: BG.taxes },
@@ -102,7 +103,7 @@ const COLUMNS: Column[] = [
   { key: 'taxableIncome',label: 'Taxable Inc', group: 'taxes', essential: false, fmt: 'money', get: (r) => Math.max(0, r.magi - r.stdDeduction),     bg: BG.taxes },
   { key: 'fedTax',       label: 'Fed Tax',     group: 'taxes', essential: true,  fmt: 'money', get: (r) => r.fedTax,                                 bg: BG.taxes },
   { key: 'stateTaxAmt',  label: 'State Tax',   group: 'taxes', essential: false, fmt: 'money', get: (r) => r.stateTaxAmt,                            bg: BG.taxes },
-  { key: 'irmaa',        label: 'IRMAA',       group: 'taxes', essential: false, fmt: 'money', get: (r) => r.irmaa,        tooltip: (r) => `IRMAA MAGI (AGI, 2-yr lookback): ${fmtFull(r.irmaaMagi)}`, bg: BG.taxes },
+  { key: 'irmaa',        label: 'IRMAA',       group: 'taxes', essential: false, fmt: 'money', get: (r) => r.irmaa,        tooltip: (r, money) => `IRMAA MAGI (AGI, 2-yr lookback): ${money(r.irmaaMagi)}`, bg: BG.taxes },
   { key: 'niit',         label: 'NIIT',        group: 'taxes', essential: false, fmt: 'money', get: (r) => r.niit,                                   bg: BG.taxes },
   { key: 'effRate',      label: 'Eff Rate',    group: 'taxes', essential: false, fmt: 'pct',   get: (r) => r.effRate * 100,                          bg: BG.taxes },
 
@@ -116,8 +117,8 @@ const COLUMNS: Column[] = [
   { key: 'endTraditional', label: 'End Trd',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTraditional - ((r.inheritedBal ?? 0) - (r.inheritedRothBal ?? 0)), bg: BG.balances },
   { key: 'endRoth',        label: 'End Roth',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.endRoth - (r.inheritedRothBal ?? 0), bg: BG.balances },
   { key: 'inheritedBal',   label: 'End Inh',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.inheritedBal ?? 0, tooltip: () => 'Money left in inherited accounts at the end of the year. End Trd and End Roth cover your own accounts only.', bg: BG.balances },
-  { key: 'endTaxableBasis',label: 'End Basis',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxableBasis ?? 0, tooltip: (r) => `Unrealized gain: ${fmtFull(Math.max(0, r.endTaxable - (r.endTaxableBasis ?? 0)))}`, bg: BG.balances },
-  { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r) => `Gross ${fmtFull(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
+  { key: 'endTaxableBasis',label: 'End Basis',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxableBasis ?? 0, tooltip: (r, money) => `Unrealized gain: ${money(Math.max(0, r.endTaxable - (r.endTaxableBasis ?? 0)))}`, bg: BG.balances },
+  { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r, money) => `Gross ${money(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
 ];
 
 const GROUP_LABELS: Record<GroupKey, string> = {
@@ -440,7 +441,7 @@ export default function Projections() {
                           else if (c.fmt === 'money') display = fmt(v, mode, r.inflationFactor);
                           else if (c.fmt === 'pct') display = `${v.toFixed(1)}%`;
                           else display = v;
-                          const tipText = c.tooltip?.(r);
+                          const tipText = c.tooltip?.(r, (n) => fmtFull(mode === 'real' ? n / r.inflationFactor : n));
                           const isWhy = c.key === 'why';
                           const hasNotes = isWhy && rowNotes.length > 0;
                           const style: React.CSSProperties = sticky
