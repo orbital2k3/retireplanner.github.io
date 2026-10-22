@@ -53,7 +53,7 @@ describe('parseTipsCsv', () => {
   });
 
   it('ignores blank lines and returns nothing for empty input', () => {
-    expect(parseTipsCsv('', names, id)).toEqual({ rungs: [], errors: [] });
+    expect(parseTipsCsv('', names, id)).toEqual({ rungs: [], errors: [], rungLines: [] });
     expect(parseTipsCsv('\n\n2031,1000,1,roth\n\n', names, id).rungs).toHaveLength(1);
   });
 

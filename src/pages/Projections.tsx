@@ -23,6 +23,7 @@ const stickyTd = (left: number, bg = '#fff', minWidth = 60): React.CSSProperties
 });
 
 type Row = ReturnType<typeof useProjection>['rows'][number];
+type Money = (n: number) => string;
 type GroupKey = 'income' | 'withdrawals' | 'spending' | 'taxes' | 'qcd' | 'hsa' | 'tips' | 'balances' | 'decisions';
 
 interface Column {
@@ -32,7 +33,8 @@ interface Column {
   essential: boolean;
   fmt?: 'money' | 'pct' | 'raw';
   get: (r: Row) => number | string;
-  tooltip?: (r: Row) => string;
+  /** `$` formats money the way the cells show it (today's or nominal dollars). */
+  tooltip?: (r: Row, $: Money) => string;
   bg: string;
 }
 
@@ -62,20 +64,20 @@ const inheritedIncome = (r: Row) => (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumF
   + (r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0);
 
 /** Splits a year's Charitable spending into the QCD part and the part paid from other accounts. */
-const givingTooltip = (r: Row): string => {
+const givingTooltip = (r: Row, $: Money): string => {
   if (!(r.charitableSpend > 0)) return '';
   const other = Math.max(0, r.charitableSpend - r.qcd);
   return r.qcd > 0
-    ? `${fmtFull(r.qcd)} paid from your IRA as a QCD; ${fmtFull(other)} paid from your other accounts.`
+    ? `${$(r.qcd)} paid from your IRA as a QCD; ${$(other)} paid from your other accounts.`
     : 'Paid from your other accounts (no QCD this year). Included in Net Spending.';
 };
 
 /** Explains a year where part of the RMD (or more) was paid straight to charity as a QCD. */
-const rmdTooltip = (r: Row): string => {
+const rmdTooltip = (r: Row, $: Money): string => {
   if (!(r.qcd > 0)) return '';
   const satisfied = r.qcd - r.qcdBeyondRmd;
-  let text = `Required ${fmtFull(r.rmd)}. ${fmtFull(satisfied)} went straight to charity as a QCD (not taxed); ${fmtFull(Math.max(0, r.rmd - satisfied))} came to you as cash.`;
-  if (r.qcdBeyondRmd > 0) text += ` A further ${fmtFull(r.qcdBeyondRmd)} QCD went to charity beyond the RMD.`;
+  let text = `Required ${$(r.rmd)}. ${$(satisfied)} went straight to charity as a QCD (not taxed); ${$(Math.max(0, r.rmd - satisfied))} came to you as cash.`;
+  if (r.qcdBeyondRmd > 0) text += ` A further ${$(r.qcdBeyondRmd)} QCD went to charity beyond the RMD.`;
   return text;
 };
 
@@ -94,7 +96,7 @@ const COLUMNS: Column[] = [
   { key: 'exemptInterest',      label: 'Tax-Exempt Int',  group: 'income', essential: false, fmt: 'money', get: (r) => r.exemptInterest ?? 0,                                                                    bg: BG.income },
   { key: 'distributedCash',     label: 'Div Paid Out',    group: 'income', essential: false, fmt: 'money', get: (r) => r.distributedCash ?? 0,                                                                   bg: BG.income },
   { key: 'lumpSumInject',       label: 'Lump Sum',        group: 'income', essential: true,  fmt: 'money', get: (r) => (r.lumpSumInjectTaxable ?? 0) + (r.lumpSumInjectTrad ?? 0) + (r.lumpSumInjectRoth ?? 0), bg: BG.income },
-  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: inheritedIncome, tooltip: (r) => `Required minimum: ${fmtFull((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0))} · Extra from your withdrawal strategy: ${fmtFull((r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0))}`, bg: BG.income },
+  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: inheritedIncome, tooltip: (r, $) => `Required minimum: ${$((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0))} · Extra from your withdrawal strategy: ${$((r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0))}`, bg: BG.income },
   { key: 'contribA',            label: 'Contrib A',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribA,                                                                              bg: BG.income },
   { key: 'contribB',            label: 'Contrib B',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribB,                                                                              bg: BG.income },
   // Spousal IRA portion of Contrib A/B — without this, the contribution column drops from a
@@ -113,7 +115,7 @@ const COLUMNS: Column[] = [
 
   // Spending — what you actually consume
   { key: 'netSpend',   label: 'Net Spend',   group: 'spending', essential: true,  fmt: 'money', get: (r) => r.netSpend,   bg: BG.spending },
-  { key: 'acaPremium', label: 'ACA Premium', group: 'spending', essential: false, fmt: 'money', get: (r) => r.acaPremium, tooltip: (r) => `ACA MAGI (AGI + non-taxable SS): ${fmtFull(r.acaMagi)}`, bg: BG.spending },
+  { key: 'acaPremium', label: 'ACA Premium', group: 'spending', essential: false, fmt: 'money', get: (r) => r.acaPremium, tooltip: (r, $) => `ACA MAGI (AGI + non-taxable SS): ${$(r.acaMagi)}`, bg: BG.spending },
 
   // Taxes — inputs first (what creates the liability), then outputs (what you pay)
   { key: 'ordIncome',    label: 'Ord Income',  group: 'taxes', essential: true,  fmt: 'money', get: (r) => r.ordIncome,                              bg: BG.taxes },
@@ -123,30 +125,30 @@ const COLUMNS: Column[] = [
   { key: 'taxableIncome',label: 'Taxable Inc', group: 'taxes', essential: false, fmt: 'money', get: (r) => Math.max(0, r.magi - r.stdDeduction),     bg: BG.taxes },
   { key: 'fedTax',       label: 'Fed Tax',     group: 'taxes', essential: true,  fmt: 'money', get: (r) => r.fedTax,                                 bg: BG.taxes },
   { key: 'stateTaxAmt',  label: 'State Tax',   group: 'taxes', essential: false, fmt: 'money', get: (r) => r.stateTaxAmt,                            bg: BG.taxes },
-  { key: 'irmaa',        label: 'IRMAA',       group: 'taxes', essential: false, fmt: 'money', get: (r) => r.irmaa,        tooltip: (r) => `IRMAA MAGI (AGI, 2-yr lookback): ${fmtFull(r.irmaaMagi)}`, bg: BG.taxes },
+  { key: 'irmaa',        label: 'IRMAA',       group: 'taxes', essential: false, fmt: 'money', get: (r) => r.irmaa,        tooltip: (r, $) => `IRMAA MAGI (AGI, 2-yr lookback): ${$(r.irmaaMagi)}`, bg: BG.taxes },
   { key: 'niit',         label: 'NIIT',        group: 'taxes', essential: false, fmt: 'money', get: (r) => r.niit,                                   bg: BG.taxes },
   { key: 'effRate',      label: 'Eff Rate',    group: 'taxes', essential: false, fmt: 'pct',   get: (r) => r.effRate * 100,                          bg: BG.taxes },
 
   // Giving — all Charitable-tagged spending, the part paid straight from an IRA as a QCD, and the cash-gift
   // deduction. Shown by default only when the plan has giving (see `qcdAuto`); always in the chooser and CSV.
   { key: 'giving',           label: 'Giving',       group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charitableSpend, tooltip: givingTooltip, bg: BG.qcd },
-  { key: 'qcd',              label: 'QCD',          group: 'qcd', essential: false, fmt: 'money', get: (r) => r.qcd, tooltip: (r) => r.qcd > 0 ? `Paid from your IRA straight to charity, so it is not taxed. ${fmtFull(r.qcd - r.qcdBeyondRmd)} of it counts toward your RMD.` : '', bg: BG.qcd },
+  { key: 'qcd',              label: 'QCD',          group: 'qcd', essential: false, fmt: 'money', get: (r) => r.qcd, tooltip: (r, $) => r.qcd > 0 ? `Paid from your IRA straight to charity, so it is not taxed. ${$(r.qcd - r.qcdBeyondRmd)} of it counts toward your RMD.` : '', bg: BG.qcd },
   { key: 'charityDeduction', label: 'Charity ded.', group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charityDeduction, tooltip: (r) => r.charityDeduction > 0 ? 'Deduction for cash gifts to public charities when you don\'t itemize (from 2026: up to $1,000, or $2,000 joint). Included in the standard deduction total.' : '', bg: BG.qcd },
 
   // HSA — opt-in through the column chooser (and the CSV). Shown to every plan, but all zero without an HSA.
-  { key: 'endHSA',          label: 'HSA Bal.',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.endHSA, tooltip: (r) => r.endHSA > 0 ? `Year-end HSA balance (included in End Total). Receipts on file: ${fmtFull(r.hsaReceiptsBal)}.` : '', bg: BG.hsa },
-  { key: 'hsaContrib',      label: 'HSA Contrib',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaContrib, tooltip: (r) => r.hsaContribRet > 0 ? `Includes ${fmtFull(r.hsaContribRet)} paid from your portfolio after retiring. That part is deducted from income (state income too, except in California), which can lower your ACA income.` : '', bg: BG.hsa },
-  { key: 'hsaQualifiedWD',  label: 'HSA Paid',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaQualifiedWD, tooltip: (r) => r.hsaQualifiedWD > 0 ? `Medical bills and Medicare surcharges paid tax-free from the HSA (medical bills this year: ${fmtFull(r.medicalSpend)}).` : '', bg: BG.hsa },
+  { key: 'endHSA',          label: 'HSA Bal.',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.endHSA, tooltip: (r, $) => r.endHSA > 0 ? `Year-end HSA balance (included in End Total). Receipts on file: ${$(r.hsaReceiptsBal)}.` : '', bg: BG.hsa },
+  { key: 'hsaContrib',      label: 'HSA Contrib',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaContrib, tooltip: (r, $) => r.hsaContribRet > 0 ? `Includes ${$(r.hsaContribRet)} paid from your portfolio after retiring. That part is deducted from income (state income too, except in California), which can lower your ACA income.` : '', bg: BG.hsa },
+  { key: 'hsaQualifiedWD',  label: 'HSA Paid',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaQualifiedWD, tooltip: (r, $) => r.hsaQualifiedWD > 0 ? `Medical bills and Medicare surcharges paid tax-free from the HSA (medical bills this year: ${$(r.medicalSpend)}).` : '', bg: BG.hsa },
   { key: 'hsaReimbursed',   label: 'HSA Reimb.',   group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReimbursed, tooltip: (r) => r.hsaReimbursed > 0 ? 'Past medical bills reimbursed from the HSA tax-free. Used only after your other accounts ran out.' : '', bg: BG.hsa },
   { key: 'hsaNonQualWD',    label: 'HSA Non-qual', group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaNonQualWD, tooltip: (r) => r.hsaNonQualWD > 0 ? 'Taken from the HSA for non-medical spending: taxed as ordinary income, plus a 20% penalty before 65.' : '', bg: BG.hsa },
   { key: 'hsaPenalty',      label: 'HSA Penalty',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaPenalty, bg: BG.hsa },
   { key: 'hsaReceiptsBal',  label: 'Receipts',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReceiptsBal, tooltip: () => 'Medical bills you paid from other accounts. They can be reimbursed from the HSA later, tax-free.', bg: BG.hsa },
 
   // TIPS ladder — opt-in through the column chooser (and the CSV); all zero without a ladder.
-  { key: 'endTips',        label: 'Ladder Bal.',  group: 'tips', essential: false, fmt: 'money', get: (r) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth, tooltip: (r) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth > 0 ? `Indexed value of the bonds still held (included in End Total): taxable ${fmtFull(r.endTipsTaxable)}, pre-tax ${fmtFull(r.endTipsTrad)}, Roth ${fmtFull(r.endTipsRoth)}. It follows inflation, not market returns.` : '', bg: BG.tips },
+  { key: 'endTips',        label: 'Ladder Bal.',  group: 'tips', essential: false, fmt: 'money', get: (r) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth, tooltip: (r, $) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth > 0 ? `Indexed value of the bonds still held (included in End Total): taxable ${$(r.endTipsTaxable)}, pre-tax ${$(r.endTipsTrad)}, Roth ${$(r.endTipsRoth)}. It follows inflation, not market returns.` : '', bg: BG.tips },
   { key: 'tipsCoupon',     label: 'TIPS Coupon',  group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsCoupon, tooltip: (r) => r.tipsCoupon > 0 ? `Interest paid by the bonds this year. Taxable rungs pay it to you as cash; pre-tax and Roth rungs pay it back into the account.` : '', bg: BG.tips },
   { key: 'tipsAccrual',    label: 'TIPS Accrual', group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsAccrual, tooltip: (r) => r.tipsAccrual !== 0 ? 'Inflation increase in the bonds\' principal. On taxable rungs it is taxable income with no cash until maturity ("phantom income"); inside an IRA or Roth it is not taxed.' : '', bg: BG.tips },
-  { key: 'tipsMaturity',   label: 'TIPS Maturity',group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsMaturity, tooltip: (r) => r.tipsMaturity > 0 ? `Principal paid out by bonds maturing this year${r.tipsFloorBonus > 0 ? ` (includes ${fmtFull(r.tipsFloorBonus)} from the deflation floor)` : ''}.` : '', bg: BG.tips },
+  { key: 'tipsMaturity',   label: 'TIPS Maturity',group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsMaturity, tooltip: (r, $) => r.tipsMaturity > 0 ? `Principal paid out by bonds maturing this year${r.tipsFloorBonus > 0 ? ` (includes ${$(r.tipsFloorBonus)} from the deflation floor)` : ''}.` : '', bg: BG.tips },
   { key: 'tipsOrdInc',     label: 'TIPS Taxable', group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsOrdInc, tooltip: (r) => r.tipsOrdInc > 0 ? 'Federal ordinary income from taxable rungs (coupons plus inflation increase). Not taxed by your state. Counted from the first year either of you has retired.' : '', bg: BG.tips },
   { key: 'rmdUnmet',       label: 'RMD Unmet',    group: 'tips', essential: false, fmt: 'money', get: (r) => r.rmdUnmet, tooltip: (r) => r.rmdUnmet > 0 ? 'Part of the required withdrawal the plan could not take because the IRA money left is tied up in ladder bonds. The plan holds bonds to maturity and does not model taking them out in kind; in real life the shortfall would be taken in kind or risk a penalty.' : '', bg: BG.tips },
 
@@ -160,8 +162,8 @@ const COLUMNS: Column[] = [
   { key: 'endTraditional', label: 'End Trd',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTraditional - ((r.inheritedBal ?? 0) - (r.inheritedRothBal ?? 0)), bg: BG.balances },
   { key: 'endRoth',        label: 'End Roth',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.endRoth - (r.inheritedRothBal ?? 0), bg: BG.balances },
   { key: 'inheritedBal',   label: 'End Inh',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.inheritedBal ?? 0, tooltip: () => 'Money left in inherited accounts at the end of the year. End Trd and End Roth cover your own accounts only.', bg: BG.balances },
-  { key: 'endTaxableBasis',label: 'End Basis',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxableBasis ?? 0, tooltip: (r) => `Unrealized gain: ${fmtFull(Math.max(0, r.endTaxable - (r.endTaxableBasis ?? 0)))}`, bg: BG.balances },
-  { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r) => `Gross ${fmtFull(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
+  { key: 'endTaxableBasis',label: 'End Basis',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxableBasis ?? 0, tooltip: (r, $) => `Unrealized gain: ${$(Math.max(0, r.endTaxable - (r.endTaxableBasis ?? 0)))}`, bg: BG.balances },
+  { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r, $) => `Gross ${$(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
 ];
 
 const GROUP_LABELS: Record<GroupKey, string> = {
@@ -508,7 +510,7 @@ export default function Projections() {
                           else if (c.fmt === 'money') display = fmt(v, mode, r.inflationFactor);
                           else if (c.fmt === 'pct') display = `${v.toFixed(1)}%`;
                           else display = v;
-                          const tipText = c.tooltip?.(r);
+                          const tipText = c.tooltip?.(r, (n) => fmtFull(mode === 'real' ? n / r.inflationFactor : n));
                           const isWhy = c.key === 'why';
                           const hasNotes = isWhy && rowNotes.length > 0;
                           const style: React.CSSProperties = sticky
@@ -567,8 +569,10 @@ export default function Projections() {
           position: 'fixed', left: cellTip.x + 12, top: cellTip.y - 8,
           background: '#1a2535', color: '#e8edf3', fontSize: 11,
           padding: '5px 9px', borderRadius: 5, pointerEvents: 'none',
-          whiteSpace: cellTip.wide ? 'pre-wrap' : 'nowrap',
-          maxWidth: cellTip.wide ? 420 : undefined,
+          // Short tips stay on one line; long ones wrap instead of running off the screen.
+          whiteSpace: cellTip.wide ? 'pre-wrap' : 'normal',
+          width: 'max-content',
+          maxWidth: cellTip.wide ? 420 : 360,
           zIndex: 9999, boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
         }}>
           {cellTip.text}

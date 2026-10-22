@@ -103,7 +103,7 @@ export function TipsBuilderModal({ portfolio, nameA, nameB, ageA, startYear, def
             <div>
               <div style={label}>Real yield</div>
               <div className="input-suffix-wrap">
-                <NumberInput value={yieldPct} scale={100} digits={2} min={0} max={10} style={{ fontSize: 13 }} onCommit={(v) => setYieldPct(Math.max(0, v))} />
+                <NumberInput value={yieldPct} scale={100} digits={2} min={0} max={0.1} style={{ fontSize: 13 }} onCommit={(v) => setYieldPct(Math.max(0, v))} />
                 <span className="input-suffix">%</span>
               </div>
               <div style={hint}>From TreasuryDirect or your broker</div>

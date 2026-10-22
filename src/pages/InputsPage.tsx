@@ -602,12 +602,12 @@ export default function InputsPage() {
                       {isSS
                         ? <div title="SS survivor benefits are modeled separately — not controlled here" style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: 2 }}>Built-in</div>
                         : <div className="input-suffix-wrap">
-                            <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={100} style={{ fontSize: 13 }} onCommit={(v) => updateIncomeStream(s.id, { survivorPct: v })} />
+                            <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={1} style={{ fontSize: 13 }} onCommit={(v) => updateIncomeStream(s.id, { survivorPct: v })} />
                             <span className="input-suffix">%</span>
                           </div>
                       }
                       <div className="input-suffix-wrap" title={s.type === 'VA' ? '38 U.S.C. §5301: VA disability is fully exempt from state tax' : 'Only applies when using a Custom flat-rate state. Named states apply their own rules.'}>
-                        <NumberInput value={s.stateTaxablePct ?? 1} scale={100} digits={0} min={0} max={100} style={{ fontSize: 13, opacity: s.type === 'VA' ? 0.45 : 1 }} disabled={s.type === 'VA'} onCommit={(v) => updateIncomeStream(s.id, { stateTaxablePct: v })} />
+                        <NumberInput value={s.stateTaxablePct ?? 1} scale={100} digits={0} min={0} max={1} style={{ fontSize: 13, opacity: s.type === 'VA' ? 0.45 : 1 }} disabled={s.type === 'VA'} onCommit={(v) => updateIncomeStream(s.id, { stateTaxablePct: v })} />
                         <span className="input-suffix">%</span>
                       </div>
                       <button className="remove-btn" onClick={() => removeIncomeStream(s.id)}>×</button>
@@ -718,8 +718,10 @@ export default function InputsPage() {
                     value={s.category ?? 'general'}
                     style={{ fontSize: 13, ...(CATEGORY_SELECT_STYLE[s.category ?? 'general']) }}
                     onChange={(e) => {
-                      const category = e.target.value as NonNullable<ExpenseStream['category']>;
-                      // Only a user change writes the tag; 'qcd' belongs to charitable rows, so leaving one clears it.
+                      // General is the default, so it is written as absent and a row switched back keeps its original key.
+                      // 'qcd' belongs to charitable rows, so leaving one clears it.
+                      const picked = e.target.value as NonNullable<ExpenseStream['category']>;
+                      const category = picked === 'general' ? undefined : picked;
                       updateExpenseStream(s.id, category === 'charitable' ? { category } : { category, qcd: undefined });
                     }}
                   >
@@ -739,11 +741,11 @@ export default function InputsPage() {
                   </div>
                   <GrowthRateInput value={s.inflationPct} inflation={asm.inflation} onChange={(gr) => updateExpenseStream(s.id, { inflationPct: gr })} />
                   <div className="input-suffix-wrap">
-                    <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={100} style={{ fontSize: 13 }} onCommit={(v) => updateExpenseStream(s.id, { survivorPct: v })} />
+                    <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={1} style={{ fontSize: 13 }} onCommit={(v) => updateExpenseStream(s.id, { survivorPct: v })} />
                     <span className="input-suffix">%</span>
                   </div>
                   <button className="remove-btn" onClick={() => removeExpenseStream(s.id)}>×</button>
-                  {s.category === 'medical' && (
+                  {s.category === 'medical' && hasHsa && (
                     <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--text-secondary)', padding: '0 0 4px 4px' }}>
                       Your HSA can pay this tax-free (see Portfolio › HSA).
                     </div>
@@ -788,7 +790,10 @@ export default function InputsPage() {
                     <div key={key} className="form-group" style={{ marginBottom: 0 }}>
                       <label>{label}<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {hint}</span></label>
                       <div className="input-suffix-wrap">
-                        <NumberInput value={key === 'hsaReturn' ? (asm.hsaReturn ?? asm.tradReturn) : asm[key]} scale={100} digits={1} onCommit={(v) => setAssumptions({ [key]: v })} />
+                        <NumberInput value={key === 'hsaReturn' ? (asm.hsaReturn ?? asm.tradReturn) : asm[key]} scale={100} digits={1} onCommit={(v) => setAssumptions(key === 'hsaReturn'
+                          // Absent = same as pre-tax, so the HSA keeps following later pre-tax edits.
+                          ? { hsaReturn: Math.abs(v - asm.tradReturn) < 1e-9 ? undefined : v }
+                          : { [key]: v })} />
                         <span className="input-suffix">%</span>
                       </div>
                     </div>
@@ -1015,7 +1020,7 @@ export default function InputsPage() {
                 <div className="form-group" style={{ marginBottom: 0, flex: '0 0 110px' }}>
                   <label style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>IRA / 401(k)</label>
                   <div className="input-suffix-wrap" title="Blended effective rate on the ending pre-tax balance — not a bracket, not used in year-by-year taxes.">
-                    <NumberInput value={asm.taxAdjOrdRate ?? 0.22} scale={100} digits={1} min={0} max={60}
+                    <NumberInput value={asm.taxAdjOrdRate ?? 0.22} scale={100} digits={1} min={0} max={0.6}
                       onCommit={(v) => setAssumptions({ taxAdjOrdRate: Math.min(0.6, Math.max(0, v)) })} />
                     <span className="input-suffix">%</span>
                   </div>
@@ -1024,7 +1029,7 @@ export default function InputsPage() {
                 <div className="form-group" style={{ marginBottom: 0, flex: '0 0 110px' }}>
                   <label style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Brokerage gains</label>
                   <div className="input-suffix-wrap" title="Blended effective rate on the ending brokerage gain above basis — not a bracket, not used in year-by-year taxes.">
-                    <NumberInput value={asm.taxAdjLtcgRate ?? 0.15} scale={100} digits={1} min={0} max={40}
+                    <NumberInput value={asm.taxAdjLtcgRate ?? 0.15} scale={100} digits={1} min={0} max={0.4}
                       onCommit={(v) => setAssumptions({ taxAdjLtcgRate: Math.min(0.4, Math.max(0, v)) })} />
                     <span className="input-suffix">%</span>
                   </div>

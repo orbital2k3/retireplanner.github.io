@@ -108,6 +108,48 @@ describe('TipsLadderCard', () => {
     const next = onChange.mock.calls[0][0]!;
     expect(next.rungs).toHaveLength(2);
     expect(next.rungs[1]).toMatchObject({ maturityYear: 2033, adjustedPrincipal: 48_000, couponRate: 0.0175, account: 'taxable' });
-    expect(screen.getByText(/Line 2: Maturity: no year found/)).toBeInTheDocument();
+    expect(screen.getByText(/Line 1: Maturity: no year found/)).toBeInTheDocument();  // the only line left in the box
+  });
+
+  it('a partly valid paste keeps only the bad lines, so adding again does not add the good rows twice', () => {
+    const onChange = setup(portfolio([rung()]));
+    fireEvent.click(screen.getByText('Paste from CSV'));
+    const box = screen.getByLabelText('Paste TIPS rungs') as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: 'Maturity,Principal,Coupon,Account\n2033, 48000, 1.75%, taxable\n2034, 0, 1%, taxable' } });
+    fireEvent.click(screen.getByText('Add rungs'));
+    expect(onChange.mock.calls[0][0]!.rungs.map((r) => r.maturityYear)).toEqual([2031, 2033]);
+    expect(box.value).toBe('Maturity,Principal,Coupon,Account\n2034, 0, 1%, taxable');
+    expect(screen.getByText('Added 1 rung.')).toBeInTheDocument();
+    expect(screen.getByText(/Line 2: Adjusted principal/)).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: 'Maturity,Principal,Coupon,Account\n2034, 5000, 1%, taxable' } });
+    fireEvent.click(screen.getByText('Add rungs'));
+    expect(onChange.mock.calls[1][0]!.rungs.map((r) => r.maturityYear)).toEqual([2031, 2034]);
+    expect(screen.queryByLabelText('Paste TIPS rungs')).toBeNull();
+  });
+
+  it('maturity year and coupon are saved on blur, within the schema bounds, not on each keystroke', () => {
+    const onChange = setup(portfolio([rung()]));
+    const [year, , , coupon] = document.querySelectorAll('.tips-row')[1].querySelectorAll('input');
+    fireEvent.focus(year);
+    fireEvent.change(year, { target: { value: '20' } });
+    fireEvent.change(year, { target: { value: '2034' } });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(year);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]!.rungs[0].maturityYear).toBe(2034);
+    fireEvent.focus(coupon);
+    fireEvent.change(coupon, { target: { value: '25' } });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    fireEvent.blur(coupon);
+    expect(onChange.mock.calls[1][0]!.rungs[0].couponRate).toBe(0.2);
+  });
+
+  it('tabbing through a field without typing saves nothing', () => {
+    const onChange = setup(portfolio([rung({ couponRate: 0.01234 })]));
+    for (const input of document.querySelectorAll('.tips-row')[1].querySelectorAll('input')) {
+      fireEvent.focus(input);
+      fireEvent.blur(input);
+    }
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

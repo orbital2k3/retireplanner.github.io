@@ -12,7 +12,8 @@ import type { TipsRung } from '../schemas/plan';
  *   - owner: the person's name, A/B, or blank (pre-tax rungs default to Person A)
  *  Every bad row is reported with its line number and skipped; good rows are still returned. */
 export interface TipsCsvError { line: number; message: string }
-export interface TipsCsvResult { rungs: TipsRung[]; errors: TipsCsvError[] }
+/** `rungLines[k]` is the 1-based line that produced `rungs[k]`. */
+export interface TipsCsvResult { rungs: TipsRung[]; errors: TipsCsvError[]; rungLines: number[] }
 
 const splitCells = (line: string): string[] => {
   const delim = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
@@ -56,6 +57,7 @@ export function parseTipsCsv(
 ): TipsCsvResult {
   const rungs: TipsRung[] = [];
   const errors: TipsCsvError[] = [];
+  const rungLines: number[] = [];
   const lines = text.split(/\r?\n/);
   let seen = 0;
   lines.forEach((raw, idx) => {
@@ -80,6 +82,7 @@ export function parseTipsCsv(
     const faceText = cells[5] ?? '';
     const face = faceText === '' ? undefined : money(faceText);
     if (face !== undefined && !(face > 0)) { errors.push({ line, message: 'Par value must be a positive amount' }); return; }
+    rungLines.push(line);
     rungs.push({
       id: makeId(rungs.length),
       maturityYear: year,
@@ -90,5 +93,5 @@ export function parseTipsCsv(
       ...(face !== undefined && face !== principal ? { faceValue: face } : {}),
     });
   });
-  return { rungs, errors };
+  return { rungs, errors, rungLines };
 }

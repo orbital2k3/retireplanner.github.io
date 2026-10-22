@@ -46,6 +46,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
   const [helpOpen, setHelpOpen] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [csvErrors, setCsvErrors] = useState<TipsCsvError[]>([]);
+  const [csvAdded, setCsvAdded] = useState(0);
   const [builderOpen, setBuilderOpen] = useState(false);
 
   const write = (next: TipsRung[], inc = include) => onChange(normalize(next, inc));
@@ -110,14 +111,22 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
   );
   const allTaxable = a.taxable + (b?.taxable ?? 0), allRoth = a.roth + (b?.roth ?? 0);
 
+  // Imported lines leave the box, so fixing a bad line and adding again can't add the good ones twice.
+  // The errors are renumbered to the lines that remain.
   const importCsv = () => {
     const res = parseTipsCsv(csvText, { a: nameA, b: nameB });
-    setCsvErrors(res.errors);
-    if (res.rungs.length > 0) {
-      write([...rungs, ...res.rungs]);
-      if (res.errors.length === 0) { setCsvOpen(false); setCsvText(''); }
-    }
+    if (res.rungs.length > 0) write([...rungs, ...res.rungs]);
+    setCsvAdded(res.rungs.length);
+    if (res.errors.length === 0) { setCsvOpen(false); setCsvText(''); setCsvErrors([]); return; }
+    const done = new Set(res.rungLines);
+    const kept = csvText.split(/\r?\n/).map((text, k) => ({ text, line: k + 1 })).filter((l) => !done.has(l.line) && l.text.trim() !== '');
+    const at = new Map(kept.map((l, k) => [l.line, k + 1]));
+    setCsvText(kept.map((l) => l.text).join('\n'));
+    setCsvErrors(res.errors.map((e) => ({ ...e, line: at.get(e.line) ?? e.line })));
   };
+  const addedNote = csvAdded > 0 && (
+    <div className="helper-text" role="status" style={{ marginTop: 6 }}>Added {csvAdded} {csvAdded === 1 ? 'rung' : 'rungs'}.</div>
+  );
 
   return (
     <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
@@ -126,7 +135,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
           TIPS ladder <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-muted)' }}>· {rungs.length} {rungs.length === 1 ? 'rung' : 'rungs'} · {fmtFull(total)}</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button type="button" style={smallBtn} onClick={() => setCsvOpen((o) => !o)}>
+          <button type="button" style={smallBtn} onClick={() => { setCsvOpen((o) => !o); setCsvAdded(0); }}>
             Paste from CSV
           </button>
           {builderBtn({ ...smallBtn, borderColor: 'var(--gold)', color: '#6b5418' })}
@@ -154,6 +163,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
             style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, boxSizing: 'border-box' }}
             aria-label="Paste TIPS rungs"
           />
+          {addedNote}
           {csvErrors.length > 0 && (
             <div className="plan-warning error" style={{ marginTop: 6 }}>
               {csvErrors.map((e) => <div key={e.line}>Line {e.line}: {e.message}</div>)}
@@ -161,10 +171,12 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button type="button" style={{ ...smallBtn, background: 'var(--navy)', color: '#fff', borderColor: 'var(--navy)', padding: '4px 12px', fontSize: 12, opacity: csvText.trim() === '' ? 0.5 : 1 }} disabled={csvText.trim() === ''} onClick={importCsv}>Add rungs</button>
-            <button type="button" style={{ ...smallBtn, padding: '4px 12px', fontSize: 12 }} onClick={() => { setCsvOpen(false); setCsvErrors([]); }}>Cancel</button>
+            <button type="button" style={{ ...smallBtn, padding: '4px 12px', fontSize: 12 }} onClick={() => { setCsvOpen(false); setCsvErrors([]); setCsvAdded(0); }}>Cancel</button>
           </div>
         </div>
       )}
+
+      {!csvOpen && addedNote}
 
       {rungs.length > 0 && (
         <div className="stream-rows-scroll">
@@ -179,7 +191,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
           </div>
           {rungs.map((r) => (
             <div key={r.id} className="stream-row tips-row">
-              <NumberInput value={r.maturityYear} digits={0} min={1990} max={2200} style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { maturityYear: Math.round(v) })} />
+              <NumberInput value={r.maturityYear} digits={0} min={1990} max={2200} commitOnBlur style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { maturityYear: Math.round(v) })} />
               <div className="input-prefix-wrap"><span className="input-prefix">$</span>
                 <NumberInput value={r.adjustedPrincipal} min={1} style={{ fontSize: 13, paddingLeft: 22 }} onCommit={(v) => { if (v > 0) update(r.id, { adjustedPrincipal: v }); }} />
               </div>
@@ -191,7 +203,7 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
                 />
               </div>
               <div className="input-suffix-wrap">
-                <NumberInput value={r.couponRate} scale={100} digits={3} min={0} max={20} style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { couponRate: v })} />
+                <NumberInput value={r.couponRate} scale={100} digits={3} min={0} max={0.2} commitOnBlur style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { couponRate: v })} />
                 <span className="input-suffix">%</span>
               </div>
               <select

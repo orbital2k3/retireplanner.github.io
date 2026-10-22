@@ -6,12 +6,16 @@ interface Props {
   onCommit: (v: number) => void;
   scale?: number;
   digits?: number;
+  /** Clamp bounds in stored units (a 0-100% field with scale 100 takes max={1}). */
   min?: number;
   max?: number;
   className?: string;
   style?: CSSProperties;
   placeholder?: string;
   disabled?: boolean;
+  /** Commit only on blur (clamped to min/max), not on every keystroke. For fields whose partial values
+   *  are invalid, such as a year (2, 20, 203 …). */
+  commitOnBlur?: boolean;
 }
 
 const formatFor = (v: number, scale: number, digits?: number, withCommas = false): string => {
@@ -34,6 +38,7 @@ export function NumberInput({
   style,
   placeholder,
   disabled,
+  commitOnBlur = false,
 }: Props) {
   // Live comma formatting is only useful for unscaled, integer-ish dollar inputs.
   // Percentage / decimal inputs (scale != 1 or digits set) skip it so the user
@@ -41,6 +46,9 @@ export function NumberInput({
   const useCommas = scale === 1 && digits == null;
   const [draft, setDraft] = useState<string>(() => formatFor(value, scale, digits, useCommas));
   const focusedRef = useRef(false);
+  // Set by typing. A blur without an edit commits nothing, so tabbing through a field never rewrites the
+  // stored value with its rounded display (0.0625 shown as 6.3 would be saved as 0.063).
+  const editedRef = useRef(false);
 
   useEffect(() => {
     if (!focusedRef.current) setDraft(formatFor(value, scale, digits, useCommas));
@@ -54,6 +62,8 @@ export function NumberInput({
       if (dotIdx !== -1 && stripped.length - dotIdx - 1 > digits) return;
     }
     setDraft(useCommas ? formatWithCommas(stripped) : raw);
+    editedRef.current = true;
+    if (commitOnBlur) return;
     if (stripped === '' || stripped === '-' || stripped === '.' || stripped === '-.') return;
     const parsed = parseFloat(stripped);
     if (isNaN(parsed)) return;
@@ -62,9 +72,11 @@ export function NumberInput({
 
   const handleBlur = () => {
     focusedRef.current = false;
+    const edited = editedRef.current;
+    editedRef.current = false;
     const stripped = useCommas ? stripCommas(draft) : draft;
     const parsed = parseFloat(stripped);
-    if (isNaN(parsed)) {
+    if (!edited || isNaN(parsed)) {
       setDraft(formatFor(value, scale, digits, useCommas));
       return;
     }
