@@ -252,9 +252,9 @@ const tipsRungSpec = () =>
  *  shrunk, so rungs outgrow their accounts and get scaled down, and IRAs run dry under RMDs) and a quarter are
  *  survivor plans (A dies early with an A-owned pre-tax rung still outstanding). One in five leaves the
  *  balances excluding the ladder. Separate from `arbPlan` so the existing properties keep their samples. */
-export const arbTipsPlan = (): fc.Arbitrary<Plan> =>
+export const arbTipsPlan = (base: fc.Arbitrary<Plan> = arbPlan()): fc.Arbitrary<Plan> =>
   fc.tuple(
-    arbPlan(),
+    base,
     fc.record({
       rungs: fc.array(tipsRungSpec(), { minLength: 1, maxLength: 8 }),
       excluded: fc.integer({ min: 0, max: 4 }).map((n) => n === 0),

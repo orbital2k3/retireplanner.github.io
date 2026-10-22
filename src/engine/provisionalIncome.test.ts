@@ -12,7 +12,7 @@ import * as golden from './__golden/plans';
 pinDate();
 afterAll(unpinDate);
 
-const plans = Object.entries(golden).filter(([k]) => /^plan[A-S]_/.test(k)) as [string, () => ReturnType<typeof golden.planA_simple>][];
+const plans = Object.entries(golden).filter(([k]) => /^plan[A-Z]_/.test(k)) as [string, () => ReturnType<typeof golden.planA_simple>][];
 
 describe('§86 provisional income includes realized gains', () => {
   for (const [name, make] of plans) {

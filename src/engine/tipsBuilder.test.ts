@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runProjection } from './projection';
+import { planWithoutLadder } from './tipsLadder';
 import { buildTipsLadder, builderBlocker, builderFundingAvailable, MAX_BUILDER_RUNGS, yearAtAge } from './tipsBuilder';
 import { rung, thisYear, tipsIdlePlan, tipsRetireePlan, withTips } from './__testutil__/tipsPlans';
 import type { Plan, TipsRung } from '../schemas/plan';
@@ -70,8 +71,11 @@ describe('buildTipsLadder through runProjection', () => {
       expect(Math.abs((rows[i][field] as number) / idxE - I)).toBeLessThan(1);
     }
     expect(rows[8][field]).toBe(0);
-    // The carve-out takes exactly the cost from the funding account.
+    // The carve-out takes exactly the cost from the funding account, and nothing from the others.
     expect(rows[0].begTips).toBeCloseTo(built.cost, 6);
+    const bare = project(planWithoutLadder(plan, y)!)[0];
+    const taken = { taxable: bare.begTaxable - rows[0].begTaxable, traditional: bare.begTraditional - rows[0].begTraditional, roth: bare.begRoth - rows[0].begRoth };
+    for (const k of ['taxable', 'traditional', 'roth'] as const) expect(taken[k]).toBeCloseTo(k === account ? built.cost : 0, 6);
   });
 
   it('holds along a varying CPI path, deflation years included', () => {

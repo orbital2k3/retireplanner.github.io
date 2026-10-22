@@ -153,7 +153,7 @@ describe('who gets the QCD (couples, survivors, eligibility)', () => {
     const withA = couple(500_000, 600_000);
     const r = rowsAt(withA)[0];
     expect(r.qcd).toBeCloseTo(20_000, 4);
-    // B (65) has no RMD and is not eligible, so the whole IRA outflow beyond growth is A's RMD side
+    expect(r.qcdB).toBe(0);   // B (65) is not eligible: none of it leaves B's IRA
     assertProjectionInvariants(runProjection(withA), withA);
   });
 
@@ -164,7 +164,9 @@ describe('who gets the QCD (couples, survivors, eligibility)', () => {
     });
     const r = rowsAt(base)[0];
     expect(r.qcd).toBeGreaterThan(QCD_LIMIT_2026);
-    expect(r.qcd).toBeLessThanOrEqual(2 * QCD_LIMIT_2026 + 1e-6);
+    expect(r.qcdB).toBeGreaterThan(0);
+    expect(r.qcd - r.qcdB).toBeLessThanOrEqual(QCD_LIMIT_2026 + 1e-6);
+    expect(r.qcdB).toBeLessThanOrEqual(QCD_LIMIT_2026 + 1e-6);
     assertProjectionInvariants(runProjection(base), base);
   });
 

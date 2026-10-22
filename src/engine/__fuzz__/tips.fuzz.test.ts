@@ -2,7 +2,7 @@ import { describe, it } from 'vitest';
 import fc from 'fast-check';
 import { runProjection } from '../projection';
 import { assertDeterministic, assertProjectionInvariants } from '../__invariants__/assertions';
-import { arbTipsPlan } from './generators';
+import { arbHsaPlan, arbTipsPlan } from './generators';
 import { enc } from '../__regression__/snapshotUtil';
 import type { Plan, TipsRung } from '../../schemas/plan';
 
@@ -25,6 +25,17 @@ describe('Property-based fuzz: TIPS ladder', () => {
         assertProjectionInvariants(runProjection(plan), plan, { skipSpendingCoverage: true });
       }),
       { numRuns: NUM_RUNS, verbose: true },
+    );
+  }, 300_000);
+
+  it(`HSA and TIPS together: every invariant, including the exact cash identity and conservation (${NUM_RUNS} runs)`, () => {
+    // The ladder's cash and the HSA's qualified payments both reduce the spending gap, and both feed ACA
+    // income, so a plan with both is the case where their ordering in the gross-up could double-count.
+    fc.assert(
+      fc.property(arbTipsPlan(arbHsaPlan()), (plan) => {
+        assertProjectionInvariants(runProjection(plan), plan, { skipSpendingCoverage: true });
+      }),
+      { numRuns: NUM_RUNS, seed: 20261021, verbose: true },
     );
   }, 300_000);
 

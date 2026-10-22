@@ -88,28 +88,37 @@ describe('Property-based fuzz: projection invariants', () => {
     );
   }, 120_000);
 
-  it(`enabling QCD never raises lifetime federal + state + IRMAA + NIIT tax under a preset strategy (${NUM_RUNS} runs)`, () => {
-    // Conversions are off: a bracket-fill or optimizer-sized conversion uses the room a QCD frees, so it
-    // can legitimately pay more tax now to save more later. The comparison is the same withdrawal
-    // preset with and without the QCD step; the OBBBA deduction applies on both sides.
-    const lifetimeTax = (rows: ReturnType<typeof runProjection>['rows']) =>
-      rows.reduce((s, r) => s + r.fedTax + r.stateTaxAmt + r.irmaa + r.niit, 0);
+  it(`a QCD changes after-tax wealth by exactly the tax it saves in its first year (${NUM_RUNS} runs, fixed seed)`, () => {
+    // "QCD never raises lifetime tax" is false: a QCD beyond the RMD spends pre-tax money and leaves taxable
+    // money to grow, which can raise later capital-gains tax while increasing wealth. What holds exactly:
+    // the years before the first QCD are identical, and in that year the gift costs the same either way,
+    // so the end-total difference is the tax difference (federal, state, IRMAA, NIIT, ACA, HSA penalty),
+    // less any shortfall difference. Conversions are off so neither run re-sizes them. The seed is fixed:
+    // the old property failed on ~0.8% of QCD plans, a ~5% chance per CI run.
+    type Row = ReturnType<typeof runProjection>['rows'][number];
+    const tax = (r: Row) => r.fedTax + r.stateTaxAmt + r.irmaa + r.niit + r.acaPremium + r.hsaPenalty;
     fc.assert(
       fc.property(arbPlan(), (generated) => {
         const plan = { ...generated, conversion: { ...generated.conversion, mode: 'off' as const, optimize: false } };
         const on = runProjection(plan);
         const off = runProjection(plan, { disableQCD: true });
         assertProjectionInvariants(on, plan, { skipSpendingCoverage: true });
-        const taxOn = lifetimeTax(on.rows), taxOff = lifetimeTax(off.rows);
-        // 0.5% + $500 slack for gross-up convergence drift.
-        if (taxOn > taxOff + 500 + 0.005 * taxOff) {
-          throw new Error(`QCD raised lifetime tax: on=${taxOn.toFixed(0)} off=${taxOff.toFixed(0)} (qcd total ${on.rows.reduce((s, r) => s + r.qcd, 0).toFixed(0)})`);
-        }
         if (!plan.expenseStreams.some((e) => e.category === 'charitable')) {
           if (enc(on) !== enc(off)) throw new Error('disableQCD changed a plan with no charitable rows');
+          return;
+        }
+        const k = on.rows.findIndex((r) => r.qcd > 0);
+        if (k < 0) return;
+        for (let i = 0; i < k; i++) {
+          if (enc(on.rows[i]) !== enc(off.rows[i])) throw new Error(`year ${on.rows[i].year} differs before the first QCD`);
+        }
+        const a = on.rows[k], b = off.rows[k];
+        const drift = (a.endTotal - b.endTotal) - (tax(b) - tax(a)) - (b.shortfall - a.shortfall);
+        if (Math.abs(drift) > 1) {
+          throw new Error(`first QCD year ${a.year}: end total moved ${(a.endTotal - b.endTotal).toFixed(2)} but tax saved ${(tax(b) - tax(a)).toFixed(2)} (qcd ${a.qcd.toFixed(0)})`);
         }
       }),
-      { numRuns: NUM_RUNS, verbose: true },
+      { numRuns: NUM_RUNS, seed: 20261021, verbose: true },
     );
   }, 120_000);
 

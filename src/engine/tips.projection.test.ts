@@ -63,6 +63,21 @@ describe('TIPS projection: carve-out and no double count (D10)', () => {
     expect(r.begTips).toBeCloseTo(250_000, 6);
   });
 
+  it('the taxable carve-out comes off the basis dollar for dollar, floored at zero', () => {
+    const withBasis = (basis: number): Plan => {
+      const p = tipsIdlePlan({ taxable: 300_000 });
+      return { ...p, portfolio: { ...p.portfolio, personA: { ...p.portfolio.personA, taxableBasis: basis } } };
+    };
+    // Zero coupon and a later maturity: no ladder cash reaches the taxable account (and its basis) in year 0.
+    const rungs = ladderRungs({ firstYear: thisYear() + 2, years: 2, principal: 60_000, couponRate: 0, account: 'taxable' });
+    for (const [basis, after] of [[250_000, 130_000], [50_000, 0]] as const) {
+      const base = runProjection(withBasis(basis)).rows[0];
+      const r = runProjection(withTips(withBasis(basis), rungs)).rows[0];
+      expect(base.endTaxableBasis).toBeCloseTo(basis, 6);
+      expect(r.endTaxableBasis).toBeCloseTo(after, 6);
+    }
+  });
+
   it('adds the ladder on top when the balances exclude it', () => {
     const p = tipsRetireePlan();
     const rungs = ladderRungs({ firstYear: thisYear() + 1, years: 2, principal: 60_000, account: 'taxable' });

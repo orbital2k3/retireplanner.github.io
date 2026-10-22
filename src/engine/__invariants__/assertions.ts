@@ -47,14 +47,17 @@ function checkRow(r: ProjectionRow, plan: Plan, tol: number, opts: { skipSpendin
 
   // 1. NO-OVERDRAW: total outflow per bucket must not exceed what's available (growth + contrib).
   //    Catches phantom withdrawals — bucket-A drained while withdrawal still claimed cash.
+  //    An inherited IRA injected this year can fund its own forced distribution in the same year, so it
+  //    counts toward what is available for the total outflow (not for the strategy draws alone).
   const tradAvail = r.begTraditional * (1 + gRateTrad) + contribToTrad;
-  const tradOutflow = r.wdTrd + r.rmd + (r.qcdBeyondRmd ?? 0) + r.rothConv + (r.lumpSumForcedTradDist ?? 0);
-  if (tradOutflow > tradAvail + tol) {
+  const tradDraws = r.wdTrd + r.rmd + (r.qcdBeyondRmd ?? 0) + r.rothConv;
+  const tradOutflow = tradDraws + (r.lumpSumForcedTradDist ?? 0);
+  if (tradDraws > tradAvail + tol || tradOutflow > tradAvail + (r.lumpSumInjectTrad ?? 0) + tol) {
     out.push(`Trad OVERDRAW: outflow $${tradOutflow.toFixed(2)} > available $${tradAvail.toFixed(2)} (wdTrd=${r.wdTrd.toFixed(2)} + rmd=${r.rmd.toFixed(2)} + qcdBeyondRmd=${(r.qcdBeyondRmd ?? 0).toFixed(2)} + conv=${r.rothConv.toFixed(2)} + forcedTrad=${(r.lumpSumForcedTradDist ?? 0).toFixed(2)} vs begTrad*(1+g)+contribTrad)`);
   }
   const rothAvail = r.begRoth * (1 + gRateRoth) + contribToRoth + r.rothConv;
   const rothOutflow = r.wdRth + (r.lumpSumForcedRothDist ?? 0);
-  if (rothOutflow > rothAvail + tol) {
+  if (r.wdRth > rothAvail + tol || rothOutflow > rothAvail + (r.lumpSumInjectRoth ?? 0) + tol) {
     out.push(`Roth OVERDRAW: outflow $${rothOutflow.toFixed(2)} > available $${rothAvail.toFixed(2)} (wdRth=${r.wdRth.toFixed(2)} + forcedRoth=${(r.lumpSumForcedRothDist ?? 0).toFixed(2)})`);
   }
   const taxAvail = r.begTaxable * (1 + gRateTax) + contribToTax;

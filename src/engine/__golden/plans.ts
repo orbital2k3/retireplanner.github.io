@@ -587,3 +587,35 @@ export function planS_tipsLadder(): Plan {
     state: 'IL',
   };
 }
+
+/** QCD edge cases planQ doesn't reach. CA couple: A turns 70 in 2026 but is 70½ only in Feb 2027 (born in
+ *  August), so 2026 giving is cash and earns the OBBBA non-itemizer deduction; B (born in March) is 70½ in
+ *  the year she turns 70 (2028), so a second limit opens. $150k of giving is above one person's $111k limit
+ *  until then, and again after A dies at 82 (2038), when B files Single and the excess earns the $1,000
+ *  deduction. A $5k donor-advised-fund gift (qcd:false) never gets a QCD or the deduction. Taxfirst, no
+ *  conversions. */
+export function planT_qcdEdges(): Plan {
+  const p = goldenBase();
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1956-08-15', retirementAge: 65, planThroughAge: 82, ssPIA: 36000, ssClaimAge: 70 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1958-03-01', retirementAge: 65, planThroughAge: 92, ssPIA: 20000, ssClaimAge: 67 },
+    portfolio: {
+      personA: { taxable: 400000, taxableBasis: 280000, traditional: 2_000_000, roth: 60000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      personB: { taxable: 200000, taxableBasis: 120000, traditional: 900_000, roth: 40000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 70, end: { mode: 'age' as const, age: 82 }, survivorPct: 0, annualAmount: 36000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 92 }, survivorPct: 0, annualAmount: 20000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 70, end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: 85000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+      { id: 'giving', description: 'Charitable giving', whose: 'Household', startAge: 70, end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: 150000, inflationPct: { mode: 'fixed', rate: 0.025 }, category: 'charitable' as const },
+      { id: 'daf', description: 'Donor-advised fund', whose: 'Household', startAge: 70, end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: 5000, inflationPct: { mode: 'fixed', rate: 0.025 }, category: 'charitable' as const, qcd: false },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 70, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'CA',
+  };
+}

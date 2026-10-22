@@ -1,5 +1,7 @@
 import { afterAll, describe, it, expect } from 'vitest';
-import { runAndCompare, runAndCompareHsa, runAndCompareTips } from './harness';
+import fs from 'node:fs';
+import path from 'node:path';
+import { runAndCompare, runAndCompareHsa, runAndCompareQcd, runAndCompareTips } from './harness';
 import { runProjection } from '../projection';
 import { pinDate, unpinDate } from '../__regression__/snapshotUtil';
 import {
@@ -7,7 +9,7 @@ import {
   planD_singleFIRE, planE_allRothCouple, planF_allTradCouple,
   planG_californiaCouple, planH_survivorMidPlan,
   planI_multiStreamIncome, planJ_personBZeroBalance,
-  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver, planR_hsaEarlyRetiree, planS_tipsLadder,
+  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver, planR_hsaEarlyRetiree, planS_tipsLadder, planT_qcdEdges,
 } from './plans';
 
 /**
@@ -96,6 +98,8 @@ describe('Golden projection snapshots', () => {
   it('Plan Q — QCD giver: 72+ NY couple gives $30k/yr straight from their IRAs', () => {
     const r = runAndCompare('planQ_qcdGiver', planQ_qcdGiver());
     expect(r.ok, r.message).toBe(true);
+    const q = runAndCompareQcd('planQ_qcdGiver', planQ_qcdGiver());
+    expect(q.ok, q.message).toBe(true);
   });
 
   it('Plan Q really exercises QCDs and the Single-filer deduction path', () => {
@@ -103,6 +107,47 @@ describe('Golden projection snapshots', () => {
     expect(rows.some((r) => r.qcd > 0)).toBe(true);
     expect(rows.some((r) => r.filingStatus === 'Single')).toBe(true);
     expect(rows.filter((r) => r.qcd > 0).every((r) => r.qcd <= r.charitableSpend + 1e-6)).toBe(true);
+  });
+
+  it('Plan T — QCD edges: 70 but not yet 70½, giving above the limit, a second limit, DAF gift, Single survivor', () => {
+    const r = runAndCompare('planT_qcdEdges', planT_qcdEdges());
+    expect(r.ok, r.message).toBe(true);
+    const q = runAndCompareQcd('planT_qcdEdges', planT_qcdEdges());
+    expect(q.ok, q.message).toBe(true);
+  });
+
+  it('Plan T really exercises the QCD edges', () => {
+    const rows = runProjection(planT_qcdEdges()).rows;
+    const at = (y: number) => rows[y - 2026];
+    const limit = (r: (typeof rows)[number]) => 111_000 * r.inflationFactor;
+    // 2026: A is 70 but turns 70½ only in Feb 2027, so the gift is cash and earns the $2,000 joint deduction
+    expect(at(2026).qcd).toBe(0);
+    expect(at(2026).charityDeduction).toBe(2_000);
+    // 2027: one limit, giving above it; the QCD is all beyond the RMD (A's RMDs start at 73)
+    expect(at(2027).qcd).toBeCloseTo(limit(at(2027)), 6);
+    expect(at(2027).qcdBeyondRmd).toBeCloseTo(at(2027).qcd, 6);
+    expect(at(2027).qcdB).toBe(0);
+    expect(at(2027).charityDeduction).toBe(2_000);
+    // 2028: B is 70½ in the year she turns 70 (born in March): a second limit, and B pays part
+    expect(at(2028).qcdB).toBeGreaterThan(0);
+    // the donor-advised-fund row is never a QCD and never deducted: once QCDs cover the public giving, no deduction
+    expect(at(2028).qcd).toBeCloseTo(at(2028).charitableSpend - 5_000 * Math.pow(1.025, 2), 6);
+    expect(at(2028).charityDeduction).toBe(0);
+    // after A dies, B files Single: one limit again, and the excess earns the $1,000 single deduction
+    const survivor = rows.filter((r) => r.phase === 'Survivor');
+    expect(survivor.length).toBeGreaterThan(0);
+    expect(survivor.every((r) => r.filingStatus === 'Single' && r.charityDeduction === 1_000 && r.qcd === r.qcdB)).toBe(true);
+    expect(survivor.every((r) => Math.abs(r.qcd - limit(r)) < 1e-6)).toBe(true);
+    expect(rows.every((r) => !r.ranOut)).toBe(true);
+  });
+
+  it.skipIf(process.env.CREATE_GOLDENS === '1' || process.env.UPDATE_GOLDENS === '1')('a missing CSV fails instead of being written', () => {
+    for (const run of [runAndCompare, runAndCompareHsa, runAndCompareTips, runAndCompareQcd]) {
+      const r = run('noSuchPlan', planA_simple());
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/^missing noSuchPlan\..*csv: run once with CREATE_GOLDENS=1/);
+    }
+    expect(fs.readdirSync(path.dirname(new URL(import.meta.url).pathname)).some((f) => f.startsWith('noSuchPlan'))).toBe(false);
   });
 
   it('Plan R — HSA early retiree: ACA bronze, $150k HSA, contributions in retirement, receipts', () => {
