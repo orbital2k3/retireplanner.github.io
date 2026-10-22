@@ -26,6 +26,12 @@ Each finding is marked **[P]** (confirmed by a numerical probe) or **[R]** (conf
 | H2 | UI, **uncommitted** | **The Sankey no longer balances in shortfall years that include giving.** `sankeyFlows.ts:175` now subtracts all giving from `spending`, but `fromGap` (the shortfall) still goes only to `spend`. The shortfall can then exceed the Net Spending node: sources ≠ uses, and a phantom "Other Portfolio Draw" appears. HEAD does not have this problem. | [P] planB single, spending ×4, $60k DAF giving at age 81: shortfall $371.5k vs spend node $339.4k; 16-27 bad rows per plan. |
 | H3 | Tests | **Golden tests don't pin the date.** `__golden/golden.test.ts` has no `pinDate()` / `vi.setSystemTime`. With the clock at 2027-03-01, planA and planS fail (37 vs 38 rows). planS also hard-codes 2026-based maturity years. CI will start failing on 2027-01-01. The A-M part predates this work; planS makes it worse. | [P] by the TIPS auditor; [R] no pin in `__golden/*.ts` |
 
+## Found after the audit
+
+| ID | Area | Finding | Evidence |
+|---|---|---|---|
+| N1 | Tax, pre-existing | **§86 provisional income left out realized capital gains.** Every provisional-income site in `projection.ts` (gross-up loop, `resolveYearTaxes`, and the conversion and withdrawal estimates) added dividends but not `wdTax*gainFraction` or `tipsGain`, though provisional income starts from AGI. A retiree living off a low-basis brokerage paid too little tax on Social Security. | [P] Lifetime real federal tax: planA +$19.8k (+4.3%), planH +$21.7k, planI +$25.6k, planK +$28.7k (+6.9%), planB +$6.3k, planG +$4.2k, planS +$1.3k; endTaxAdjustedReal down 0.15-4.1%. **Fixed 2026-10-21** with the user's approval: goldens A, B, D, G, H, I, K, M, S, bit-exact and optimizer snapshots regenerated. |
+
 ## Medium: engine and tax rules
 
 | ID | Area | Finding | Evidence |
@@ -149,7 +155,7 @@ Each finding is marked **[P]** (confirmed by a numerical probe) or **[R]** (conf
 - **Optimizer:** the objective equals the projection's `endTaxAdjustedReal`.
 
 ## Suggested order
-**Status (2026-10-20):** steps 1-4 are done. Step 3: TIPS gain the basis didn't cover is realized as capital gain as the rungs mature (new `tipsGain` row field, plus an info note); the matured-rung advice now differs for on-top ladders; face value is capped at 1.25x principal and flagged above 1.05x; the CSV rejects years before 1990; removing Person B drops B's pre-tax rungs. Step 4: the clock is pinned at module load in the golden test and in 27 other date-sensitive test files, and the whole fast tier passes with the clock at 2027-03-01. Step 2 also covers H1a: the HSA card now reports the years the contribution lowers ACA income and the net premium effect. The audit found the HU-7 cause was the deduction clamp, not the funding withdrawals; in planR the brokerage now runs out a year sooner, so a later pre-tax year crosses the ACA cliff. planR's two CSVs were regenerated, and the v38 migration and freshness tests compare planR's numbers with the current engine.
+**Status (2026-10-21):** steps 1-4 are done (e085092). e2e 25/25 after them. N1 (§86 gains) fixed. Step 3: TIPS gain the basis didn't cover is realized as capital gain as the rungs mature (new `tipsGain` row field, plus an info note); the matured-rung advice now differs for on-top ladders; face value is capped at 1.25x principal and flagged above 1.05x; the CSV rejects years before 1990; removing Person B drops B's pre-tax rungs. Step 4: the clock is pinned at module load in the golden test and in 27 other date-sensitive test files, and the whole fast tier passes with the clock at 2027-03-01. Step 2 also covers H1a: the HSA card now reports the years the contribution lowers ACA income and the net premium effect. The audit found the HU-7 cause was the deduction clamp, not the funding withdrawals; in planR the brokerage now runs out a year sooner, so a later pre-tax year crosses the ACA cliff. planR's two CSVs were regenerated, and the v38 migration and freshness tests compare planR's numbers with the current engine.
 
 1. **Before committing the working tree:**
    - Fix H2 (Sankey gap split plus a shortfall+DAF fixture).

@@ -3,7 +3,7 @@ import { runProjection, effectiveBracketCeiling } from './projection';
 import { optimizeStrategy, CONVERSION_MIN_GAIN, rowsToSeed } from './optimizer';
 import { optimizeCached } from './__testutil__/optimizeCached';
 import { applyResultToPlan } from './applyOptimizerResult';
-import { planP_tightPlan, planG_californiaCouple } from './__golden/plans';
+import { planP_tightPlan, planG_californiaCouple, planF_allTradCouple } from './__golden/plans';
 import { runMonteCarlo } from './monteCarlo';
 import { samplePlan as defaultPlan } from '../schemas/plan';
 import type { Plan } from '../schemas/plan';
@@ -370,8 +370,10 @@ describe('conversion.optimize gate', () => {
   }, 60_000);
 
   it('optimizeConversions=true (default) → optimizer populates numeric convAmt', () => {
-    const plan = defaultPlan();
-    plan.conversion.mode = 'off';
+    // An all-pre-tax couple, where conversions clearly pay; on samplePlan they gain too little to pass the
+    // adoption guard once realized gains count toward taxable Social Security.
+    const plan = planF_allTradCouple();
+    plan.conversion = { ...plan.conversion, mode: 'off', optimize: true };
     const r = optimizeCached(plan, 'max-end-balance', { thorough: false });
     expect(r.perYearPolicy.windows.some((w) => w.convAmt != null)).toBe(true);
   }, 60_000);

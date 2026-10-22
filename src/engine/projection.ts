@@ -713,10 +713,15 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       // taxfirst and tradfirst both exhaust Roth last
       return Math.max(0, gap - avTax - tradAvailForEst);
     };
+    // Realized gains are in AGI, so they count toward §86 provisional income: estimate the taxable
+    // draw as the part of the gap the pre-tax and Roth estimates leave.
+    const gainFractionEst = taxAvailEst > 0 ? Math.max(0, Math.min(1, 1 - taxableBasis / taxAvailEst)) : 0;
+    const gainsEstFor = (gap: number, avTax: number, wdT: number, wdR: number): number =>
+      Math.min(avTax, Math.max(0, gap - wdT - wdR)) * gainFractionEst + tipsGain;
     // Pass 1 — wdTrd estimate ignoring conversion taxes on taxable
     const wdTrdEst1  = _wdTrdEst(spendingGapEst, taxAvailEst);
     const wdRthEst1  = _wdRthEst(spendingGapEst, taxAvailEst);
-    const piEst1     = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEst1 + annualDivEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
+    const piEst1     = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEst1 + annualDivEst + gainsEstFor(spendingGapEst, taxAvailEst, wdTrdEst1, wdRthEst1) + 0.5 * ss.total - hsaContribRet + tipsTaxed;
     const baseOrdEst1 = hsaDed(taxableSocialSecurity(piEst1, ss.total, filingStatus) + rmdTaxable + other.taxableAmt + wdTrdEst1 + wdRthEst1 + ordDivEst + tipsTaxed);
     const ceilForConv = effectiveBracketCeiling(plan.conversion.bracketCeiling, filingStatus) * inflationFactor;
     // Inherited pre-tax IRAs cannot be converted to Roth — exclude their tracked balance.
@@ -733,7 +738,6 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // senior bonus. Two-pass: size conversion with no bonus to estimate post-conv MAGI, then resolve.
     const convEstNoSB = Math.min(maxConvEst, Math.max(0, ceilForConv - (baseOrdEst1 - stdDEff)));
     const qualDivEst = annualDivEst * taxableQualifiedPct;
-    const gainFractionEst = taxAvailEst > 0 ? Math.max(0, Math.min(1, 1 - taxableBasis / taxAvailEst)) : 0;
     const ltcgEst = spendingGapEst * gainFractionEst + qualDivEst;
     const magiEstPostConv = baseOrdEst1 + convEstNoSB + ltcgEst;
     const seniorBonusEst = seniorBonusDeduction(filingStatus, filerAge, ageB, magiEstPostConv, calYear);
@@ -745,14 +749,15 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const taxAvailForSpendingEst = Math.max(0, taxAvailEst - convTaxFromBrok);
     const wdTrdEstForConv = _wdTrdEst(spendingGapEst, taxAvailForSpendingEst);
     const wdRthEstForConv = _wdRthEst(spendingGapEst, taxAvailForSpendingEst);
-    const piForConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + annualDivEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
+    const gainsEstForConv = gainsEstFor(spendingGapEst, taxAvailForSpendingEst, wdTrdEstForConv, wdRthEstForConv);
+    const piForConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + annualDivEst + gainsEstForConv + 0.5 * ss.total - hsaContribRet + tipsTaxed;
     const taxableSSForConv = taxableSocialSecurity(piForConv, ss.total, filingStatus);
     const baseOrdIncForConv0 = hsaDed(taxableSSForConv + rmdTaxable + other.taxableAmt + wdTrdEstForConv + wdRthEstForConv + ordDivEst + tipsTaxed);
     // Pass 3 — SS taxability feedback: if the conversion itself pushes PI above the 85% tier,
     // SS becomes more taxable, adding to ordIncome. Compute SS gain at full headroom and absorb
     // it into the base so rothConversion sizes conv to stay within the ceiling after the flip.
     const headroomNominal = Math.max(0, ceilForConv - (baseOrdIncForConv0 - stdDEff - seniorBonusEst));
-    const piWithFullConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + headroomNominal + annualDivEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
+    const piWithFullConv = other.taxableAmt + exemptIncomeEst + rmdTaxable + wdTrdEstForConv + headroomNominal + annualDivEst + gainsEstForConv + 0.5 * ss.total - hsaContribRet + tipsTaxed;
     const taxableSSWithFullConv = taxableSocialSecurity(piWithFullConv, ss.total, filingStatus);
     const ssGain = Math.max(0, taxableSSWithFullConv - taxableSSForConv);
     const baseOrdIncForConv = baseOrdIncForConv0 + ssGain;
@@ -826,7 +831,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     const lumpSumOrdIncomeEst = lumpSumHSAIncomeEst + lumpSumForcedTradDistEst;
 
     // Base ordinary income for withdrawal bracket-fill sizing (conv now known; wdTrd unknown).
-    const piForWd = other.taxableAmt + exemptIncomeEst + rmdTaxable + conv + lumpSumOrdIncomeEst + 0.5 * ss.total - hsaContribRet + tipsTaxed;
+    const piForWd = other.taxableAmt + exemptIncomeEst + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDivEst + tipsGain + 0.5 * ss.total - hsaContribRet + tipsTaxed;
     const taxableSSForWd = taxableSocialSecurity(piForWd, ss.total, filingStatus);
     // Include ordinary dividends so bracketfill withdrawal sees the correct pre-wdTrd taxable income.
     const baseOrdIncForWd = hsaDed(taxableSSForWd + rmdTaxable + conv + other.taxableAmt + lumpSumOrdIncomeEst
@@ -927,8 +932,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
 
       const gains = wdTax * gainFraction + qualifiedDiv + tipsGain;
       // SS taxability via IRC §86 provisional-income tiers (replaces flat 0.85).
-      // annualDiv and §103 exempt interest count toward provisional income per IRC §86.
-      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDiv + 0.5 * ss.total - hsaContribRet + tipsTaxed;
+      // Provisional income starts from AGI, so dividends, realized gains (qualified dividends are in
+      // annualDiv, not gains) and §103 exempt interest all count per IRC §86.
+      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + annualDiv + wdTax * gainFraction + tipsGain + 0.5 * ss.total - hsaContribRet + tipsTaxed;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
       // ordinaryDiv is ordinary income; qualifiedDiv is captured in ltcg (LTCG stack path).
       const ordPreDed = taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncomeEst + ordinaryDiv + tipsTaxed;
@@ -1146,7 +1152,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Mirrors one pass of the gross-up loop body.
     const resolveYearTaxes = () => {
       const gains = wdTax * gainFraction + qualifiedDiv + tipsGain;
-      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + annualDiv + 0.5 * ss.total + hsaNonQual - hsaContribRet + tipsTaxed;
+      const provisionalIncome = other.taxableAmt + exemptIncome + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + annualDiv + wdTax * gainFraction + tipsGain + 0.5 * ss.total + hsaNonQual - hsaContribRet + tipsTaxed;
       const taxableSS = taxableSocialSecurity(provisionalIncome, ss.total, filingStatus);
       const ordPreDed = taxableSS + other.taxableAmt + wdTrd + rmdTaxable + conv + lumpSumOrdIncome + ordinaryDiv + hsaNonQual + tipsTaxed;
       const ordIncome = hsaDed(ordPreDed);

@@ -7,6 +7,7 @@ import { runProjection } from '../engine/projection';
 import { enginePlan, planStatus, savedOptimizerKey } from '../engine/strategy/savedPlan';
 import { importPlanFromJSON } from '../storage/exportImport';
 import { pinDate, unpinDate } from '../engine/__regression__/snapshotUtil';
+import { expectedNumbers } from '../engine/__testutil__/engineChanges';
 import { PLAN_STORE_VERSION } from './planStoreVersion';
 import { usePlanStore } from './usePlanStore';
 
@@ -16,17 +17,6 @@ import { usePlanStore } from './usePlanStore';
 interface Baseline { name: string; key: string; resultKey: string; status: string; endTotalReal: number; lifetimeFedTax: number; saved: SavedPlan }
 const baselines = JSON.parse(readFileSync(join(__dirname, '../engine/__fixtures__/exports/v38-baselines.json'), 'utf8')) as Baseline[];
 
-/** Plans whose numbers moved through a deliberate engine change made after this baseline was captured
- *  (2026-10-20 audit: the retiree HSA deduction now also comes off capital gains and state income, the
- *  family pool, the IRMAA age rule). Their key and status are still checked against the baseline; their
- *  numbers against the same saved plan on today's engine, which is what shows the load path is neutral. */
-const ENGINE_CHANGED = new Set(['planR_hsaEarlyRetiree']);
-const expectedNumbers = (b: { name: string; endTotalReal: number; lifetimeFedTax: number; saved: SavedPlan }) => {
-  if (!ENGINE_CHANGED.has(b.name)) return b;
-  const p = runProjection(enginePlan(b.saved));
-  expect(p.endTotalReal, 'remove the plan from ENGINE_CHANGED: its numbers match the baseline again').not.toBe(b.endTotalReal);
-  return { endTotalReal: p.endTotalReal, lifetimeFedTax: p.lifetimeFedTax };
-};
 
 pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
 afterAll(unpinDate);
@@ -45,7 +35,7 @@ describe('the TIPS builder keeps v38 plans fresh', () => {
       expect(savedOptimizerKey(after)).toBe(b.key);
       expect(planStatus(after)).toBe('fresh');
       const proj = runProjection(enginePlan(after));
-      const want = expectedNumbers(b);
+      const want = expectedNumbers(b.name, b, () => runProjection(enginePlan(b.saved)));
       expect(proj.endTotalReal).toBe(want.endTotalReal);
       expect(proj.lifetimeFedTax).toBe(want.lifetimeFedTax);
       const r = importPlanFromJSON(JSON.stringify({ app: 'retirement-optimizer', version: 1, exportedAt: '2026-10-20T00:00:00Z', planVersion: 38, plan: b.saved }));

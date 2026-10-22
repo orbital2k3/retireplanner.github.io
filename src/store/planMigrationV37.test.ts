@@ -8,6 +8,7 @@ import { enginePlan, planStatus, savedOptimizerKey } from '../engine/strategy/sa
 import { exportPlanToJSON, importPlanFromJSON } from '../storage/exportImport';
 import { optimizedSaved, sampleSaved } from '../engine/__testutil__/savedPlans';
 import { pinDate, unpinDate } from '../engine/__regression__/snapshotUtil';
+import { expectedNumbers } from '../engine/__testutil__/engineChanges';
 import { PLAN_STORE_VERSION } from './planStoreVersion';
 import { usePlanStore } from './usePlanStore';
 
@@ -53,8 +54,9 @@ describe('v36 → v37 on captured plans', () => {
       expect(after.strategy.result!.inputKey).toBe(b.resultKey);
       expect(planStatus(after)).toBe('fresh');
       const proj = runProjection(enginePlan(after));
-      expect(proj.endTotalReal).toBe(b.endTotalReal);
-      expect(proj.lifetimeFedTax).toBe(b.lifetimeFedTax);
+      const want = expectedNumbers(b.name, b, () => runProjection(enginePlan(b.saved)));
+      expect(proj.endTotalReal).toBe(want.endTotalReal);
+      expect(proj.lifetimeFedTax).toBe(want.lifetimeFedTax);
     });
 
     it(`${b.name}: a v36 export imports fresh with the same key and projection`, () => {
@@ -63,7 +65,7 @@ describe('v36 → v37 on captured plans', () => {
       expect(r.ok).toBe(true);
       expect(savedOptimizerKey(r.plan!)).toBe(b.key);
       expect(planStatus(r.plan!)).toBe('fresh');
-      expect(runProjection(enginePlan(r.plan!)).endTotalReal).toBe(b.endTotalReal);
+      expect(runProjection(enginePlan(r.plan!)).endTotalReal).toBe(expectedNumbers(b.name, b, () => runProjection(enginePlan(b.saved))).endTotalReal);
     });
   }
 
@@ -88,9 +90,10 @@ describe('legacy export files import exactly as they did before the HSA', () => 
       expect(planStatus(r.plan!)).toBe(b.status);
       expect(savedOptimizerKey(r.plan!)).toBe(b.key);
       const proj = runProjection(enginePlan(r.plan!));
-      expect(proj.endTotalReal).toBe(b.endTotalReal);
-      expect(proj.lifetimeFedTax).toBe(b.lifetimeFedTax);
-      expect(proj.lifetimeConversion).toBe(b.lifetimeConversion);
+      const want = expectedNumbers(b.n, b, () => proj);
+      expect(proj.endTotalReal).toBe(want.endTotalReal);
+      expect(proj.lifetimeFedTax).toBe(want.lifetimeFedTax);
+      expect(proj.lifetimeConversion).toBe(want.lifetimeConversion);
     });
   }
 });

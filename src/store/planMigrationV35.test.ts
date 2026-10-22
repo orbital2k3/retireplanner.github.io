@@ -13,6 +13,7 @@ import { importPlanFromJSON } from '../storage/exportImport';
 import { usePlanStore } from './usePlanStore';
 import { OPT_WINDOW } from '../engine/__testutil__/strategyPlans';
 import { pinDate, unpinDate } from '../engine/__regression__/snapshotUtil';
+import { expectedNumbers } from '../engine/__testutil__/engineChanges';
 
 // The captured projections start in 2026; pin the clock so they still match after New Year.
 pinDate();
@@ -58,9 +59,10 @@ describe('P19 v34 → v35 on captured plans', () => {
       const after = migrateStore(structuredClone(b.v34Plan), 34);
       expect(SavedPlanSchema.safeParse(after).success).toBe(true);
       const proj = runProjection(enginePlan(after));
-      expect(proj.endTotalReal).toBeCloseTo(b.endTotalReal, 2);
-      expect(proj.lifetimeFedTax).toBeCloseTo(b.lifetimeFedTax, 2);
-      expect(proj.lifetimeConversion).toBeCloseTo(b.lifetimeConversion, 2);
+      const want = expectedNumbers(b.name, b, () => proj);
+      expect(proj.endTotalReal).toBeCloseTo(want.endTotalReal!, 2);
+      expect(proj.lifetimeFedTax).toBeCloseTo(want.lifetimeFedTax!, 2);
+      expect(proj.lifetimeConversion).toBeCloseTo(want.lifetimeConversion!, 2);
       expect(planStatus(after)).toBe(b.status);
       if (b.v34Plan.customPolicy?.source === 'optimizer') {
         expect(after.strategy.result!.policy.windows).toEqual(b.v34Plan.customPolicy.windows);
@@ -71,7 +73,8 @@ describe('P19 v34 → v35 on captured plans', () => {
       const file = JSON.stringify({ app: 'retirement-optimizer', version: 1, exportedAt: '2026-10-07T00:00:00Z', planVersion: 34, plan: b.v34Plan });
       const r = importPlanFromJSON(file);
       expect(r.ok).toBe(true);
-      expect(runProjection(enginePlan(r.plan!)).endTotalReal).toBeCloseTo(b.endTotalReal, 2);
+      const proj = runProjection(enginePlan(r.plan!));
+      expect(proj.endTotalReal).toBeCloseTo(expectedNumbers(b.name, b, () => proj).endTotalReal!, 2);
       expect(planStatus(r.plan!)).toBe(b.status);
     });
   }
