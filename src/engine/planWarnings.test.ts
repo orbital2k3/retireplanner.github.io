@@ -114,9 +114,22 @@ describe('QCD warnings on charitable expense rows', () => {
     expect(w?.message).toContain("Person A's and B's IRAs are empty");
   });
 
-  it('names the one person when a single owner pays and their IRA is empty', () => {
-    const p = withGiving({ whose: 'B' }, (q) => { q.portfolio = { personA: q.portfolio.personA, personB: emptyIra(q.portfolio.personB!) }; });
+  it("does not warn for a row tagged to B when A's IRA can pay it (the engine pools giving across spouses)", () => {
+    const p = withGiving({ whose: 'B' }, (q) => { q.portfolio = { personA: { ...q.portfolio.personA, traditional: 300_000 }, personB: emptyIra(q.portfolio.personB!) }; });
+    expect(find(p, 'qcd-no-ira-giving')).toBeUndefined();
+  });
+
+  it('names only the spouse who reaches 70½ while alive', () => {
+    const p = withGiving({}, (q) => {
+      q.personA.planThroughAge = 69;
+      q.portfolio = { personA: { ...q.portfolio.personA, traditional: 300_000 }, personB: emptyIra(q.portfolio.personB!) };
+    });
     expect(find(p, 'qcd-no-ira-giving')?.message).toContain("B's IRA is empty");
+  });
+
+  it("is silent when the row ends before anyone reaches 70½", () => {
+    const p = withGiving({ startAge: 60, end: { mode: 'age', age: 66 } }, (q) => { q.portfolio = { personA: emptyIra(q.portfolio.personA), personB: emptyIra(q.portfolio.personB!) }; });
+    expect(find(p, 'qcd-no-ira-giving')).toBeUndefined();
   });
 
   it('does not warn when someone has pre-tax money', () => {

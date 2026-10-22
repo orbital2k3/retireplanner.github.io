@@ -1,5 +1,5 @@
 import type { Plan } from '../schemas/plan';
-import { firstRetirementAgeA } from './streamWindow';
+import { firstRetirementAgeA, householdAgeFrame, resolveWindow } from './streamWindow';
 import { calendarYearAge } from '../lib/ageUtils';
 import { INHERITED_DEADLINE_YEARS } from './taxConstants';
 import { resolveStrategy } from './strategy/resultSettings';
@@ -124,6 +124,14 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
     && pf.annualContribution * pf.contribSplit.traditional <= 0
     && ((pf.spousalContribution ?? 0) <= 0 || pf.spousalTarget === 'roth');
   const firstQcdAge = (dob: string) => (qcdEligible(dob, 70) ? 70 : 71);
+  const frame = householdAgeFrame(plan);
+  // `offset` turns Person A's age into this spouse's age (the frame every stream window uses).
+  const spouses = [
+    { name: plan.personA.name || 'Person A', dob: plan.personA.dob, through: plan.personA.planThroughAge, pf: plan.portfolio.personA, offset: 0 },
+    ...(plan.personB && plan.portfolio.personB && frame.deltaBA !== undefined
+      ? [{ name: plan.personB.name || 'Person B', dob: plan.personB.dob, through: plan.personB.planThroughAge, pf: plan.portfolio.personB, offset: frame.deltaBA }]
+      : []),
+  ];
   for (const s of plan.expenseStreams) {
     if (s.category !== 'charitable' || s.annualAmount <= 0) continue;
     if (s.qcd === false) {
@@ -134,13 +142,18 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
       });
       continue;
     }
-    // Owners whose IRA could pay this row: A, B, or both for a household row.
-    const owners = [
-      ...(s.whose !== 'B' ? [{ name: plan.personA.name || 'Person A', dob: plan.personA.dob, through: plan.personA.planThroughAge, pf: plan.portfolio.personA }] : []),
-      ...(s.whose !== 'A' && plan.personB && plan.portfolio.personB
-        ? [{ name: plan.personB.name || 'Person B', dob: plan.personB.dob, through: plan.personB.planThroughAge, pf: plan.portfolio.personB }]
-        : []),
-    ].filter((o) => calendarYearAge(o.dob) <= o.through && firstQcdAge(o.dob) <= o.through);
+    // The engine pools the household's QCD-eligible giving and pays it from either spouse's IRA, so
+    // every spouse who is 70½ and alive in some year of this row's age window could pay it.
+    const w = resolveWindow(s, frame);
+    const fromA = Math.max(w.startAge, frame.startAgeA), toA = Math.min(w.stopAge, frame.horizonA);
+    const canPay = (o: typeof spouses[number]) => {
+      for (let x = fromA; x <= toA; x++) {
+        const age = x + o.offset;
+        if (age >= firstQcdAge(o.dob) && age <= o.through) return true;
+      }
+      return false;
+    };
+    const owners = spouses.filter(canPay);
     if (owners.length > 0 && owners.every((o) => ownIraEmpty(o.pf))) {
       const who = owners.length === 1 ? `${owners[0].name}'s IRA is` : `${owners.map((o) => `${o.name}'s`).join(' and ')} IRAs are`;
       warnings.push({
