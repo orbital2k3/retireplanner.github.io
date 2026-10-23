@@ -79,6 +79,11 @@ export const RELEASES: Release[] = [
         title: 'With vs without the ladder',
         text: 'After a Monte Carlo run, Compare shows the chance of success and the 10th-percentile end balance with your ladder and with the same money left in its accounts.',
       },
+      {
+        kind: 'fix',
+        title: 'Saved optimizer results may show as out of date',
+        text: 'Capital gains you realize when selling taxable investments now count toward the income that decides how much of your Social Security is taxed. Projections for many plans shift slightly, so a saved optimizer result may show as out of date after you upgrade. Click Re-optimize to refresh it.',
+      },
     ],
   },
   {
