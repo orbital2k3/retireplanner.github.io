@@ -16,6 +16,10 @@ interface Props {
   /** Commit only on blur (clamped to min/max), not on every keystroke. For fields whose partial values
    *  are invalid, such as a year (2, 20, 203 …). */
   commitOnBlur?: boolean;
+  /** Pairs with a `<label htmlFor>`. */
+  id?: string;
+  /** Accessible name when there is no visible label (table rows). */
+  ariaLabel?: string;
 }
 
 const formatFor = (v: number, scale: number, digits?: number, withCommas = false): string => {
@@ -39,6 +43,8 @@ export function NumberInput({
   placeholder,
   disabled,
   commitOnBlur = false,
+  id,
+  ariaLabel,
 }: Props) {
   // Live comma formatting is only useful for unscaled, integer-ish dollar inputs.
   // Percentage / decimal inputs (scale != 1 or digits set) skip it so the user
@@ -91,6 +97,8 @@ export function NumberInput({
     <input
       type="text"
       inputMode="decimal"
+      id={id}
+      aria-label={ariaLabel}
       className={className}
       style={style}
       value={draft}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import LearnMoreModal from '../LearnMoreModal';
 import { HSA_HELP } from '../learnMoreTopics';
 import type { PersonPortfolio } from '../../schemas/plan';
@@ -24,6 +24,7 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
 }) {
   const [open, setOpen] = useState((data.hsa ?? 0) > 0 || (data.hsaContribution ?? 0) > 0);
   const [helpOpen, setHelpOpen] = useState(false);
+  const uid = useId();
   const coverage = data.hsaCoverage ?? 'self';
   const limitCoverage = sharedWith ? 'family' : coverage;
   const max = hsaLimit(limitCoverage, age ?? 0, 1);
@@ -46,15 +47,15 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
       {open && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>HSA balance</label>
+            <label htmlFor={`${uid}-bal`}>HSA balance</label>
             <div className="input-prefix-wrap"><span className="input-prefix">$</span>
-              <NumberInput value={data.hsa ?? 0} min={0} style={{ paddingLeft: 22 }} onCommit={(v) => onChange({ hsa: positive(v) })} />
+              <NumberInput id={`${uid}-bal`} value={data.hsa ?? 0} min={0} style={{ paddingLeft: 22 }} onCommit={(v) => onChange({ hsa: positive(v) })} />
             </div>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Annual contribution</label>
+            <label htmlFor={`${uid}-contrib`}>Annual contribution</label>
             <div className="input-prefix-wrap"><span className="input-prefix">$</span>
-              <NumberInput value={contribution} min={0} style={{ paddingLeft: 22 }} onCommit={(v) => onChange({ hsaContribution: positive(v) })} />
+              <NumberInput id={`${uid}-contrib`} value={contribution} min={0} style={{ paddingLeft: 22 }} onCommit={(v) => onChange({ hsaContribution: positive(v) })} />
             </div>
             <div className="helper-text" style={contribution > max ? { color: 'var(--warning)' } : undefined}>
               {contribution > max
@@ -64,13 +65,14 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
             </div>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Coverage</label>
-            <div className="toggle-group">
+            <label id={`${uid}-cov`}>Coverage</label>
+            <div className="toggle-group" role="group" aria-labelledby={`${uid}-cov`}>
               {(['self', 'family'] as const).map((c) => (
                 <button
                   key={c}
                   type="button"
                   className={`toggle-opt${coverage === c ? ' active' : ''}`}
+                  aria-pressed={coverage === c}
                   onClick={() => onChange({ hsaCoverage: c === 'self' ? undefined : c })}
                 >
                   {c === 'self' ? 'Self' : 'Family'}
@@ -79,9 +81,9 @@ export function HsaBlock({ data, onChange, age, retirementAge, sharedWith }: {
             </div>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Unreimbursed receipts</label>
+            <label htmlFor={`${uid}-rcpt`}>Unreimbursed receipts</label>
             <div className="input-prefix-wrap"><span className="input-prefix">$</span>
-              <NumberInput value={data.hsaReceipts ?? 0} min={0} style={{ paddingLeft: 22 }} onCommit={(v) => onChange({ hsaReceipts: positive(v) })} />
+              <NumberInput id={`${uid}-rcpt`} value={data.hsaReceipts ?? 0} min={0} style={{ paddingLeft: 22 }} onCommit={(v) => onChange({ hsaReceipts: positive(v) })} />
             </div>
             <div className="helper-text">Past medical bills you paid out of pocket and can still claim tax-free</div>
           </div>
@@ -119,8 +121,8 @@ export function HsaPolicyRow({ value, onChange }: { value: number | undefined; o
   return (
     <div style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 12, display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 12, alignItems: 'start' }}>
       <div className="form-group" style={{ marginBottom: 0 }}>
-        <label>HSA pays medical expenses from age</label>
-        <select value={current} onChange={(e) => { const v = Number(e.target.value); onChange(v === HSA_MEDICARE_AGE ? undefined : v); }}>
+        <label htmlFor="hsa-pay-age">HSA pays medical expenses from age</label>
+        <select id="hsa-pay-age" value={current} onChange={(e) => { const v = Number(e.target.value); onChange(v === HSA_MEDICARE_AGE ? undefined : v); }}>
           <option value={0}>Always</option>
           {ages.map((a) => <option key={a} value={a}>{a}{a === HSA_MEDICARE_AGE ? ' (default)' : ''}</option>)}
         </select>

@@ -16,9 +16,12 @@ export const HSA_DEFAULT_PAY_AGE = 65;
 /** Owner's age from which the HSA pays medical-tagged spending. 0 = always. */
 export const hsaPayAge = (pf: Portfolio): number => pf.hsaPolicy?.payMedicalFromAge ?? HSA_DEFAULT_PAY_AGE;
 
-/** Base annual limit in nominal dollars: the 2026 limit indexed with the plan's inflation factor. */
+/** Base annual limit in nominal dollars: the 2026 limit indexed with the plan's inflation factor,
+ *  rounded down to a multiple of $50 (§223(g)(1)). The epsilon keeps exact multiples from flooring
+ *  one step low after float multiplication. */
 export function hsaBaseLimit(coverage: HsaCoverage | undefined, inflationFactor: number): number {
-  return (coverage === 'family' ? HSA_LIMIT_FAMILY_2026 : HSA_LIMIT_SELF_2026) * inflationFactor;
+  const indexed = (coverage === 'family' ? HSA_LIMIT_FAMILY_2026 : HSA_LIMIT_SELF_2026) * inflationFactor;
+  return Math.floor(indexed / 50 + 1e-9) * 50;
 }
 
 /** The age-55 catch-up. Set by statute and not indexed, so it is never scaled by inflation. */

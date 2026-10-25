@@ -191,24 +191,26 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
             <div style={headerStyle} title={WHOSE_TIP}>Whose ⓘ</div>
             <div></div>
           </div>
-          {rungs.map((r) => (
+          {rungs.map((r, i) => (
             <div key={r.id} className="stream-row tips-row">
-              <NumberInput value={r.maturityYear} digits={0} min={1990} max={2200} commitOnBlur style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { maturityYear: Math.round(v) })} />
+              <NumberInput ariaLabel={`Rung ${i + 1} maturity year`} value={r.maturityYear} digits={0} min={1990} max={2200} commitOnBlur style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { maturityYear: Math.round(v) })} />
               <div className="input-prefix-wrap"><span className="input-prefix">$</span>
-                <NumberInput value={r.adjustedPrincipal} min={1} style={{ fontSize: 13, paddingLeft: 22 }} onCommit={(v) => { if (v > 0) update(r.id, { adjustedPrincipal: v }); }} />
+                <NumberInput ariaLabel={`Rung ${i + 1} adjusted principal`} value={r.adjustedPrincipal} min={1} style={{ fontSize: 13, paddingLeft: 22 }} onCommit={(v) => { if (v > 0) update(r.id, { adjustedPrincipal: v }); }} />
               </div>
               <div className="input-prefix-wrap" title="Par value from your statement, usually below the adjusted principal. Sets the floor if prices fall. Left equal to the principal, the plan assumes a higher floor than most bonds bought after issue have.">
                 <span className="input-prefix">$</span>
                 <NumberInput
+                  ariaLabel={`Rung ${i + 1} face value`}
                   value={r.faceValue ?? r.adjustedPrincipal} min={1} style={{ fontSize: 13, paddingLeft: 22 }}
                   onCommit={(v) => update(r.id, { faceValue: v > 0 && v !== r.adjustedPrincipal ? v : undefined })}
                 />
               </div>
               <div className="input-suffix-wrap">
-                <NumberInput value={r.couponRate} scale={100} digits={3} min={0} max={0.2} commitOnBlur style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { couponRate: v })} />
+                <NumberInput ariaLabel={`Rung ${i + 1} coupon`} value={r.couponRate} scale={100} digits={3} min={0} max={0.2} commitOnBlur style={{ fontSize: 13 }} onCommit={(v) => update(r.id, { couponRate: v })} />
                 <span className="input-suffix">%</span>
               </div>
               <select
+                aria-label={`Rung ${i + 1} account`}
                 value={r.account}
                 style={{ fontSize: 13, ...(r.account === 'taxable' ? { borderColor: '#b8620a' } : {}) }}
                 onChange={(e) => {
@@ -219,14 +221,14 @@ export function TipsLadderCard({ portfolio, nameA, nameB, startYear, ageA, retir
                 {(Object.keys(ACCOUNT_LABEL) as TipsRung['account'][]).map((k) => <option key={k} value={k}>{ACCOUNT_LABEL[k]}</option>)}
               </select>
               {r.account === 'traditional' ? (
-                <select value={r.whose === 'B' ? 'B' : 'A'} style={{ fontSize: 13 }} onChange={(e) => update(r.id, { whose: e.target.value as 'A' | 'B' })}>
+                <select aria-label={`Rung ${i + 1} owner`} value={r.whose === 'B' ? 'B' : 'A'} style={{ fontSize: 13 }} onChange={(e) => update(r.id, { whose: e.target.value as 'A' | 'B' })}>
                   <option value="A">{nameA}</option>
                   {b && <option value="B">{nameB ?? 'Person B'}</option>}
                 </select>
               ) : (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }} title={WHOSE_TIP}>Household</div>
               )}
-              <button className="remove-btn" aria-label="Remove rung" onClick={() => write(rungs.filter((x) => x.id !== r.id))}>×</button>
+              <button className="remove-btn" aria-label={`Remove rung ${i + 1}`} onClick={() => write(rungs.filter((x) => x.id !== r.id))}>×</button>
             </div>
           ))}
         </div>

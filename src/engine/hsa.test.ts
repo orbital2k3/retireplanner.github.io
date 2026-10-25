@@ -15,6 +15,13 @@ describe('hsaLimit', () => {
     expect(hsaBaseLimit('family', 1)).toBe(HSA_LIMIT_FAMILY_2026);
     expect(hsaBaseLimit(undefined, 2)).toBe(HSA_LIMIT_SELF_2026 * 2);
   });
+  it('rounds the indexed base down to a multiple of $50 (§223(g)(1))', () => {
+    expect(hsaBaseLimit('self', 1.03)).toBe(Math.floor((HSA_LIMIT_SELF_2026 * 1.03) / 50) * 50);
+    expect(hsaBaseLimit('family', 1.027) % 50).toBe(0);
+    expect(hsaBaseLimit('family', 1.027)).toBeLessThanOrEqual(HSA_LIMIT_FAMILY_2026 * 1.027);
+    // an exact multiple is kept, not floored one step low by float error
+    expect(hsaBaseLimit('self', 1.125)).toBe(HSA_LIMIT_SELF_2026 * 1.125);
+  });
   it('adds the catch-up at 55 and later, unscaled', () => {
     expect(hsaCatchUp(54)).toBe(0);
     expect(hsaCatchUp(55)).toBe(HSA_CATCHUP);

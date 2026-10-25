@@ -37,7 +37,7 @@ describe('HSA core: balance, growth and contributions (H-3)', () => {
     const rows = runProjection(withHsa(base(), { a: { hsa: 0, hsaContribution: 50_000, hsaCoverage: 'family' } })).rows;
     expect(rows[0].hsaContrib).toBe(8_750);                      // age 53, family
     const r2 = rows[2];                                           // age 55: indexed base + unindexed 1,000
-    expect(r2.hsaContrib).toBeCloseTo(8_750 * r2.inflationFactor + 1_000, 6);
+    expect(r2.hsaContrib).toBe(Math.floor((8_750 * r2.inflationFactor) / 50) * 50 + 1_000); // base rounded down to $50
   });
 
   it('contributions are external: taxable, pre-tax and Roth balances do not move', () => {

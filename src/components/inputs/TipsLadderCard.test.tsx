@@ -96,7 +96,7 @@ describe('TipsLadderCard', () => {
 
   it('removing the last rung clears the ladder', () => {
     const onChange = setup(portfolio([rung()]));
-    fireEvent.click(screen.getByLabelText('Remove rung'));
+    fireEvent.click(screen.getByLabelText('Remove rung 1'));
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
 
