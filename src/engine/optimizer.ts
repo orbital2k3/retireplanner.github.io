@@ -721,7 +721,7 @@ function innerOptimize(
     const pathsC = mcCtx ? MC_PATHS_DEFAULT : 0;
 
     // Track the MC objective of the current-best policy for the monotone accept gate.
-    // Seeded once before sweep 6a using the full path count.
+    // Re-scored at the start of each phase with that phase's path count.
     let bestMcObj: number | null = null;
 
     // nmYear: runs Nelder-Mead for one retirement year and accepts improvements.
@@ -789,23 +789,27 @@ function innerOptimize(
       }
     };
 
-    // Seed bestMcObj before NM sweeps using the full path count.
-    if (mcCtx) {
-      bestMcObj = nmObj(bestWindows, MC_PATHS_DEFAULT);
-    }
+    // CVaR scores from different path counts aren't on the same scale, so each phase
+    // re-scores the current best with its own nPaths before the accept gate compares.
+    const rescoreBest = (nPaths: number): void => {
+      if (mcCtx) bestMcObj = nmObj(bestWindows, nPaths);
+    };
 
     // Phase 6a — backward sweep: propagates terminal-value signal backward so early
     // Roth conversions see their downstream RMD reduction benefit during search.
+    rescoreBest(pathsA);
     for (let yi = bestWindows.length - 1; yi >= 0; yi--) {
       nmYear(yi, nA, pathsA);
       outerProgress?.();
     }
     // Phase 6b — forward sweep: refines early years given updated later-year policies.
+    rescoreBest(pathsB);
     for (let yi = 0; yi < bestWindows.length; yi++) {
       nmYear(yi, nB, pathsB);
       outerProgress?.();
     }
     // Phase 6c — backward convergence pass: propagates forward-pass changes back.
+    rescoreBest(pathsC);
     for (let yi = bestWindows.length - 1; yi >= 0; yi--) {
       nmYear(yi, nC, pathsC);
       outerProgress?.();
