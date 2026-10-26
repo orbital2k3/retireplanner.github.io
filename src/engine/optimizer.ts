@@ -1364,6 +1364,17 @@ function buildMcContext(opts: OptimizeOptions): McContext {
   return { paths, seed, equityPct, posture };
 }
 
+// Rows carry whole ages, so age 59 may still be before 59½: treat < 60 as penalty-era.
+const PENALTY_FREE_AGE = 60;
+
+// wdTrd is a household total with no per-person split, so either spouse being under
+// 59½ counts as an early traditional withdrawal.
+function hasEarlyTradWithdrawal(proj: ProjectionResult): boolean {
+  return proj.rows.some(r =>
+    (r.ageA < PENALTY_FREE_AGE || (r.ageB !== undefined && r.ageB < PENALTY_FREE_AGE)) &&
+    r.netSpend > 0 && r.wdTrd > 1);
+}
+
 export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeOptions = {}): OptimizeResult {
   // Every caller gets the same view: "Set it myself" settings and hand-built blends never reach the search.
   const plan = optimizerInput(livePlan);
@@ -1721,16 +1732,17 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
       // for all pre-59 windows. If the constrained plan still survives, it's a viable age
       // (the user avoids the penalty by drawing from taxable/Roth first). Only break if
       // the constrained plan also runs out — meaning trad genuinely cannot be avoided.
-      const needsEarlyTrad = inner.proj.rows.some(r => r.ageA < 59 && r.netSpend > 0 && r.wdTrd > 1);
-      if (needsEarlyTrad) {
+      if (hasEarlyTradWithdrawal(inner.proj)) {
         const clampedPolicy: BlendPolicy = {
           ...inner.policy,
           windows: inner.policy.windows.map((w) =>
-            w.fromAge < 59 ? { ...w, pctTraditional: 0, pctRoth: w.pctRoth + w.pctTraditional } : w
+            w.fromAge < PENALTY_FREE_AGE ? { ...w, pctTraditional: 0, pctRoth: w.pctRoth + w.pctTraditional } : w
           ),
         };
         const clampedProj = runProjection(trialPlan, { policy: clampedPolicy });
-        if (clampedProj.ranOut) {
+        // The blend policy tops up any shortfall taxable → traditional → Roth, so zeroing
+        // pctTraditional doesn't guarantee zero pre-59½ traditional draws: re-check.
+        if (clampedProj.ranOut || hasEarlyTradWithdrawal(clampedProj)) {
           stopReason = 'early-trad';
           break;
         }
