@@ -1394,8 +1394,10 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
 
     opts.onProgress?.(0.9, 'Measuring conversion benefit…');
     // Compute the no-conversion baseline against the deterministic winner (before any MC step),
-    // so the deterministic metric is the reference point for the adoption guard.
-    const conversionBaseline = computeConversionBaseline(plan, opts, evalCounter, finalInner);
+    // so the deterministic metric is the reference point for the adoption guard. The MC policy is
+    // tuned for tail risk and scores lower on the deterministic number, so comparing it here would
+    // switch conversions off more often than they should be.
+    const conversionBaseline = computeConversionBaseline(plan, opts, evalCounter, inner);
 
     // Adoption guard: when the optimizer owns conversions, ship the no-conversion baseline unless
     // they clearly beat it. A conversion mode the user chose (manual, bracket-fill, auto-window)
@@ -1406,7 +1408,7 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
     let conversionBaselinePolicy: BlendPolicy | undefined;
     const conversionBaselineMetric = conversionBaseline?.eval.score;
     if (conversionBaseline != null) {
-      if (guardConversions && !conversionsEarnTheirPlace(finalInner, conversionBaseline.eval)) {
+      if (guardConversions && !conversionsEarnTheirPlace(inner, conversionBaseline.eval)) {
         shippedInner = conversionBaseline.eval;
         conversionsDisabled = true;
         // conversionBaselinePolicy stays undefined: benefit is definitionally 0 when adopted.
@@ -1490,7 +1492,9 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
 
       // The rewrite is value-neutral to within rounding, but the adoption guard above ran on the
       // pre-rewrite score. Re-check so rounding drift can never ship conversions below the bar.
-      if (guardConversions && conversionBaseline != null) {
+      // Skipped when the MC policy shipped: its deterministic score isn't comparable to the baseline's
+      // (see above), and the adoption decision was already made on the deterministic winner.
+      if (guardConversions && conversionBaseline != null && finalInner === inner) {
         if (!conversionsEarnTheirPlace(shippedInner, conversionBaseline.eval)) {
           shippedInner = conversionBaseline.eval;
           conversionsDisabled = true;
