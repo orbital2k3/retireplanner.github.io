@@ -3,6 +3,7 @@ import type { ChartOptions, ChartData } from 'chart.js';
 import { palette, fmtCompact, fmtFull, indexInteraction } from './setup';
 import { useAgeAxis } from './useAgeAxis';
 import type { ProjectionResult } from '../../engine/projection';
+import { rmdCashOf } from '../../engine/qcd';
 
 interface Props {
   proj: ProjectionResult;
@@ -12,7 +13,7 @@ interface Props {
 
 export default function RothVsRmd({ proj, real = true, height = 220 }: Props) {
   const age = useAgeAxis();
-  const rows = proj.rows.filter((r) => r.rothConv > 0 || r.rmd > 0);
+  const rows = proj.rows.filter((r) => r.rothConv > 0 || r.rmd > 0 || r.qcd > 0);
   const labels = rows.map((r) => r.ageA);
   const scale = (n: number, inf: number) => (real ? n / inf : n);
 
@@ -30,10 +31,18 @@ export default function RothVsRmd({ proj, real = true, height = 220 }: Props) {
       },
       {
         label: 'RMDs (forced)',
-        data: rows.map((r) => -scale(r.rmd, r.inflationFactor)),
+        data: rows.map((r) => -scale(rmdCashOf(r), r.inflationFactor)),
         backgroundColor: palette.warning,
         stack: 'conv-rmd',
       },
+      ...(rows.some((r) => r.qcd > 0) ? [{
+        label: 'QCDs (to charity)',
+        data: rows.map((r) => -scale(r.qcd, r.inflationFactor)),
+        backgroundColor: palette.goldPale,
+        borderColor: palette.gold,
+        borderWidth: 1.5,
+        stack: 'conv-rmd',
+      }] : []),
     ],
   };
 

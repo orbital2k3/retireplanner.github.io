@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { taxAdjustedRates, taxAdjustedValue } from './taxAdjusted';
+import { taxAdjustedRates, taxAdjustedValue, hsaTaxableBalance } from './taxAdjusted';
 
 describe('taxAdjustedRates', () => {
   it('returns defaults when called with undefined', () => {
@@ -101,5 +101,36 @@ describe('taxAdjustedValue', () => {
     const gross = endTaxable + trad + roth;
     const adj = taxAdjustedValue(endTaxable, endTaxableBasis, trad, roth, ordRate, ltcgRate);
     expect(adj).toBeGreaterThanOrEqual(gross * (1 - Math.max(ordRate, ltcgRate)) - 1e-9);
+  });
+});
+
+describe('taxAdjustedValue extras (H-6)', () => {
+  const args = [200_000, 100_000, 300_000, 150_000, 0.22, 0.15] as const;
+  const core = taxAdjustedValue(...args);
+
+  it('an absent or empty extras argument is bit-identical to the 6-argument call', () => {
+    expect(Object.is(taxAdjustedValue(...args, undefined), core)).toBe(true);
+    expect(Object.is(taxAdjustedValue(...args, {}), core)).toBe(true);
+    expect(Object.is(taxAdjustedValue(...args, { hsa: 0, hsaReceipts: 5_000 }), core)).toBe(true);
+  });
+
+  it('an HSA with no receipts is haircut at the ordinary rate', () => {
+    expect(taxAdjustedValue(...args, { hsa: 100_000 })).toBeCloseTo(core + 100_000 * 0.78, 6);
+  });
+
+  it('the part of the HSA covered by receipts is Roth-like', () => {
+    expect(taxAdjustedValue(...args, { hsa: 100_000, hsaReceipts: 30_000 })).toBeCloseTo(core + 30_000 + 70_000 * 0.78, 6);
+    // receipts above the balance cannot add value beyond the balance
+    expect(taxAdjustedValue(...args, { hsa: 100_000, hsaReceipts: 900_000 })).toBeCloseTo(core + 100_000, 6);
+  });
+
+  it('pre-tax and clean TIPS terms are haircut and untouched respectively', () => {
+    expect(taxAdjustedValue(...args, { preTax: 50_000, clean: 20_000 })).toBeCloseTo(core + 50_000 * 0.78 + 20_000, 6);
+  });
+
+  it('hsaTaxableBalance is the balance above receipts', () => {
+    expect(hsaTaxableBalance(100_000, 30_000)).toBe(70_000);
+    expect(hsaTaxableBalance(100_000, 500_000)).toBe(0);
+    expect(hsaTaxableBalance(0, 0)).toBe(0);
   });
 });

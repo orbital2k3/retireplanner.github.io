@@ -8,6 +8,7 @@ import { runProjection, depletionAge as calcDepletionAge } from '../projection';
 import { compareWithWithoutConversion, hasComparableConversionBaseline } from '../comparison';
 import { REC_GOALS } from '../recommender';
 import { FED_BRACKETS_MFJ } from '../taxConstants';
+import { hsaTaxableBalance } from '../taxAdjusted';
 import { resolveStrategy } from '../strategy/resultSettings';
 
 export type CfKind = 'conversion' | 'ordering' | 'taxSourcing' | 'assumption';
@@ -147,8 +148,10 @@ function buildOrdRateSensitivity(
   if (!lastC || !lastB) return null;
 
   // Real end-traditional balances: score(o) = K − T·o, so T = endTrad / inflF
-  const tC = lastC.endTraditional / lastC.inflationFactor;
-  const tB = lastB.endTraditional / lastB.inflationFactor;
+  // The HSA above its receipts and ladder bonds held in IRAs are haircut at the same rate, so they count toward T too.
+  const exposure = (r: typeof lastC) => (r.endTraditional + hsaTaxableBalance(r.endHSA, r.hsaReceiptsBal) + r.endTipsTrad) / r.inflationFactor;
+  const tC = exposure(lastC);
+  const tB = exposure(lastB);
   const deltaTrad = tC - tB;  // typically negative (chosen has less trad, having converted some)
 
   // convAdvantage(o) = atActive + deltaTrad · (activeRate − o)

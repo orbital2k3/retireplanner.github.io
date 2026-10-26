@@ -4,6 +4,7 @@ import { runProjection } from '../projection';
 import { assertProjectionInvariants, assertDeterministic } from '../__invariants__/assertions';
 import { rmdStartAgeForDob } from '../rmd';
 import { arbPlan } from './generators';
+import { enc } from '../__regression__/snapshotUtil';
 
 /**
  * Property-based fuzz tests. Generates random valid plans and asserts that the
@@ -77,13 +78,47 @@ describe('Property-based fuzz: projection invariants', () => {
           if (r.endTotal < -0.5) {
             throw new Error(`negative endTotal at year ${r.year}: ${r.endTotal}`);
           }
-          const sum = r.endTaxable + r.endTraditional + r.endRoth;
+          const sum = r.endTaxable + r.endTraditional + r.endRoth + r.endHSA;
           if (Math.abs(r.endTotal - sum) > 1) {
             throw new Error(`endTotal mismatch at year ${r.year}: ${r.endTotal} vs sum ${sum}`);
           }
         }
       }),
       { numRuns: NUM_RUNS, verbose: true },
+    );
+  }, 120_000);
+
+  it(`a QCD changes after-tax wealth by exactly the tax it saves in its first year (${NUM_RUNS} runs, fixed seed)`, () => {
+    // "QCD never raises lifetime tax" is false: a QCD beyond the RMD spends pre-tax money and leaves taxable
+    // money to grow, which can raise later capital-gains tax while increasing wealth. What holds exactly:
+    // the years before the first QCD are identical, and in that year the gift costs the same either way,
+    // so the end-total difference is the tax difference (federal, state, IRMAA, NIIT, ACA, HSA penalty),
+    // less any shortfall difference. Conversions are off so neither run re-sizes them. The seed is fixed:
+    // the old property failed on ~0.8% of QCD plans, a ~5% chance per CI run.
+    type Row = ReturnType<typeof runProjection>['rows'][number];
+    const tax = (r: Row) => r.fedTax + r.stateTaxAmt + r.irmaa + r.niit + r.acaPremium + r.hsaPenalty;
+    fc.assert(
+      fc.property(arbPlan(), (generated) => {
+        const plan = { ...generated, conversion: { ...generated.conversion, mode: 'off' as const, optimize: false } };
+        const on = runProjection(plan);
+        const off = runProjection(plan, { disableQCD: true });
+        assertProjectionInvariants(on, plan, { skipSpendingCoverage: true });
+        if (!plan.expenseStreams.some((e) => e.category === 'charitable')) {
+          if (enc(on) !== enc(off)) throw new Error('disableQCD changed a plan with no charitable rows');
+          return;
+        }
+        const k = on.rows.findIndex((r) => r.qcd > 0);
+        if (k < 0) return;
+        for (let i = 0; i < k; i++) {
+          if (enc(on.rows[i]) !== enc(off.rows[i])) throw new Error(`year ${on.rows[i].year} differs before the first QCD`);
+        }
+        const a = on.rows[k], b = off.rows[k];
+        const drift = (a.endTotal - b.endTotal) - (tax(b) - tax(a)) - (b.shortfall - a.shortfall);
+        if (Math.abs(drift) > 1) {
+          throw new Error(`first QCD year ${a.year}: end total moved ${(a.endTotal - b.endTotal).toFixed(2)} but tax saved ${(tax(b) - tax(a)).toFixed(2)} (qcd ${a.qcd.toFixed(0)})`);
+        }
+      }),
+      { numRuns: NUM_RUNS, seed: 20261021, verbose: true },
     );
   }, 120_000);
 

@@ -9,7 +9,11 @@ import StateTaxDrag from '../components/charts/StateTaxDrag';
 import ChartFrame from '../components/charts/ChartFrame';
 import { STATE_PROFILES } from '../engine/stateTax';
 import { compareWithWithoutConversion } from '../engine/comparison';
+import { compareWithWithoutQCD, qcdBenefitCopy } from '../engine/qcdBenefit';
+import { computeHsaBenefit, hsaBenefitCopy } from '../engine/hsaBenefit';
 import { fmtK } from '../lib/format';
+import LearnMoreModal from '../components/LearnMoreModal';
+import { QCD_HELP, HSA_HELP } from '../components/learnMoreTopics';
 
 type TaxTab = 'federal' | 'state' | 'irmaa';
 
@@ -28,7 +32,19 @@ export default function TaxPlanning() {
     return q === 'state' || q === 'irmaa' ? q : 'federal';
   })();
   const [tab, setTab] = useState<TaxTab>(initialTab);
+  const [qcdHelpOpen, setQcdHelpOpen] = useState(false);
+  const [hsaHelpOpen, setHsaHelpOpen] = useState(false);
+  // HSA card: what the HSA pays tax-free and (when a retiree keeps contributing) the ACA effect. Null without either.
+  const hsaCopy = useMemo(() => {
+    const b = computeHsaBenefit(plan);
+    return b ? hsaBenefitCopy(b) : null;
+  }, [plan]);
   const cmp = useMemo(() => compareWithWithoutConversion(plan), [plan]);
+  // "Tax saved by QCD": same plan with the gifts paid in cash instead. Null (card hidden) without QCDs.
+  const qcdCopy = useMemo(() => {
+    const b = compareWithWithoutQCD(plan);
+    return b ? qcdBenefitCopy(b) : null;
+  }, [plan]);
   const taxDelta = real
     ? (cmp.cumulativeTaxWith.at(-1) ?? 0) - (cmp.cumulativeTaxNo.at(-1) ?? 0)
     : (cmp.cumulativeTaxWithNom.at(-1) ?? 0) - (cmp.cumulativeTaxNoNom.at(-1) ?? 0);
@@ -61,6 +77,39 @@ export default function TaxPlanning() {
         </div>
       </div>
       <div className="page-body">
+        {tab === 'federal' && qcdCopy && (
+          <div className="insight-card info" style={{ marginBottom: 20, borderRadius: 'var(--radius)' }}>
+            <div className="insight-icon">◆</div>
+            <div className="insight-content">
+              <div className="insight-title">{qcdCopy.title}</div>
+              <div className="insight-body">{qcdCopy.body}</div>
+              <button
+                onClick={() => setQcdHelpOpen(true)}
+                style={{ background: 'transparent', border: 'none', padding: 0, marginTop: 6, cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+              >
+                ⓘ Learn more
+              </button>
+            </div>
+          </div>
+        )}
+        {tab === 'federal' && hsaCopy && (
+          <div className="insight-card success" style={{ marginBottom: 20, borderRadius: 'var(--radius)' }}>
+            <div className="insight-icon">✚</div>
+            <div className="insight-content">
+              <div className="insight-title">{hsaCopy.title}</div>
+              <div className="insight-body">{hsaCopy.body}</div>
+              <button
+                onClick={() => setHsaHelpOpen(true)}
+                style={{ background: 'transparent', border: 'none', padding: 0, marginTop: 6, cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+              >
+                ⓘ Learn more
+              </button>
+            </div>
+          </div>
+        )}
+        {hsaHelpOpen && <LearnMoreModal topic={HSA_HELP} onClose={() => setHsaHelpOpen(false)} />}
+        {qcdHelpOpen && <LearnMoreModal topic={QCD_HELP} onClose={() => setQcdHelpOpen(false)} />}
+
         {tab === 'federal' && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">

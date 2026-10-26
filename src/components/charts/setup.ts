@@ -67,6 +67,10 @@ export const palette = {
   bucketTrad:    '#0d1b2e',   // navy
   bucketRoth:    '#c9a84c',   // gold
   bucketInherited: '#7b5ea7', // muted violet — distinct from all three own-account buckets
+  // HSA: cyan-teal. Run through the dataviz validator against the other bucket colors (all pairs, light
+  // surface): normal-vision ΔE 16 to Taxable green (the earlier #2a9d9a placeholder was 9.9, a FAIL) and no
+  // CVD pair under 12. Contrast on the surface is under 3:1 (like the gold), so charts keep the legend.
+  bucketHSA:     '#2bb3b9',
   incomeOther:   '#3b5e8a',   // blue-slate — distinct from textMuted
   taxOther:      '#7a96b0',   // textMuted — kept for state-tax / IRMAA aggregate
   acaBar:        '#c0714d',   // warm coral — ACA premium (spend, not tax)
@@ -77,7 +81,34 @@ export const bucketColors = {
   traditional: palette.bucketTrad,
   roth: palette.bucketRoth,
   inherited: palette.bucketInherited,
+  hsa: palette.bucketHSA,
 };
+
+const hatchCache = new Map<string, CanvasPattern | string>();
+
+/** A diagonal-stripe fill in `color` on white: how a TIPS ladder is drawn inside its account's color
+ *  (no new solid color). Falls back to the plain color where there is no canvas (tests, SSR). */
+export function hatch(color: string): CanvasPattern | string {
+  const hit = hatchCache.get(color);
+  if (hit) return hit;
+  if (typeof document === 'undefined' || (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent))) return color;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 8;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return color;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 8, 8);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-2, 10); ctx.lineTo(10, -2);
+  ctx.moveTo(-2, 2); ctx.lineTo(2, -2);
+  ctx.moveTo(6, 10); ctx.lineTo(10, 6);
+  ctx.stroke();
+  const pattern = ctx.createPattern(cv, 'repeat') ?? color;
+  hatchCache.set(color, pattern);
+  return pattern;
+}
 
 export const fmtCompact = (n: number): string => {
   if (!isFinite(n)) return '';

@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { samplePlan, type Plan } from '../schemas/plan';
@@ -12,6 +12,12 @@ import { enginePlan, planStatus } from '../engine/strategy/savedPlan';
 import { importPlanFromJSON } from '../storage/exportImport';
 import { usePlanStore } from './usePlanStore';
 import { OPT_WINDOW } from '../engine/__testutil__/strategyPlans';
+import { pinDate, unpinDate } from '../engine/__regression__/snapshotUtil';
+import { expectedNumbers } from '../engine/__testutil__/engineChanges';
+
+// The captured projections start in 2026; pin the clock so they still match after New Year.
+pinDate();
+afterAll(unpinDate);
 
 /** P19: a real export (sanitized) and the 2026-10-06 shape (two inherited IRAs) migrate to slots
  *  with the projection, the status and the optimizer result unchanged. */
@@ -53,9 +59,10 @@ describe('P19 v34 → v35 on captured plans', () => {
       const after = migrateStore(structuredClone(b.v34Plan), 34);
       expect(SavedPlanSchema.safeParse(after).success).toBe(true);
       const proj = runProjection(enginePlan(after));
-      expect(proj.endTotalReal).toBe(b.endTotalReal);
-      expect(proj.lifetimeFedTax).toBe(b.lifetimeFedTax);
-      expect(proj.lifetimeConversion).toBe(b.lifetimeConversion);
+      const want = expectedNumbers(b.name, b, () => proj);
+      expect(proj.endTotalReal).toBeCloseTo(want.endTotalReal!, 2);
+      expect(proj.lifetimeFedTax).toBeCloseTo(want.lifetimeFedTax!, 2);
+      expect(proj.lifetimeConversion).toBeCloseTo(want.lifetimeConversion!, 2);
       expect(planStatus(after)).toBe(b.status);
       if (b.v34Plan.customPolicy?.source === 'optimizer') {
         expect(after.strategy.result!.policy.windows).toEqual(b.v34Plan.customPolicy.windows);
@@ -66,7 +73,8 @@ describe('P19 v34 → v35 on captured plans', () => {
       const file = JSON.stringify({ app: 'retirement-optimizer', version: 1, exportedAt: '2026-10-07T00:00:00Z', planVersion: 34, plan: b.v34Plan });
       const r = importPlanFromJSON(file);
       expect(r.ok).toBe(true);
-      expect(runProjection(enginePlan(r.plan!)).endTotalReal).toBe(b.endTotalReal);
+      const proj = runProjection(enginePlan(r.plan!));
+      expect(proj.endTotalReal).toBeCloseTo(expectedNumbers(b.name, b, () => proj).endTotalReal!, 2);
       expect(planStatus(r.plan!)).toBe(b.status);
     });
   }

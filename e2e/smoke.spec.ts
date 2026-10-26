@@ -5,7 +5,7 @@ import { enginePlan } from '../src/engine/strategy/savedPlan';
 import { fmtM } from '../src/lib/format';
 import { PLAN_STORE_KEY } from '../src/store/planStoreVersion';
 import type { SavedPlan } from '../src/schemas/savedPlan';
-import { optimizedPlanA, optimizedPlanABracketFill, seedPlan, heroStat, gotoDashboard, saved } from './fixtures';
+import { optimizedPlanA, optimizedPlanABracketFill, seedPlan, heroStat, gotoDashboard, saved, qcdGiver, hsaRetiree, tipsRetiree } from './fixtures';
 import { exportPlanToJSON } from '../src/storage/exportImport';
 
 // The UI optimizer runs in a Web Worker; max-spending on planA takes ~5s in Node.
@@ -255,4 +255,214 @@ test('P18 Reset after a pending result leaves no result, no pending result and n
   await expect(page.getByText('Plan Summary', { exact: true })).toBeVisible();
   await expect(pendingBanner(page)).toHaveCount(0);
   await expect(dashboardStale(page)).toHaveCount(0);
+});
+
+test('QCD giver: Projections shows a non-zero QCD column and the Taxes page shows the savings card', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await seedPlan(page, qcdGiver());
+
+  await page.goto('/#/projections');
+  await expect(page.getByText('Year-by-Year Detail', { exact: true }).first()).toBeVisible();
+  const qcdHeader = page.locator('table.data-table thead th', { hasText: /^QCD$/ });
+  await expect(qcdHeader).toBeVisible();
+  const col = await qcdHeader.evaluate((th) => Array.from(th.parentElement!.children).indexOf(th));
+  const firstCell = page.locator('table.data-table tbody tr').first().locator('td').nth(col);
+  await expect(firstCell).toHaveText(/\$[1-9]/);
+
+  await page.goto('/#/taxes');
+  await expect(page.getByText(/^QCDs save you \$/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('Inputs: a charitable expense row shows the QCD checkbox, and unticking it is saved', async ({ page }) => {
+  await seedPlan(page, qcdGiver());
+  await page.goto('/#/inputs');
+  const box = page.getByLabel(/Paid directly to a public charity/);
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  const giving = (await storedPlan(page)).expenseStreams.find((e) => e.category === 'charitable')!;
+  expect(giving.qcd).toBe(false);
+});
+
+test('a plan saved by v35 with a current result opens with no stale banner and the same numbers', async ({ page }) => {
+  const plan = optimizedPlanA();
+  const before = runProjection(enginePlan(plan));
+  await seedPlan(page, plan, 'real', 35);
+  await gotoDashboard(page);
+  await expect(dashboardStale(page)).toHaveCount(0);
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(fmtM(before.endTotalReal));
+  await page.goto('/#/inputs');
+  await expect(staleBanner(page)).toHaveCount(0);
+  expect((await storedPlan(page)).strategy.result?.inputKey).toBe(plan.strategy.result?.inputKey);
+});
+
+test('HSA retiree: the HSA column group, the Sankey flows and the Taxes card show up', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await seedPlan(page, hsaRetiree());
+
+  // Projections: the HSA columns are opt-in through the chooser.
+  await page.goto('/#/projections');
+  await expect(page.getByText('Year-by-Year Detail', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('table.data-table thead th', { hasText: /^HSA Bal\.$/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /Show \/ Hide Columns/ }).click();
+  await page.locator('label', { hasText: /^HSA$/ }).locator('input[type=checkbox]').check();
+  const header = page.locator('table.data-table thead th', { hasText: /^HSA Bal\.$/ });
+  await expect(header).toBeVisible();
+  const col = await header.evaluate((th) => Array.from(th.parentElement!.children).indexOf(th));
+  await expect(page.locator('table.data-table tbody tr').first().locator('td').nth(col)).toHaveText(/\$[1-9]/);
+
+  // Dashboard Sankey: the first year the retiree contributes (age 55); at 65 the HSA starts paying medical bills.
+  await gotoDashboard(page);
+  const year = page.getByLabel('Cash-flow year selector');
+  await year.fill('0');
+  await expect(page.getByText('Contributed to HSA')).toBeVisible();
+  await year.fill('10');
+  await expect(page.getByText('Medical & IRMAA (HSA)')).toBeVisible();
+
+  // Taxes: the HSA card with the ACA effect of the contribution.
+  await page.goto('/#/taxes');
+  await expect(page.getByText(/^Your HSA covers .*medical bills from 65$/)).toBeVisible();
+  await expect(page.getByText(/Contributing \$[\d,]+ a year on an HSA-eligible plan before 65/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('Inputs: entering an HSA is saved, and the HSA return and payment policy appear with it', async ({ page }) => {
+  await seedPlan(page, saved(planA_simple()));
+  await page.goto('/#/inputs');
+  // Nothing HSA-ish until an account exists: no HSA return field, no policy row.
+  await expect(page.getByText('HSA pays medical expenses from age')).toHaveCount(0);
+  await page.getByRole('button', { name: /Health savings account \(HSA\)/ }).first().click();
+  const balance = page.locator('label', { hasText: /^HSA balance$/ }).locator('xpath=following-sibling::div//input').first();
+  await balance.fill('62000');
+  await balance.blur();
+  await expect(page.getByText('HSA pays medical expenses from age')).toBeVisible();
+  await expect(page.locator('label', { hasText: /^HSA/ }).filter({ hasText: 'Health savings' })).toBeVisible();
+  expect((await storedPlan(page)).portfolio.personA.hsa).toBe(62_000);
+  // Setting the policy to its default (65) is stored as "absent" so it never marks a result stale.
+  await page.getByText('HSA pays medical expenses from age').locator('xpath=following-sibling::select').selectOption('70');
+  expect((await storedPlan(page)).portfolio.hsaPolicy).toEqual({ payMedicalFromAge: 70 });
+  await page.getByText('HSA pays medical expenses from age').locator('xpath=following-sibling::select').selectOption('65');
+  expect((await storedPlan(page)).portfolio.hsaPolicy).toBeUndefined();
+});
+
+test('a plan saved by v36 with a current result opens with no stale banner and the same numbers', async ({ page }) => {
+  const plan = optimizedPlanA();
+  const before = runProjection(enginePlan(plan));
+  await seedPlan(page, plan, 'real', 36);
+  await gotoDashboard(page);
+  await expect(dashboardStale(page)).toHaveCount(0);
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(fmtM(before.endTotalReal));
+  await page.goto('/#/inputs');
+  await expect(staleBanner(page)).toHaveCount(0);
+  expect((await storedPlan(page)).strategy.result?.inputKey).toBe(plan.strategy.result?.inputKey);
+});
+
+test('TIPS retiree: the TIPS column group, the Sankey source and the Monte Carlo note show up', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await seedPlan(page, tipsRetiree());
+
+  // Projections: the TIPS columns are opt-in through the chooser.
+  await page.goto('/#/projections');
+  await expect(page.getByText('Year-by-Year Detail', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('table.data-table thead th', { hasText: /^Ladder Bal\.$/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /Show \/ Hide Columns/ }).click();
+  await page.locator('label', { hasText: /^TIPS$/ }).locator('input[type=checkbox]').check();
+  const header = page.locator('table.data-table thead th', { hasText: /^Ladder Bal\.$/ });
+  await expect(header).toBeVisible();
+  const col = await header.evaluate((th) => Array.from(th.parentElement!.children).indexOf(th));
+  await expect(page.locator('table.data-table tbody tr').first().locator('td').nth(col)).toHaveText(/\$[1-9]/);
+  await expect(page.locator('table.data-table thead th', { hasText: /^TIPS Accrual$/ })).toBeVisible();
+
+  // Dashboard Sankey: a year with taxable rungs paying cash (plan year 2, age 61).
+  await gotoDashboard(page);
+  await page.getByLabel('Cash-flow year selector').fill('2');
+  await expect(page.getByText('TIPS · Coupons & maturities')).toBeVisible();
+
+  // Monte Carlo: the page explains what the ladder does there.
+  await page.goto('/#/montecarlo');
+  await expect(page.getByText(/Your TIPS ladder pays the same real amounts in every market scenario/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('Inputs: adding a TIPS ladder is saved, and removing the last rung leaves no trace', async ({ page }) => {
+  await seedPlan(page, saved(planA_simple()));
+  await page.goto('/#/inputs');
+  // Nothing ladder-ish until a rung exists.
+  await expect(page.getByText('Adj. principal')).toHaveCount(0);
+  await page.getByRole('button', { name: '+ Enter bonds I own' }).click();
+  await expect(page.getByText('Adj. principal')).toBeVisible();
+  const ladder = (await storedPlan(page)).portfolio.tipsLadder!;
+  expect(ladder.rungs).toHaveLength(1);
+  expect(ladder.rungs[0]).toMatchObject({ account: 'taxable', whose: 'Household' });
+  // The carve-out flag is only stored when it is switched off.
+  expect(ladder.balancesIncludeLadder).toBeUndefined();
+  await page.getByRole('checkbox', { name: /already include these bonds/ }).uncheck();
+  expect((await storedPlan(page)).portfolio.tipsLadder!.balancesIncludeLadder).toBe(false);
+  // Pasting rungs from CSV
+  await page.getByRole('button', { name: 'Paste from CSV' }).click();
+  await page.getByLabel('Paste TIPS rungs').fill('2033, 20000, 1.25%, roth');
+  await page.getByRole('button', { name: 'Add rungs' }).click();
+  expect((await storedPlan(page)).portfolio.tipsLadder!.rungs).toHaveLength(2);
+  // Removing every rung removes the ladder from the saved plan.
+  await page.getByRole('button', { name: 'Remove rung' }).first().click();
+  await page.getByRole('button', { name: 'Remove rung' }).first().click();
+  expect((await storedPlan(page)).portfolio.tipsLadder).toBeUndefined();
+});
+
+test('TIPS builder: build rungs, see them in the ladder table, a Projections column and the Monte Carlo comparison', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await seedPlan(page, saved(planA_simple()));
+  await page.goto('/#/inputs');
+  await page.getByRole('button', { name: 'Build a ladder…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Build a TIPS ladder' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Buy with money from').selectOption('taxable');
+  const add = dialog.getByRole('button', { name: /^Add \d+ rungs? to ladder$/ });
+  const n = Number((await add.innerText()).match(/\d+/)![0]);
+  expect(n).toBeGreaterThan(0);
+  await add.click();
+  await expect(dialog).toHaveCount(0);
+
+  // Saved as appended rungs; the carve-out flag is left absent.
+  const ladder = (await storedPlan(page)).portfolio.tipsLadder!;
+  expect(ladder.rungs).toHaveLength(n);
+  expect(ladder.rungs.every((r) => r.account === 'taxable' && r.couponRate === 0.019)).toBe(true);
+  expect(ladder.balancesIncludeLadder).toBeUndefined();
+  await expect(page.getByText(new RegExp(`${n} rungs`))).toBeVisible();
+  await expect(page.locator('.tips-row')).toHaveCount(n + 1); // header + rungs
+
+  // Projections: the ladder balance column shows the rungs.
+  await page.goto('/#/projections');
+  await page.getByRole('button', { name: /Show \/ Hide Columns/ }).click();
+  await page.locator('label', { hasText: /^TIPS$/ }).locator('input[type=checkbox]').check();
+  const header = page.locator('table.data-table thead th', { hasText: /^Ladder Bal\.$/ });
+  await expect(header).toBeVisible();
+  const col = await header.evaluate((th) => Array.from(th.parentElement!.children).indexOf(th));
+  await expect(page.locator('table.data-table tbody tr').first().locator('td').nth(col)).toHaveText(/\$[1-9]/);
+
+  // Monte Carlo: with vs without the ladder, on a short run.
+  await page.goto('/#/montecarlo');
+  await page.locator('input[type=number][step="50"]').fill('200');
+  await page.getByRole('button', { name: /Run Simulation/ }).click();
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  const table = page.getByRole('table', { name: 'With vs without the TIPS ladder' });
+  await expect(table).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByText('Money left in accounts')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('a plan saved by v37 with a current result opens with no stale banner and the same numbers', async ({ page }) => {
+  const plan = optimizedPlanA();
+  const before = runProjection(enginePlan(plan));
+  await seedPlan(page, plan, 'real', 37);
+  await gotoDashboard(page);
+  await expect(dashboardStale(page)).toHaveCount(0);
+  await expect(heroStat(page, 'Gross End Balance')).toHaveText(fmtM(before.endTotalReal));
+  await page.goto('/#/inputs');
+  await expect(staleBanner(page)).toHaveCount(0);
+  expect((await storedPlan(page)).strategy.result?.inputKey).toBe(plan.strategy.result?.inputKey);
 });

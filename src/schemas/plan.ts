@@ -79,6 +79,9 @@ export const AssumptionsSchema = z.object({
   legacyTargetTaxAdjReal: z.number().nonnegative().default(0),
   tradReturn: z.number().default(0.055),
   rothReturn: z.number().default(0.055),
+  /** Expected annual growth of owned HSA balances. Absent = tradReturn.
+   *  Optional (not .default) so old saved plans keep their optimizer key. */
+  hsaReturn: z.number().optional(),
   inflation: z.number(),
   // ACA marketplace premium modeling (pre-Medicare gap years)
   modelACA: z.boolean().default(false),
@@ -125,12 +128,64 @@ export const PersonPortfolioSchema = z.object({
   // behavior, so old persisted plans parse unchanged and need no data migration.
   spousalContribution: z.number().nonnegative().optional(),
   spousalTarget: z.enum(['traditional', 'roth']).optional(),
+  // Owned health savings account (HSA). HSAs are individual, so these sit per person. All
+  // optional for the same reason as spousalContribution: absent is exactly the pre-existing
+  // behavior and old plans need no migration.
+  /** HSA balance at plan start. */
+  hsa: z.number().nonnegative().optional(),
+  /** Annual contribution in today's dollars; the engine caps it at the legal limit. */
+  hsaContribution: z.number().nonnegative().optional(),
+  /** Coverage tier. Absent = 'self'. The family limit is shared by spouses. */
+  hsaCoverage: z.enum(['self', 'family']).optional(),
+  /** Keep contributing after retiring (before 65) on an HSA-eligible ACA plan. */
+  hsaContribInRetirement: z.boolean().optional(),
+  /** Unreimbursed past qualified medical expenses (shoebox receipts), claimable tax-free. */
+  hsaReceipts: z.number().nonnegative().optional(),
 });
 export type PersonPortfolio = z.infer<typeof PersonPortfolioSchema>;
+
+export const HsaPolicySchema = z.object({
+  /** Owner's age from which the HSA pays medical-tagged spending (and IRMAA at 65+).
+   *  0 = always pay. Absent policy = 65. Before this age medical bills are paid from other
+   *  accounts and logged as receipts. */
+  payMedicalFromAge: z.number().int().min(0).max(120),
+});
+export type HsaPolicy = z.infer<typeof HsaPolicySchema>;
+
+/** One rung of a TIPS ladder: a Treasury inflation-protected bond held to maturity. */
+export const TipsRungSchema = z.object({
+  id: z.string(),
+  /** Calendar year the bond matures. */
+  maturityYear: z.number().int().min(1990).max(2200),
+  /** Today's inflation-adjusted principal (the figure on a brokerage statement). */
+  adjustedPrincipal: z.number().positive(),
+  /** Par (original face) value. Sets the deflation floor at maturity. Absent = adjustedPrincipal. */
+  faceValue: z.number().positive().optional(),
+  /** Fixed real coupon, e.g. 0.0125. */
+  couponRate: z.number().min(0).max(0.2),
+  account: z.enum(['taxable', 'traditional', 'roth']),
+  /** Whose IRA holds it. Only meaningful for traditional rungs (it sets the RMD owner). */
+  whose: z.enum(['A', 'B', 'Household']),
+}).refine((r) => r.account !== 'traditional' || r.whose !== 'Household', {
+  message: 'A pre-tax rung must belong to Person A or Person B',
+  path: ['whose'],
+});
+export type TipsRung = z.infer<typeof TipsRungSchema>;
+
+export const TipsLadderSchema = z.object({
+  rungs: z.array(TipsRungSchema),
+  /** True (or absent): the account balances entered already include these bonds, so the engine
+   *  carves them out. False: they are on top of the entered balances. */
+  balancesIncludeLadder: z.boolean().optional(),
+});
+export type TipsLadder = z.infer<typeof TipsLadderSchema>;
 
 export const PortfolioSchema = z.object({
   personA: PersonPortfolioSchema,
   personB: PersonPortfolioSchema.optional(),
+  hsaPolicy: HsaPolicySchema.optional(),
+  /** Optional TIPS ladder. Absent (or no rungs) is exactly the pre-ladder behavior. */
+  tipsLadder: TipsLadderSchema.optional(),
 });
 export type Portfolio = z.infer<typeof PortfolioSchema>;
 
@@ -184,6 +239,13 @@ export const ExpenseStreamSchema = z.object({
   survivorPct: z.number().min(0).max(1),
   annualAmount: z.number().nonnegative(),
   inflationPct: GrowthRateSchema,
+  // Spending tag. Absent === 'general' === pre-v36 behavior. 'medical' rows can be paid from an HSA;
+  // 'charitable' rows are QCD-eligible. Optional with no default so existing saved plans keep their
+  // optimizer key (a default would change every key and mark saved results stale).
+  category: z.enum(['general', 'medical', 'charitable']).optional(),
+  // Charitable rows only: false when the gift is not paid directly to a public charity (donor-advised
+  // fund, private foundation), which excludes it from QCD. Absent === true.
+  qcd: z.boolean().optional(),
 });
 export type ExpenseStream = z.infer<typeof ExpenseStreamSchema>;
 

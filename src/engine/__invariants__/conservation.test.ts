@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runProjection, type ProjectionResult } from '../projection';
-import { assertPortfolioConservation } from './assertions';
+import { assertPortfolioConservation, assertProjectionInvariants } from './assertions';
 import type { Plan, LumpSumEvent } from '../../schemas/plan';
 import * as G from '../__golden/plans';
 
@@ -110,6 +110,24 @@ describe('portfolio conservation: golden plans', () => {
         if (r.endTotal > 1) expect(r.shortfall, `age ${r.ageA}`).toBe(0);
       }
       if (!proj.rows.some((r) => r.ranOut)) expect(proj.lifetimeShortfallReal).toBe(0);
+    });
+  }
+});
+
+describe('no-overdraw invariant in the injection year', () => {
+  // The inherited account can pay its own forced distribution in the year it arrives; the invariant used to
+  // leave the injection out of "available" and flag an overdraw when the owner's own account was empty.
+  for (const [bucket, own] of [['inheritedPreTaxIRA', 'traditional'], ['inheritedRoth', 'roth']] as const) {
+    it(`${bucket} with an empty own ${own} balance`, () => {
+      const p = singlePlan();
+      p.portfolio.personA = { ...p.portfolio.personA, [own]: 0, annualContribution: 0 };
+      p.lumpSumEvents = [{ ...inherit(bucket, 300_000), ownerStartedRmds: true }];
+      const proj = runProjection(p);
+      const year = proj.rows.find((r) => r.ageA === 66)!;
+      expect((year.lumpSumForcedTradDist ?? 0) + (year.lumpSumForcedRothDist ?? 0)).toBeGreaterThan(0);
+      expect(own === 'traditional' ? year.begTraditional : year.begRoth).toBe(0);
+      // The tracked inherited balance earns no growth in its injection year, like the account (M12).
+      expect(() => assertProjectionInvariants(proj, p, { skipSpendingCoverage: true })).not.toThrow();
     });
   }
 });

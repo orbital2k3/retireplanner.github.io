@@ -1,6 +1,7 @@
 import type { Insight, InsightContext } from '../index';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, SS_TAXABLE_PCT } from '../../taxConstants';
 import { fmtUSD } from '../../../lib/format';
+import { rmdCashOf } from '../../qcd';
 
 /** Detects a year where the household crosses from one marginal bracket to a higher
  *  one — typically because RMDs and SS taxable portion stack on top of withdrawals.
@@ -29,7 +30,7 @@ export function bracketCliffRule(ctx: InsightContext): Insight | null {
       firstCrossAge = r.ageA;
       fromRate = brackets[prevBracket][1];
       toRate = brackets[bIdx][1];
-      driverRmd = r.rmd / r.inflationFactor;
+      driverRmd = rmdCashOf(r) / r.inflationFactor; // only the RMD that counts as income
     }
     prevBracket = bIdx;
   }

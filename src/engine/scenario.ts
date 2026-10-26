@@ -97,7 +97,8 @@ export function defaultScenarios(base?: Plan): Scenario[] {
   return [
     { id: 'retire-earlier', name: 'Retire 3 Years Earlier', overrides: { personA: { retirementAge: Math.max(50, baselineRetire - 3) } }, createdAt: new Date().toISOString() },
     { id: 'retire-later', name: 'Retire 3 Years Later', overrides: { personA: { retirementAge: Math.min(80, baselineRetire + 3) } }, createdAt: new Date().toISOString() },
-    { id: 'lower-return', name: 'Lower Returns (4%)', overrides: { assumptions: { taxableReturn: 0.04, tradReturn: 0.04, rothReturn: 0.04 } }, createdAt: new Date().toISOString() },
+    // The HSA too: an explicit hsaReturn would otherwise keep its rate (absent, it already follows pre-tax).
+    { id: 'lower-return', name: 'Lower Returns (4%)', overrides: { assumptions: { taxableReturn: 0.04, tradReturn: 0.04, rothReturn: 0.04, hsaReturn: 0.04 } }, createdAt: new Date().toISOString() },
     { id: 'higher-inflation', name: 'Higher Inflation (4%)', overrides: { assumptions: { inflation: 0.04 } }, createdAt: new Date().toISOString() },
   ];
 }

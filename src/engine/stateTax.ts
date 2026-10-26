@@ -132,6 +132,10 @@ function applyBrackets(taxable: number, brackets: [number, number][], inflationF
  * @param numOver65   Number of taxpayers aged 65+ (IL additional exemption).
  * @param inflationFactor  Cumulative inflation from plan start; scales all nominal thresholds.
  */
+/** States that do not follow the federal HSA deduction (of the modeled ones, only California; New
+ *  Jersey also taxes HSAs but is not modeled). Every other state starts from federal AGI. */
+export const HSA_NONCONFORMING_STATES: ReadonlySet<string> = new Set(['CA']);
+
 export function stateTax(
   state: string,
   nonExemptOrdinaryIncome: number,
@@ -141,6 +145,8 @@ export function stateTax(
   numOver65 = 0,
   customRate?: number,
   ssIncome = 0,
+  /** Above-the-line deduction the state follows (e.g. a retiree's HSA contribution). Default 0. */
+  deduction = 0,
 ): number {
   const profile = STATE_PROFILES[state];
   if (!profile) return 0;
@@ -157,7 +163,9 @@ export function stateTax(
     ? 0
     : Math.max(0, retirementDistributions - retExclusion);
 
-  const grossIncome = nonExemptOrdinaryIncome + stateSS + taxableRetirement;
+  const grossIncome = deduction > 0
+    ? Math.max(0, nonExemptOrdinaryIncome + stateSS + taxableRetirement - deduction)
+    : nonExemptOrdinaryIncome + stateSS + taxableRetirement;
 
   // Standard deduction (NY-style, filing-status based).
   const stdDed = (isMFJ ? profile.stdDeductionMFJ : profile.stdDeductionSingle) * inflationFactor;

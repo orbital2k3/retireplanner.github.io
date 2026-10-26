@@ -490,5 +490,14 @@ export function migrateStoredPlan(plan: Record<string, unknown>, fromVersion: nu
   if (fromVersion < 34) migratePlanToV34(plan);
   // v35: flat strategy fields → strategy slots (runs after every flat-shape migration).
   if (fromVersion < 35) return migrateFlatToSaved(plan) as unknown as Record<string, unknown>;
+  // v36 (QCD): no migration. The new expense `category` and `qcd` fields are optional with no default,
+  // so a v35 plan is already valid and its optimizer key is unchanged. Writing a default here would
+  // change every saved plan's key and mark its result out of date (see planMigrationV36.test.ts).
+  // v37 (HSA): no migration either. The per-person hsa* fields, portfolio.hsaPolicy and
+  // assumptions.hsaReturn are optional with no default, so a v36 plan is valid as it stands and its
+  // optimizer key is unchanged (see planMigrationV37.test.ts).
+  // v38 (TIPS ladder): no migration either. portfolio.tipsLadder is optional with no default (and its
+  // balancesIncludeLadder flag is optional too), so a v37 plan is valid as it stands and its optimizer key
+  // is unchanged (see planMigrationV38.test.ts).
   return plan;
 }

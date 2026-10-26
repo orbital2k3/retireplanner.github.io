@@ -1,11 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { runAndCompare } from './harness';
+import { afterAll, describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { runAndCompare, runAndCompareHsa, runAndCompareQcd, runAndCompareTips } from './harness';
+import { runProjection } from '../projection';
+import { pinDate, unpinDate } from '../__regression__/snapshotUtil';
 import {
   planA_simple, planB_largeTradSingle, planC_bracketFillConv,
   planD_singleFIRE, planE_allRothCouple, planF_allTradCouple,
   planG_californiaCouple, planH_survivorMidPlan,
   planI_multiStreamIncome, planJ_personBZeroBalance,
-  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD,
+  planK_wideAgeGap, planL_survivorARMD, planM_survivorBRMD, planQ_qcdGiver, planR_hsaEarlyRetiree, planS_tipsLadder, planT_qcdEdges,
 } from './plans';
 
 /**
@@ -17,7 +21,14 @@ import {
  *
  * NOTE: When real Excel-validated CSVs are available, replace the .csv files in this folder
  * to convert these from regression checks into Excel-parity checks.
+ *
+ * The projection starts in the current calendar year (ages, RMD/QCD eligibility, OBBBA years, ladder
+ * maturities), so the clock is pinned to the year the CSVs were captured; otherwise every golden would
+ * fail on January 1.
  */
+pinDate(); // at load, so fixtures built while collecting describe blocks see the pinned year too
+afterAll(unpinDate);
+
 describe('Golden projection snapshots', () => {
   it('Plan A — Simple couple, taxfirst, IL', () => {
     const r = runAndCompare('planA_simple', planA_simple());
@@ -82,5 +93,106 @@ describe('Golden projection snapshots', () => {
   it('Plan M — Survivor: B dies at 78, A continues RMDs on merged balance', () => {
     const r = runAndCompare('planM_survivorBRMD', planM_survivorBRMD());
     expect(r.ok, r.message).toBe(true);
+  });
+
+  it('Plan Q — QCD giver: 72+ NY couple gives $30k/yr straight from their IRAs', () => {
+    const r = runAndCompare('planQ_qcdGiver', planQ_qcdGiver());
+    expect(r.ok, r.message).toBe(true);
+    const q = runAndCompareQcd('planQ_qcdGiver', planQ_qcdGiver());
+    expect(q.ok, q.message).toBe(true);
+  });
+
+  it('Plan Q really exercises QCDs and the Single-filer deduction path', () => {
+    const rows = runProjection(planQ_qcdGiver()).rows;
+    expect(rows.some((r) => r.qcd > 0)).toBe(true);
+    expect(rows.some((r) => r.filingStatus === 'Single')).toBe(true);
+    expect(rows.filter((r) => r.qcd > 0).every((r) => r.qcd <= r.charitableSpend + 1e-6)).toBe(true);
+  });
+
+  it('Plan T — QCD edges: 70 but not yet 70½, giving above the limit, a second limit, DAF gift, Single survivor', () => {
+    const r = runAndCompare('planT_qcdEdges', planT_qcdEdges());
+    expect(r.ok, r.message).toBe(true);
+    const q = runAndCompareQcd('planT_qcdEdges', planT_qcdEdges());
+    expect(q.ok, q.message).toBe(true);
+  });
+
+  it('Plan T really exercises the QCD edges', () => {
+    const rows = runProjection(planT_qcdEdges()).rows;
+    const at = (y: number) => rows[y - 2026];
+    const limit = (r: (typeof rows)[number]) => 111_000 * r.inflationFactor;
+    // 2026: A is 70 but turns 70½ only in Feb 2027, so the gift is cash and earns the $2,000 joint deduction
+    expect(at(2026).qcd).toBe(0);
+    expect(at(2026).charityDeduction).toBe(2_000);
+    // 2027: one limit, giving above it; the QCD is all beyond the RMD (A's RMDs start at 73)
+    expect(at(2027).qcd).toBeCloseTo(limit(at(2027)), 6);
+    expect(at(2027).qcdBeyondRmd).toBeCloseTo(at(2027).qcd, 6);
+    expect(at(2027).qcdB).toBe(0);
+    expect(at(2027).charityDeduction).toBe(2_000);
+    // 2028: B is 70½ in the year she turns 70 (born in March): a second limit, and B pays part
+    expect(at(2028).qcdB).toBeGreaterThan(0);
+    // the donor-advised-fund row is never a QCD and never deducted: once QCDs cover the public giving, no deduction
+    expect(at(2028).qcd).toBeCloseTo(at(2028).charitableSpend - 5_000 * Math.pow(1.025, 2), 6);
+    expect(at(2028).charityDeduction).toBe(0);
+    // after A dies, B files Single: one limit again, and the excess earns the $1,000 single deduction
+    const survivor = rows.filter((r) => r.phase === 'Survivor');
+    expect(survivor.length).toBeGreaterThan(0);
+    expect(survivor.every((r) => r.filingStatus === 'Single' && r.charityDeduction === 1_000 && r.qcd === r.qcdB)).toBe(true);
+    expect(survivor.every((r) => Math.abs(r.qcd - limit(r)) < 1e-6)).toBe(true);
+    expect(rows.every((r) => !r.ranOut)).toBe(true);
+  });
+
+  it.skipIf(process.env.CREATE_GOLDENS === '1' || process.env.UPDATE_GOLDENS === '1')('a missing CSV fails instead of being written', () => {
+    for (const run of [runAndCompare, runAndCompareHsa, runAndCompareTips, runAndCompareQcd]) {
+      const r = run('noSuchPlan', planA_simple());
+      expect(r.ok).toBe(false);
+      expect(r.message).toMatch(/^missing noSuchPlan\..*csv: run once with CREATE_GOLDENS=1/);
+    }
+    expect(fs.readdirSync(path.dirname(new URL(import.meta.url).pathname)).some((f) => f.startsWith('noSuchPlan'))).toBe(false);
+  });
+
+  it('Plan R — HSA early retiree: ACA bronze, $150k HSA, contributions in retirement, receipts', () => {
+    const r = runAndCompare('planR_hsaEarlyRetiree', planR_hsaEarlyRetiree());
+    expect(r.ok, r.message).toBe(true);
+    const h = runAndCompareHsa('planR_hsaEarlyRetiree', planR_hsaEarlyRetiree());
+    expect(h.ok, h.message).toBe(true);
+  });
+
+  it('Plan R really exercises the HSA: retiree contributions, receipts, qualified payments and the survivor merge', () => {
+    const rows = runProjection(planR_hsaEarlyRetiree()).rows;
+    expect(rows.filter((r) => r.hsaContribRet > 0).map((r) => r.ageA)).toEqual([55, 56, 57, 58, 59, 60, 61, 62, 63, 64]);
+    expect(rows.some((r) => r.hsaReceiptsBal > 22_000)).toBe(true);           // bills paid elsewhere before 65
+    expect(rows.find((r) => r.ageA === 64)!.hsaQualifiedWD).toBe(0);
+    expect(rows.find((r) => r.ageA === 65)!.hsaQualifiedWD).toBeGreaterThan(0);
+    expect(rows.some((r) => r.acaPremium > 0)).toBe(true);
+    expect(rows.some((r) => r.phase === 'Survivor' && r.endHSA > 0)).toBe(true);
+    expect(rows.every((r) => r.hsaNonQualWD === 0 && r.hsaPenalty === 0)).toBe(true);
+  });
+
+  it('Plan S — TIPS ladder: taxable bridge rungs, IRA and Roth rungs, ACA, survivor rung', () => {
+    const r = runAndCompare('planS_tipsLadder', planS_tipsLadder());
+    expect(r.ok, r.message).toBe(true);
+    const t = runAndCompareTips('planS_tipsLadder', planS_tipsLadder());
+    expect(t.ok, t.message).toBe(true);
+  });
+
+  it('Plan S really exercises the ladder: phantom income, IRA and Roth cash, the RMD base and the survivor rung', () => {
+    const rows = runProjection(planS_tipsLadder()).rows;
+    const byYear = (y: number) => rows[y - 2026];
+    // taxable rungs: indexation and coupons are taxed (federal only), and the ACA income carries them
+    expect(rows.filter((r) => r.tipsOrdInc > 0 && r.tipsCash > 0).length).toBeGreaterThanOrEqual(6);
+    expect(rows.some((r) => r.acaPremium > 0 && r.tipsOrdInc > 0)).toBe(true);
+    // the 2027 rung pays out at maturity: 40,000 x (1.025)^2 above its 36,500 par, so no floor bonus
+    expect(byYear(2027).tipsMaturity).toBeGreaterThan(40_000);
+    expect(byYear(2027).tipsFloorBonus).toBe(0);
+    // IRA and Roth rungs pay back into their accounts
+    expect(byYear(2033).tipsToTrad).toBeGreaterThan(50_000);
+    expect(byYear(2030).tipsToRoth).toBeGreaterThan(25_000);
+    // A dies at 85 (2051); the 2055 rung is then held in B's IRA and counts in B's RMD base
+    const survivor = rows.filter((r) => r.phase === 'Survivor' && r.year + 2025 < 2055);
+    expect(survivor.length).toBeGreaterThan(0);
+    expect(survivor.every((r) => r.endTipsTrad > 0)).toBe(true);
+    expect(rows.some((r) => r.rmd > 0)).toBe(true);
+    expect(rows.every((r) => r.rmdUnmet === 0)).toBe(true);
+    expect(rows[rows.length - 1].begTips).toBe(0);                     // everything has matured by the end
   });
 });

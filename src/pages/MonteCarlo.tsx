@@ -19,6 +19,7 @@ import type { SavedPlan } from '../schemas/savedPlan';
 import LearnMoreModal from '../components/LearnMoreModal';
 import { MC_SIMULATE_HELP, MC_OPTIMIZE_HELP, type HelpTopic } from '../components/learnMoreTopics';
 import { type McPosture } from '../engine/goalLabels';
+import { planWithoutLadder, resolveTipsLadder } from '../engine/tipsLadder';
 import { loadEquityPct, saveEquityPct } from '../lib/mcPrefs';
 import StalePlanBanner from '../components/StalePlanBanner';
 
@@ -165,6 +166,27 @@ export default function MonteCarlo() {
       setMcPlanKey(planKey);
     } finally {
       setRunning(false);
+    }
+  };
+
+  // TB-3: the same simulation with the ladder's money left in its accounts. Kept with the result it was
+  // computed for, so any new run (or a plan change, which clears the result) hides a stale comparison.
+  const [ladderCompare, setLadderCompare] = useState<{ for: NonNullable<typeof result>; without: NonNullable<typeof result> } | null>(null);
+  const [comparingLadder, setComparingLadder] = useState(false);
+  const [compareFailed, setCompareFailed] = useState(false);
+  const ladderFree = useMemo(() => planWithoutLadder(enginePlan(robustnessPlan ?? mcBase), new Date().getFullYear()), [robustnessPlan, mcBase]);
+  const compareLadder = async () => {
+    if (!result || !ladderFree) return;
+    setComparingLadder(true);
+    setCompareFailed(false);
+    try {
+      const without = await getEngineWorker().monteCarlo(ladderFree, { trials, model: 'historical', equityPct: equityPct / 100, seed });
+      setLadderCompare({ for: result, without });
+    } catch {
+      // A worker error must not become an unhandled rejection; say so and let the user retry.
+      setCompareFailed(true);
+    } finally {
+      setComparingLadder(false);
     }
   };
 
@@ -323,6 +345,11 @@ export default function MonteCarlo() {
                   </div>
                 </div>
 
+                {resolveTipsLadder(mcFlat.portfolio, new Date().getFullYear()) !== null && (
+                  <div className="plan-warning info" style={{ marginBottom: 12 }}>
+                    Your TIPS ladder pays the same real amounts in every market scenario, so the years it funds don't depend on returns. That is where its value shows up here. Because it stands in for bonds, consider raising Equity % for the rest of your portfolio.
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <button className="btn btn-gold" onClick={run} disabled={running || optimizingRobust}>
                     {running ? 'Running…' : '▶ Run Simulation'}
@@ -519,6 +546,45 @@ export default function MonteCarlo() {
             <div className="metric-sub">Favorable scenario ({real ? "today's $" : 'nominal $'})</div>
           </div>
         </div>
+
+        {result && !dirty && ladderFree && (
+          <div className="panel" style={{ marginBottom: 16 }}>
+            <div className="panel-body" style={{ padding: '12px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>With vs without your TIPS ladder</span>
+                {ladderCompare?.for !== result && (
+                  <button className="btn" onClick={compareLadder} disabled={comparingLadder || running || optimizingRobust}>
+                    {comparingLadder ? 'Running…' : 'Compare'}
+                  </button>
+                )}
+              </div>
+              <div className="helper-text" style={{ marginTop: 4 }}>
+                Runs the same {trials.toLocaleString()} market histories with the ladder's money left in its accounts at your {mixLabel} mix.
+              </div>
+              {compareFailed && <div className="plan-warning error" role="alert" style={{ marginTop: 6 }}>The comparison could not be run. Try Compare again.</div>}
+              {ladderCompare?.for === result && (
+                <table style={{ marginTop: 8, fontSize: 12, borderCollapse: 'collapse' }} aria-label="With vs without the TIPS ladder">
+                  <thead>
+                    <tr style={{ color: 'var(--text-muted)', textAlign: 'right' }}>
+                      <th style={{ textAlign: 'left', padding: '2px 14px 2px 0', fontWeight: 500 }}></th>
+                      <th style={{ padding: '2px 14px', fontWeight: 500 }}>Chance of success</th>
+                      <th style={{ padding: '2px 0 2px 14px', fontWeight: 500 }}>10th percentile end ({real ? "today's $" : 'nominal $'})</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {([['With the ladder', result], ['Money left in accounts', ladderCompare.without]] as const).map(([name, r]) => (
+                      <tr key={name} style={{ textAlign: 'right' }}>
+                        <td style={{ textAlign: 'left', padding: '2px 14px 2px 0', color: 'var(--text-secondary)' }}>{name}</td>
+                        <td style={{ padding: '2px 14px', fontWeight: 600 }}>{fmtPct(r.successRate, 0)}</td>
+                        <td style={{ padding: '2px 0 2px 14px', fontWeight: 600 }}>{fmtM(real ? r.p10EndBalance : r.p10EndBalanceNominal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
 
         <div style={{ marginBottom: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Historical worst-case cohorts</span>

@@ -22,5 +22,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/engine/__golden/**"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/engine/__golden/**", "src/engine/__regression__/**"]
 }

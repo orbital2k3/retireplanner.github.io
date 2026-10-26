@@ -8,6 +8,7 @@ export type DecisionCode =
   | 'conv-policy-zero'
   | 'conv-with-trad-wd'
   | 'conv-during-rmd'
+  | 'qcd-rmd'
   | 'wd-policy-spill'
   | 'wd-bracket-override'
   | 'wd-bracketfill-room'
@@ -44,7 +45,14 @@ export interface YearDecisionContext {
   wdTrd: number;
   wdRth: number;
   gap: number;
-  rmdAmt: number;
+  /** RMD that reached the household as taxable income (the gross RMD less any QCD that satisfied it). */
+  rmdTaxable: number;
+  /** Gross RMD, QCD paid to charity this year, and the part of that QCD beyond the RMD. Optional: absent = no QCD. */
+  rmdGross?: number;
+  qcd?: number;
+  qcdBeyondRmd?: number;
+  /** Part of the QCD taxed under the §408(d)(8)(A) anti-abuse rule. */
+  qcdTaxable?: number;
   bracketOverridden: boolean;
   spill?: { kind: SpillKind; amount: number; tradCap?: number };
   /** Active window percentages, present when a blend-policy window covers this age. */
@@ -140,20 +148,44 @@ function convWithTradWd(ctx: YearDecisionContext): YearDecision {
 }
 
 function convDuringRmd(ctx: YearDecisionContext): YearDecision {
-  const { ageA, year, rmdAmt, tradBalance, ceilForConv, headroomNominal, conv, gap } = ctx;
+  const { ageA, year, rmdTaxable, tradBalance, ceilForConv, headroomNominal, conv, gap } = ctx;
   return {
     year, ageA,
     code: 'conv-during-rmd',
     severity: 'info',
     binding: false,
     text: `Age ${ageA} — the RMD came first and shrank the conversion. ` +
-      `Your ${fmtUSD(rmdAmt)} RMD is mandatory ordinary income and consumed that much bracket space ` +
+      `Your ${fmtUSD(rmdTaxable)} RMD is mandatory ordinary income and consumed that much bracket space ` +
       `before any conversion was considered; it also reduced the convertible pre-tax balance to ${fmtUSD(tradBalance)}. ` +
       `What remained below the ${fmtUSD(ceilForConv)} ceiling was ${fmtUSD(headroomNominal)}, ` +
       `and ${fmtUSD(conv)} was converted. ` +
       `The RMD is spending money, not a withdrawal, so it offsets your ${fmtUSD(gap)} of spending ` +
       `rather than appearing in the withdrawal columns.`,
-    amounts: { rmdAmt, tradBalance, ceilForConv, headroomNominal, conv, gap },
+    amounts: { rmdTaxable, tradBalance, ceilForConv, headroomNominal, conv, gap },
+  };
+}
+
+function qcdRmd(ctx: YearDecisionContext): YearDecision {
+  const { ageA, year, rmdTaxable } = ctx;
+  const qcd = ctx.qcd ?? 0;
+  const beyond = ctx.qcdBeyondRmd ?? 0;
+  const gross = ctx.rmdGross ?? 0;
+  const covered = qcd - beyond;
+  const taxed = ctx.qcdTaxable ?? 0;
+  const rmdPart = gross > 1
+    ? `It covered ${fmtUSD(covered)} of your ${fmtUSD(gross)} required withdrawal, so only ${fmtUSD(rmdTaxable)} of it counted as income` +
+      (beyond > 1 ? `, and a further ${fmtUSD(beyond)} went to charity beyond the requirement.` : '.')
+    : 'No withdrawal was required yet, so none of it counted toward an RMD.';
+  return {
+    year, ageA,
+    code: 'qcd-rmd',
+    severity: 'info',
+    binding: false,
+    text: taxed > 1
+      ? `Age ${ageA} — ${fmtUSD(qcd)} went straight from your IRA to charity as a QCD. ${fmtUSD(taxed)} of it was taxed anyway: ` +
+        `deductible IRA contributions made from age 70½ reduce the tax-free amount (IRC §408(d)(8)). ${rmdPart}`
+      : `Age ${ageA} — ${fmtUSD(qcd)} went straight from your IRA to charity as a QCD, so it was not taxed. ${rmdPart}`,
+    amounts: { qcd, qcdBeyondRmd: beyond, rmdGross: gross, rmdTaxable, ...(taxed > 0 ? { qcdTaxable: taxed } : {}) },
   };
 }
 
@@ -254,10 +286,12 @@ export function buildYearDecisions(ctx: YearDecisionContext): YearDecision[] {
 
     // Non-binding pattern callouts (can coexist).
     if (ctx.wdTrd > 1) notes.push(convWithTradWd(ctx));
-    if (ctx.rmdAmt > 1) notes.push(convDuringRmd(ctx));
+    if (ctx.rmdTaxable > 1) notes.push(convDuringRmd(ctx));
   } else if (ctx.convPolicyZero) {
     notes.push(convPolicyZero(ctx));
   }
+
+  if ((ctx.qcd ?? 0) > 1) notes.push(qcdRmd(ctx));
 
   // At most one binding withdrawal-sizing note per year.
   if (ctx.spill && ctx.spill.amount > 0.01) {

@@ -1,8 +1,12 @@
 import type { Plan } from '../schemas/plan';
-import { firstRetirementAgeA } from './streamWindow';
+import { firstRetirementAgeA, householdAgeFrame, resolveWindow } from './streamWindow';
 import { calendarYearAge } from '../lib/ageUtils';
 import { INHERITED_DEADLINE_YEARS } from './taxConstants';
 import { resolveStrategy } from './strategy/resultSettings';
+import { qcdEligible } from './qcd';
+import { effectiveHsaCoverage, hsaBaseLimit, hsaCatchUp, hsaLimit, HSA_MEDICARE_AGE } from './hsa';
+import { tipsLadderIssues } from './tipsValidation';
+import { fmtFull } from '../lib/format';
 
 /**
  * Ages (Person A's frame) with a non-zero manual Roth conversion that will actually run before the
@@ -23,7 +27,7 @@ export function preRetirementConversionAges(livePlan: Plan): number[] {
 
 export interface PlanWarning {
   id: string;
-  severity: 'error' | 'warn';
+  severity: 'error' | 'warn' | 'info';
   message: string;
 }
 
@@ -113,6 +117,137 @@ export function computePlanWarnings(livePlan: Plan): PlanWarning[] {
     } else if (ownerCurrentAge - ev.age > INHERITED_DEADLINE_YEARS) {
       warnings.push({ id: `lump-expired-${ev.id}`, severity: 'warn', message: `"${ev.description}": the 10-year deadline to empty this inherited account has passed, so it is not counted.` });
     }
+  }
+
+  // QCD checks on charitable expense rows (see qcd.ts). A QCD pays gifts straight from the owner's IRA.
+  const ownIraEmpty = (pf: Plan['portfolio']['personA']) =>
+    pf.traditional <= 0
+    && pf.annualContribution * pf.contribSplit.traditional <= 0
+    && ((pf.spousalContribution ?? 0) <= 0 || pf.spousalTarget === 'roth');
+  const firstQcdAge = (dob: string) => (qcdEligible(dob, 70) ? 70 : 71);
+  const frame = householdAgeFrame(plan);
+  // `offset` turns Person A's age into this spouse's age (the frame every stream window uses).
+  const spouses = [
+    { name: plan.personA.name || 'Person A', dob: plan.personA.dob, through: plan.personA.planThroughAge, pf: plan.portfolio.personA, offset: 0 },
+    ...(plan.personB && plan.portfolio.personB && frame.deltaBA !== undefined
+      ? [{ name: plan.personB.name || 'Person B', dob: plan.personB.dob, through: plan.personB.planThroughAge, pf: plan.portfolio.personB, offset: frame.deltaBA }]
+      : []),
+  ];
+  for (const s of plan.expenseStreams) {
+    if (s.category !== 'charitable' || s.annualAmount <= 0) continue;
+    if (s.qcd === false) {
+      warnings.push({
+        id: `qcd-optout-${s.id}`,
+        severity: 'info',
+        message: `"${s.description}" is marked as not paid directly to a public charity (for example a donor-advised fund), so it is taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. It still shows as giving in Projections.`,
+      });
+      continue;
+    }
+    // The engine pools the household's QCD-eligible giving and pays it from either spouse's IRA, so
+    // every spouse who is 70½ and alive in some year of this row's age window could pay it.
+    const w = resolveWindow(s, frame);
+    const fromA = Math.max(w.startAge, frame.startAgeA), toA = Math.min(w.stopAge, frame.horizonA);
+    const canPay = (o: typeof spouses[number]) => {
+      for (let x = fromA; x <= toA; x++) {
+        const age = x + o.offset;
+        if (age >= firstQcdAge(o.dob) && age <= o.through) return true;
+      }
+      return false;
+    };
+    const owners = spouses.filter(canPay);
+    if (owners.length > 0 && owners.every((o) => ownIraEmpty(o.pf))) {
+      const who = owners.length === 1 ? `${owners[0].name}'s IRA is` : `${owners.map((o) => `${o.name}'s`).join(' and ')} IRAs are`;
+      warnings.push({
+        id: `qcd-no-ira-${s.id}`,
+        severity: 'warn',
+        message: `Charitable giving "${s.description}" can't be paid as QCDs because ${who} empty. Gifts will be paid from other accounts.`,
+      });
+    }
+  }
+
+  // HSA checks. Amounts are today's dollars: the limit and the contribution both index with inflation.
+  const hsaWho = [
+    { name: plan.personA.name || 'Person A', age: currentAgeA, claim: plan.personA.ssClaimAge, pf: plan.portfolio.personA },
+    ...(plan.personB && plan.portfolio.personB && currentAgeB !== undefined
+      ? [{ name: plan.personB.name || 'Person B', age: currentAgeB, claim: plan.personB.ssClaimAge, pf: plan.portfolio.personB }]
+      : []),
+  ];
+  const money = (n: number) => fmtFull(Math.round(n));
+  for (const o of hsaWho) {
+    const c = o.pf.hsaContribution ?? 0;
+    if (c <= 0) continue;
+    if (o.age >= Math.max(HSA_MEDICARE_AGE, o.claim)) {
+      warnings.push({
+        id: `hsa-medicare-${o.name}`,
+        severity: 'warn',
+        message: `${o.name}'s HSA contribution is ignored: contributions stop once you are on Medicare (65, or when you claim Social Security if later), and ${o.name} is already past that.`,
+      });
+      continue;
+    }
+    const spouse = hsaWho.find((x) => x !== o);
+    const limit = hsaLimit(effectiveHsaCoverage(o.pf.hsaCoverage, spouse?.pf.hsaCoverage), o.age, 1);
+    if (c > limit + 0.5) {
+      warnings.push({
+        id: `hsa-limit-${o.name}`,
+        severity: 'warn',
+        message: `${o.name}'s HSA contribution of ${money(c)} is above the annual limit of ${money(limit)} (today's dollars; the plan raises it with inflation). Capped at the limit.`,
+      });
+    }
+  }
+  // When either spouse is on family coverage they share one family limit (§223(b)(5); each keeps
+  // their own catch-up).
+  if (hsaWho.length === 2 && hsaWho.some((o) => o.pf.hsaCoverage === 'family')) {
+    const pool = hsaBaseLimit('family', 1) + hsaWho.reduce((s, o) => s + hsaCatchUp(o.age), 0);
+    const asked = hsaWho.reduce((s, o) => s + (o.pf.hsaContribution ?? 0), 0);
+    const eachWithin = hsaWho.every((o) => (o.pf.hsaContribution ?? 0) <= hsaLimit('family', o.age, 1) + 0.5);
+    if (asked > pool + 0.5 && eachWithin) {
+      warnings.push({
+        id: 'hsa-family-pool',
+        severity: 'warn',
+        message: `${hsaWho[0].name} and ${hsaWho[1].name} share one family limit because ${hsaWho.every((o) => o.pf.hsaCoverage === 'family') ? 'both are' : 'one of them is'} on family coverage: together they can put in ${money(pool)}, but ${money(asked)} is entered. The second contribution is capped.`,
+      });
+    }
+  }
+  const hasAnyHsa = hsaWho.some((o) => (o.pf.hsa ?? 0) > 0 || (o.pf.hsaContribution ?? 0) > 0);
+  if (hasAnyHsa && plan.state === 'CA') {
+    warnings.push({
+      id: 'hsa-ca-conformity',
+      severity: 'warn',
+      message: "California doesn't recognize HSAs: state tax on HSA growth isn't modeled.",
+    });
+  }
+
+  // TIPS ladder: rungs bigger than their account are an error (the plan caps them at the balance, so the
+  // numbers would be wrong); stale rungs are ignored; taxable rungs owe tax on money they haven't paid out.
+  const tipsYear = new Date().getFullYear();
+  const tipsIssues = tipsLadderIssues(plan.portfolio, tipsYear, { a: plan.personA.name, b: plan.personB?.name });
+  for (const i of tipsIssues) {
+    if (i.code === 'overflow') {
+      const bal = i.account === 'traditional' ? 'pre-tax balance' : `${i.place} balance`;
+      warnings.push({
+        id: `tips-overflow-${i.place}`,
+        severity: 'error',
+        message: `TIPS rungs in ${i.place} (${money(i.total ?? 0)}) exceed the ${bal} (${money(i.balance ?? 0)}). The plan caps them at the balance.`,
+      });
+    } else if (i.code === 'matured') {
+      warnings.push({ id: `tips-matured-${i.rungId}`, severity: 'warn', message: i.message });
+    } else if (i.code === 'face') {
+      warnings.push({ id: `tips-face-${i.rungId}`, severity: 'warn', message: i.message });
+    } else if (i.code === 'basis') {
+      warnings.push({ id: 'tips-basis', severity: 'info', message: i.message });
+    } else {
+      warnings.push({ id: `tips-owner-${i.rungId}`, severity: 'warn', message: `${i.message} Pick whose IRA holds it.` });
+    }
+  }
+  const taxableTips = (plan.portfolio.tipsLadder?.rungs ?? [])
+    .filter((r) => r.account === 'taxable' && r.maturityYear >= tipsYear)
+    .reduce((s, r) => s + r.adjustedPrincipal, 0);
+  if (taxableTips > 0) {
+    warnings.push({
+      id: 'tips-phantom-income',
+      severity: 'info',
+      message: `Taxable TIPS rungs (${money(taxableTips)}) owe federal tax each year on the inflation increase, before you get any cash. An IRA is often a better home for them. The plan counts this income from the first year either of you has retired.`,
+    });
   }
 
   // Warn when conversions are active alongside a Roth-first withdrawal ordering. Bracket-fill

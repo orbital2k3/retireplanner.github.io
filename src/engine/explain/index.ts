@@ -8,6 +8,8 @@ import { wrRule } from './rules/wr';
 import { taxRule } from './rules/tax';
 import { legacyRule } from './rules/legacy';
 import { sequenceRiskRule } from './rules/sequenceRisk';
+import { qcdRule } from './rules/qcd';
+import { hsaRule } from './rules/hsa';
 import { resolveStrategy } from '../strategy/resultSettings';
 
 export type InsightSurface = 'dashboard' | 'strategy' | 'mc' | 'taxes';
@@ -39,6 +41,8 @@ const RULES: Rule[] = [
   taxRule,
   legacyRule,
   sequenceRiskRule,
+  qcdRule,
+  hsaRule,
 ];
 
 export function generateInsights(livePlan: Plan, proj: ProjectionResult, mc?: MonteCarloResult): Insight[] {

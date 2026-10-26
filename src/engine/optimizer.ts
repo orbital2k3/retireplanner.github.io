@@ -11,6 +11,8 @@ import { FED_BRACKETS_MFJ } from './taxConstants';
 import { federalPovertyLevel } from './aca';
 import { shiftRetirementAge } from './retirementAgeShift';
 import { taxAdjustedValue, taxAdjustedRates } from './taxAdjusted';
+import { resolveTipsLadder } from './tipsLadder';
+import { ladderInBalances } from './tipsValidation';
 
 interface Posture { failYears: number; tailWeight: number; }
 
@@ -855,7 +857,20 @@ function amortizationSeed(plan: Plan, legacyTaxAdjReal = 0): { absoluteReal: num
        p.personB.traditional * plan.assumptions.tradReturn +
        p.personB.roth * plan.assumptions.rothReturn) / totB
     : plan.assumptions.tradReturn;
-  const blendNominal = (totA * blendA + totB * blendB) / tot;
+  // TIPS ladder. When the entered balances already hold the bonds they are inside every total above and
+  // only the opening sleeve value below needs adding back; when they sit on top, they are extra money that
+  // earns CPI. `ladderOnTop` is the principal of those extra rungs, split by tax treatment for the haircut.
+  const ladder = resolveTipsLadder(p, new Date().getFullYear());
+  let ladderOnTop = 0, ladderPreTax = 0, ladderClean = 0;
+  if (ladder && !ladderInBalances(p)) {
+    for (const r of ladder.rungs) {
+      ladderOnTop += r.adjustedPrincipal;
+      if (r.account === 'traditional') ladderPreTax += r.adjustedPrincipal; else ladderClean += r.adjustedPrincipal;
+    }
+  }
+  const blendNominal = ladderOnTop > 0
+    ? (totA * blendA + totB * blendB + ladderOnTop * inf) / (tot + ladderOnTop)
+    : (totA * blendA + totB * blendB) / tot;
   const realR = Math.max(0.001, (1 + blendNominal) / (1 + inf) - 1);
 
   // Quick projection to get at-retirement portfolio and external income in real (today's) dollars
@@ -863,8 +878,8 @@ function amortizationSeed(plan: Plan, legacyTaxAdjReal = 0): { absoluteReal: num
   const retireRow = proj.rows.find((r) => r.ageA === retireAge);
   const inflF = retireRow ? retireRow.inflationFactor : 1;
   const portfolioRealAtRetire = retireRow
-    ? (retireRow.begTaxable + retireRow.begTraditional + retireRow.begRoth) / inflF
-    : tot;
+    ? (retireRow.begTaxable + retireRow.begTraditional + retireRow.begRoth + (ladder ? retireRow.begTips : 0)) / inflF
+    : tot + ladderOnTop;
 
   // Average annual external income in today's dollars across retirement rows
   const retRows = proj.rows.filter((r) => r.ageA >= retireAge);
@@ -881,8 +896,15 @@ function amortizationSeed(plan: Plan, legacyTaxAdjReal = 0): { absoluteReal: num
   const taxAdjTrad = p.personA.traditional + (p.personB?.traditional ?? 0);
   const taxAdjRoth = p.personA.roth + (p.personB?.roth ?? 0);
   const { ordRate, ltcgRate } = taxAdjustedRates(plan.assumptions);
-  const taxAdjTotal = taxAdjustedValue(taxAdjTaxable, taxAdjBasis, taxAdjTrad, taxAdjRoth, ordRate, ltcgRate);
-  const grossUp = (totA + totB) / Math.max(1, taxAdjTotal);
+  // An owned HSA is haircut at ordRate above its receipts, like the projection's ending value does.
+  const hsaNow = (p.personA.hsa ?? 0) + (p.personB?.hsa ?? 0);
+  const hsaExtras = hsaNow > 0
+    ? { hsa: hsaNow, hsaReceipts: (p.personA.hsaReceipts ?? 0) + (p.personB?.hsaReceipts ?? 0) }
+    : undefined;
+  const tipsExtras = ladderOnTop > 0 ? { preTax: ladderPreTax, clean: ladderClean } : undefined;
+  const taxAdjTotal = taxAdjustedValue(taxAdjTaxable, taxAdjBasis, taxAdjTrad, taxAdjRoth, ordRate, ltcgRate,
+    tipsExtras ? { ...hsaExtras, ...tipsExtras } : hsaExtras);
+  const grossUp = (totA + totB + hsaNow + ladderOnTop) / Math.max(1, taxAdjTotal);
   const reserveGrossToday = legacyTaxAdjReal * grossUp / Math.pow(1 + realR, n);
   const spendable = Math.max(0, portfolioRealAtRetire - reserveGrossToday);
   const absoluteReal = Math.max(1, spendable / annuityFactor + avgExternalReal);

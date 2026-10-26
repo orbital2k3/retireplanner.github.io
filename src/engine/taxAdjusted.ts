@@ -26,10 +26,30 @@ export function taxAdjustedRates(
  * Rates are blended effective rates on whole balances — not brackets.
  * No state tax, IRMAA, or NIIT is included; the breakdown modal discloses this.
  *
+ * Extras (optional 7th argument, appended after the sum above so an absent argument is bit-identical):
+ *   HSA: the part covered by receipts is reimbursable tax-free (Roth-like, D4); the rest is haircut at
+ *        ordRate (D5: a non-spouse heir owes ordinary tax on it).
+ *   preTax / clean: ladder money held in an IRA (haircut at ordRate) or in Roth/taxable-after-tax form
+ *        (TIPS, Phase 3).
+ *
  * Clamp: basis accretes unconditionally (dividends, exempt interest) while the
  * taxable balance can be zero or negative on low-return / bad Monte Carlo paths.
  * Without the clamp endTaxAdjusted can exceed endTotal, breaking invariants.
  */
+export interface TaxAdjustedExtras {
+  /** Combined ending HSA balance. */
+  hsa?: number;
+  /** Unreimbursed receipts on file; min(hsa, hsaReceipts) is treated as tax-free. */
+  hsaReceipts?: number;
+  /** Ending value of TIPS held in pre-tax accounts. */
+  preTax?: number;
+  /** Ending value of TIPS held in Roth or with taxes already paid. */
+  clean?: number;
+}
+
+/** The part of an HSA balance the heir would owe ordinary tax on: everything above the receipts. */
+export const hsaTaxableBalance = (hsa: number, receipts: number): number => hsa - Math.min(hsa, receipts);
+
 export function taxAdjustedValue(
   endTaxable: number,
   endTaxableBasis: number,
@@ -37,13 +57,19 @@ export function taxAdjustedValue(
   endRoth: number,
   ordRate: number,
   ltcgRate: number,
+  extras?: TaxAdjustedExtras,
 ): number {
   const basis = Math.min(endTaxableBasis, endTaxable);
   const unrealizedGain = Math.max(0, endTaxable - basis);
-  return (
+  const core = (
     endRoth +
     basis +
     unrealizedGain * (1 - ltcgRate) +
     endTraditional * (1 - ordRate)
   );
+  if (extras === undefined) return core;
+  const hsa = extras.hsa ?? 0;
+  const hsaExempt = Math.min(hsa, extras.hsaReceipts ?? 0);
+  return core + (hsa - hsaExempt) * (1 - ordRate) + hsaExempt
+    + (extras.preTax ?? 0) * (1 - ordRate) + (extras.clean ?? 0);
 }

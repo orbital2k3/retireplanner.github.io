@@ -90,3 +90,68 @@ describe('pre-retirement conversion warning', () => {
     expect(preRetirementConversionAges(p)).toEqual([52]);
   });
 });
+
+describe('QCD warnings on charitable expense rows', () => {
+  const giving = (extra: Partial<Plan['expenseStreams'][number]> = {}): Plan['expenseStreams'][number] => ({
+    id: 'giving', description: 'Church and charities', whose: 'Household', startAge: 65,
+    end: { mode: 'lastSurvivor' }, survivorPct: 1, annualAmount: 10_000, inflationPct: { mode: 'cpi' }, category: 'charitable', ...extra,
+  });
+  const withGiving = (extra: Partial<Plan['expenseStreams'][number]> = {}, edit: (p: Plan) => void = () => {}): Plan => {
+    const p = basePlan();
+    p.portfolio = { ...p.portfolio, personB: p.portfolio.personB ?? { ...p.portfolio.personA } };
+    p.expenseStreams = [...p.expenseStreams, giving(extra)];
+    edit(p);
+    return p;
+  };
+  const emptyIra = (pf: Plan['portfolio']['personA']) => ({ ...pf, traditional: 0, contribSplit: { taxable: 0.5, traditional: 0, roth: 0.5 } });
+  const find = (p: Plan, id: string) => computePlanWarnings(p).find((w) => w.id === id);
+
+  it('warns when nobody who would pay the gifts has an IRA', () => {
+    const p = withGiving({}, (q) => { q.portfolio = { personA: emptyIra(q.portfolio.personA), personB: q.portfolio.personB ? emptyIra(q.portfolio.personB) : undefined }; });
+    const w = find(p, 'qcd-no-ira-giving');
+    expect(w?.severity).toBe('warn');
+    expect(w?.message).toContain("can't be paid as QCDs");
+    expect(w?.message).toContain("Person A's and B's IRAs are empty");
+  });
+
+  it("does not warn for a row tagged to B when A's IRA can pay it (the engine pools giving across spouses)", () => {
+    const p = withGiving({ whose: 'B' }, (q) => { q.portfolio = { personA: { ...q.portfolio.personA, traditional: 300_000 }, personB: emptyIra(q.portfolio.personB!) }; });
+    expect(find(p, 'qcd-no-ira-giving')).toBeUndefined();
+  });
+
+  it('names only the spouse who reaches 70½ while alive', () => {
+    const p = withGiving({}, (q) => {
+      q.personA.planThroughAge = 69;
+      q.portfolio = { personA: { ...q.portfolio.personA, traditional: 300_000 }, personB: emptyIra(q.portfolio.personB!) };
+    });
+    expect(find(p, 'qcd-no-ira-giving')?.message).toContain("B's IRA is empty");
+  });
+
+  it("is silent when the row ends before anyone reaches 70½", () => {
+    const p = withGiving({ startAge: 60, end: { mode: 'age', age: 66 } }, (q) => { q.portfolio = { personA: emptyIra(q.portfolio.personA), personB: emptyIra(q.portfolio.personB!) }; });
+    expect(find(p, 'qcd-no-ira-giving')).toBeUndefined();
+  });
+
+  it('does not warn when someone has pre-tax money', () => {
+    const p = withGiving({}, (q) => { q.portfolio = { personA: { ...q.portfolio.personA, traditional: 200_000 }, personB: q.portfolio.personB }; });
+    expect(find(p, 'qcd-no-ira-giving')).toBeUndefined();
+  });
+
+  it('does not warn when contributions will build an IRA', () => {
+    const p = withGiving({}, (q) => { q.portfolio = { personA: { ...emptyIra(q.portfolio.personA), annualContribution: 20_000, contribSplit: { taxable: 0, traditional: 1, roth: 0 } }, personB: q.portfolio.personB ? emptyIra(q.portfolio.personB) : undefined }; });
+    expect(find(p, 'qcd-no-ira-giving')).toBeUndefined();
+  });
+
+  it('gives an info note (not a warning) for a gift marked as not paid to a public charity', () => {
+    const w = find(withGiving({ qcd: false }), 'qcd-optout-giving');
+    expect(w?.severity).toBe('info');
+    expect(w?.message).toContain('not paid directly to a public charity');
+    expect(find(withGiving({ qcd: false }), 'qcd-no-ira-giving')).toBeUndefined();
+  });
+
+  it('is silent for general rows, zero-amount rows and plans with no charitable rows', () => {
+    expect(computePlanWarnings(withGiving({ category: 'general' })).filter((w) => w.id.startsWith('qcd-'))).toEqual([]);
+    expect(computePlanWarnings(withGiving({ annualAmount: 0 })).filter((w) => w.id.startsWith('qcd-'))).toEqual([]);
+    expect(computePlanWarnings(basePlan()).filter((w) => w.id.startsWith('qcd-'))).toEqual([]);
+  });
+});

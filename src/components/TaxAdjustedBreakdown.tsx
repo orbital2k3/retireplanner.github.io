@@ -1,7 +1,7 @@
 import type { ProjectionResult } from '../engine/projection';
 import type { Plan } from '../schemas/plan';
-import { taxAdjustedRates } from '../engine/taxAdjusted';
-import { fmtFull, fmtM } from '../lib/format';
+import { taxAdjustedRates, hsaTaxableBalance } from '../engine/taxAdjusted';
+import { fmtFull, fmtM, fmtPct } from '../lib/format';
 
 interface Props {
   proj: ProjectionResult;
@@ -29,6 +29,10 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
   const gainAdj = unrealizedGain * (1 - ltcgRate);
   const tradAdj = endTraditional * (1 - ordRate);
 
+  const endHSA = last?.endHSA ?? 0;
+  const hsaReceipts = Math.min(endHSA, last?.hsaReceiptsBal ?? 0);
+  const hsaTaxable = hsaTaxableBalance(endHSA, last?.hsaReceiptsBal ?? 0);
+
   const toReal = (n: number) => (real ? n / inflFactor : n);
   const totalDisplay = real ? proj.endTaxAdjustedReal : proj.endTaxAdjustedNominal;
 
@@ -38,17 +42,46 @@ export default function TaxAdjustedBreakdown({ proj, plan, real, onClose }: Prop
     {
       label: 'Taxable unrealized gain',
       balance: unrealizedGain,
-      rateLabel: `${(ltcgRate * 100).toFixed(0)}% cap-gains rate`,
+      rateLabel: `${fmtPct(ltcgRate, 0)} cap-gains rate`,
       result: gainAdj,
       note: basisExceeds ? 'Basis clamped to balance (basis exceeded balance at plan end)' : undefined,
     },
     {
       label: 'Pre-tax (401k/IRA) balance',
       balance: endTraditional,
-      rateLabel: `${(ordRate * 100).toFixed(0)}% blended effective rate`,
+      rateLabel: `${fmtPct(ordRate, 0)} blended effective rate`,
       result: tradAdj,
     },
   ];
+  // HSA rows appear only when the plan ends with an HSA, so other plans see the same table as before.
+  if (endHSA > 0) {
+    rows.push(
+      { label: 'HSA backed by receipts', balance: hsaReceipts, rateLabel: '0% (claimable tax-free)', result: hsaReceipts },
+      {
+        label: 'HSA above receipts',
+        balance: hsaTaxable,
+        rateLabel: `${fmtPct(ordRate, 0)} blended effective rate`,
+        result: hsaTaxable * (1 - ordRate),
+        note: 'A non-spouse heir owes ordinary tax on an inherited HSA',
+      },
+    );
+  }
+
+  // TIPS ladder rows appear only when the plan ends with bonds still held. Pre-tax ones owe ordinary tax
+  // when drawn; taxable ones have paid tax on their inflation increase each year, so their basis is their value.
+  const tipsTrad = last?.endTipsTrad ?? 0;
+  const tipsClean = (last?.endTipsTaxable ?? 0) + (last?.endTipsRoth ?? 0);
+  if (tipsTrad > 0) {
+    rows.push({
+      label: 'TIPS ladder in pre-tax accounts',
+      balance: tipsTrad,
+      rateLabel: `${fmtPct(ordRate, 0)} blended effective rate`,
+      result: tipsTrad * (1 - ordRate),
+    });
+  }
+  if (tipsClean > 0) {
+    rows.push({ label: 'TIPS ladder in taxable / Roth', balance: tipsClean, rateLabel: '0% (already taxed or tax-free)', result: tipsClean });
+  }
 
   return (
     <div

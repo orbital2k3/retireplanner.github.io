@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import { useProjection, usePlanStore } from '../store/usePlanStore';
 import StalePlanBanner from '../components/StalePlanBanner';
 import type { DisplayMode } from '../store/usePlanStore';
@@ -23,7 +23,8 @@ const stickyTd = (left: number, bg = '#fff', minWidth = 60): React.CSSProperties
 });
 
 type Row = ReturnType<typeof useProjection>['rows'][number];
-type GroupKey = 'income' | 'withdrawals' | 'spending' | 'taxes' | 'balances' | 'decisions';
+type Money = (n: number) => string;
+type GroupKey = 'income' | 'withdrawals' | 'spending' | 'taxes' | 'qcd' | 'hsa' | 'tips' | 'balances' | 'decisions';
 
 interface Column {
   key: string;
@@ -32,8 +33,8 @@ interface Column {
   essential: boolean;
   fmt?: 'money' | 'pct' | 'raw';
   get: (r: Row) => number | string;
-  /** `money` formats a nominal amount in the active display mode (deflated in real mode). */
-  tooltip?: (r: Row, money: (nominal: number) => string) => string;
+  /** `$` formats money the way the cells show it (today's or nominal dollars). */
+  tooltip?: (r: Row, $: Money) => string;
   bg: string;
 }
 
@@ -43,6 +44,9 @@ const BG: Record<'identity' | GroupKey, string> = {
   withdrawals: '#d4e8d8',
   spending:    '#e8d8ee',
   taxes:       '#ced7e2',
+  qcd:         '#f5e9c8',
+  hsa:         '#e8f7f0',
+  tips:        '#efeaf6',
   balances:    '#d3d6d9',
   decisions:   '#dce8e8',
 };
@@ -59,6 +63,29 @@ const deductionApplies = (r: Row) => r.ordIncome + r.ltcg > 0;
 const inheritedIncome = (r: Row) => (r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0)
   + (r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0);
 
+/** Splits a year's Charitable spending into the QCD part and the part paid from other accounts. */
+const givingTooltip = (r: Row, $: Money): string => {
+  if (!(r.charitableSpend > 0)) return '';
+  const other = Math.max(0, r.charitableSpend - r.qcd);
+  return r.qcd > 0
+    ? `${$(r.qcd)} paid from your IRA as a QCD; ${$(other)} paid from your other accounts.`
+    : 'Paid from your other accounts (no QCD this year). Included in Net Spending.';
+};
+
+/** Explains a year where part of the RMD (or more) was paid straight to charity as a QCD. */
+const rmdTooltip = (r: Row, $: Money): string => {
+  if (!(r.qcd > 0)) return '';
+  const satisfied = r.qcd - r.qcdBeyondRmd;
+  let text = `Required ${$(r.rmd)}. ${$(satisfied)} went straight to charity as a QCD (not taxed); ${$(Math.max(0, r.rmd - satisfied))} came to you as cash.`;
+  if (r.qcdBeyondRmd > 0) text += ` A further ${$(r.qcdBeyondRmd)} QCD went to charity beyond the RMD.`;
+  if (r.qcdTaxable > 0) text += ` ${QCD_TAXED(r, $)}`;
+  return text;
+};
+
+/** The part of a QCD the §408(d)(8)(A) rule taxes: deductible IRA contributions made from 70½ on. */
+const QCD_TAXED = (r: Row, $: Money): string =>
+  `${$(r.qcdTaxable)} of the QCD was taxed anyway, because deductible IRA contributions made from age 70½ reduce the tax-free amount.`;
+
 const COLUMNS: Column[] = [
   // Identity (always shown, sticky)
   { key: 'year',  label: 'Yr',    group: 'identity', essential: true, fmt: 'raw', get: (r) => r.year,       bg: BG.identity },
@@ -74,7 +101,7 @@ const COLUMNS: Column[] = [
   { key: 'exemptInterest',      label: 'Tax-Exempt Int',  group: 'income', essential: false, fmt: 'money', get: (r) => r.exemptInterest ?? 0,                                                                    bg: BG.income },
   { key: 'distributedCash',     label: 'Div Paid Out',    group: 'income', essential: false, fmt: 'money', get: (r) => r.distributedCash ?? 0,                                                                   bg: BG.income },
   { key: 'lumpSumInject',       label: 'Lump Sum',        group: 'income', essential: true,  fmt: 'money', get: (r) => (r.lumpSumInjectTaxable ?? 0) + (r.lumpSumInjectTrad ?? 0) + (r.lumpSumInjectRoth ?? 0), bg: BG.income },
-  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: inheritedIncome, tooltip: (r, money) => `Required minimum: ${money((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0))} · Extra from your withdrawal strategy: ${money((r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0))}`, bg: BG.income },
+  { key: 'lumpSumOrdinaryIncome', label: 'Inherited Inc', group: 'income', essential: false, fmt: 'money', get: inheritedIncome, tooltip: (r, $) => `Required minimum: ${$((r.lumpSumOrdinaryIncome ?? 0) + (r.lumpSumForcedRothDist ?? 0))} · Extra from your withdrawal strategy: ${$((r.inheritedTradFromWd ?? 0) + (r.inheritedRothFromWd ?? 0))}`, bg: BG.income },
   { key: 'contribA',            label: 'Contrib A',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribA,                                                                              bg: BG.income },
   { key: 'contribB',            label: 'Contrib B',       group: 'income', essential: false, fmt: 'money', get: (r) => r.contribB,                                                                              bg: BG.income },
   // Spousal IRA portion of Contrib A/B — without this, the contribution column drops from a
@@ -88,24 +115,47 @@ const COLUMNS: Column[] = [
   { key: 'wdTax',     label: 'WD Taxable', group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdTax,     bg: BG.withdrawals },
   { key: 'wdTrd',     label: 'WD Pre-tax', group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdTrd - (r.inheritedTradFromWd ?? 0), bg: BG.withdrawals },
   { key: 'wdRth',     label: 'WD Roth',    group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.wdRth - (r.inheritedRothFromWd ?? 0), bg: BG.withdrawals },
-  { key: 'rmd',       label: 'RMD',        group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.rmd,       bg: BG.withdrawals },
+  { key: 'rmd',       label: 'RMD',        group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.rmd,       tooltip: rmdTooltip, bg: BG.withdrawals },
   { key: 'rothConv',  label: 'Roth Conv',  group: 'withdrawals', essential: false, fmt: 'money', get: (r) => r.rothConv,  bg: BG.withdrawals },
 
   // Spending — what you actually consume
   { key: 'netSpend',   label: 'Net Spend',   group: 'spending', essential: true,  fmt: 'money', get: (r) => r.netSpend,   bg: BG.spending },
-  { key: 'acaPremium', label: 'ACA Premium', group: 'spending', essential: false, fmt: 'money', get: (r) => r.acaPremium, tooltip: (r, money) => `ACA MAGI (AGI + non-taxable SS): ${money(r.acaMagi)}`, bg: BG.spending },
+  { key: 'acaPremium', label: 'ACA Premium', group: 'spending', essential: false, fmt: 'money', get: (r) => r.acaPremium, tooltip: (r, $) => `ACA MAGI (AGI + non-taxable SS): ${$(r.acaMagi)}`, bg: BG.spending },
 
   // Taxes — inputs first (what creates the liability), then outputs (what you pay)
   { key: 'ordIncome',    label: 'Ord Income',  group: 'taxes', essential: true,  fmt: 'money', get: (r) => r.ordIncome,                              bg: BG.taxes },
   { key: 'ltcg',         label: 'LTCG',        group: 'taxes', essential: true,  fmt: 'money', get: (r) => r.ltcg,                                   bg: BG.taxes },
-  { key: 'stdDeduction', label: 'Std Deduct',  group: 'taxes', essential: false, fmt: 'money', get: (r) => deductionApplies(r) ? r.stdDeduction - r.seniorBonus : 0, bg: BG.taxes },
+  { key: 'stdDeduction', label: 'Std Deduct',  group: 'taxes', essential: false, fmt: 'money', get: (r) => deductionApplies(r) ? r.stdDeduction - r.seniorBonus - r.charityDeduction : 0, bg: BG.taxes },
   { key: 'seniorBonus',  label: 'Senior Bonus',group: 'taxes', essential: false, fmt: 'money', get: (r) => deductionApplies(r) ? r.seniorBonus : 0,     bg: BG.taxes },
   { key: 'taxableIncome',label: 'Taxable Inc', group: 'taxes', essential: false, fmt: 'money', get: (r) => Math.max(0, r.magi - r.stdDeduction),     bg: BG.taxes },
   { key: 'fedTax',       label: 'Fed Tax',     group: 'taxes', essential: true,  fmt: 'money', get: (r) => r.fedTax,                                 bg: BG.taxes },
   { key: 'stateTaxAmt',  label: 'State Tax',   group: 'taxes', essential: false, fmt: 'money', get: (r) => r.stateTaxAmt,                            bg: BG.taxes },
-  { key: 'irmaa',        label: 'IRMAA',       group: 'taxes', essential: false, fmt: 'money', get: (r) => r.irmaa,        tooltip: (r, money) => `IRMAA MAGI (AGI, 2-yr lookback): ${money(r.irmaaMagi)}`, bg: BG.taxes },
+  { key: 'irmaa',        label: 'IRMAA',       group: 'taxes', essential: false, fmt: 'money', get: (r) => r.irmaa,        tooltip: (r, $) => `IRMAA MAGI (AGI, 2-yr lookback): ${$(r.irmaaMagi)}`, bg: BG.taxes },
   { key: 'niit',         label: 'NIIT',        group: 'taxes', essential: false, fmt: 'money', get: (r) => r.niit,                                   bg: BG.taxes },
   { key: 'effRate',      label: 'Eff Rate',    group: 'taxes', essential: false, fmt: 'pct',   get: (r) => r.effRate * 100,                          bg: BG.taxes },
+
+  // Giving — all Charitable-tagged spending, the part paid straight from an IRA as a QCD, and the cash-gift
+  // deduction. Shown by default only when the plan has giving (see `qcdAuto`); always in the chooser and CSV.
+  { key: 'giving',           label: 'Giving',       group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charitableSpend, tooltip: givingTooltip, bg: BG.qcd },
+  { key: 'qcd',              label: 'QCD',          group: 'qcd', essential: false, fmt: 'money', get: (r) => r.qcd, tooltip: (r, $) => r.qcd > 0 ? (r.qcdTaxable > 0 ? `Paid from your IRA straight to charity. ${QCD_TAXED(r, $)}` : 'Paid from your IRA straight to charity, so it is not taxed.') + ` ${$(r.qcd - r.qcdBeyondRmd)} of it counts toward your RMD.` : '', bg: BG.qcd },
+  { key: 'charityDeduction', label: 'Charity ded.', group: 'qcd', essential: false, fmt: 'money', get: (r) => r.charityDeduction, tooltip: (r) => r.charityDeduction > 0 ? 'Deduction for cash gifts to public charities when you don\'t itemize (from 2026: up to $1,000, or $2,000 joint). Included in the standard deduction total.' : '', bg: BG.qcd },
+
+  // HSA — opt-in through the column chooser (and the CSV). Shown to every plan, but all zero without an HSA.
+  { key: 'endHSA',          label: 'HSA Bal.',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.endHSA, tooltip: (r, $) => r.endHSA > 0 ? `Year-end HSA balance (included in End Total). Receipts on file: ${$(r.hsaReceiptsBal)}.` : '', bg: BG.hsa },
+  { key: 'hsaContrib',      label: 'HSA Contrib',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaContrib, tooltip: (r, $) => r.hsaContribRet > 0 ? `Includes ${$(r.hsaContribRet)} paid from your portfolio after retiring. That part is deducted from income (state income too, except in California), which can lower your ACA income.` : '', bg: BG.hsa },
+  { key: 'hsaQualifiedWD',  label: 'HSA Paid',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaQualifiedWD, tooltip: (r, $) => r.hsaQualifiedWD > 0 ? `Medical bills and Medicare surcharges paid tax-free from the HSA (medical bills this year: ${$(r.medicalSpend)}).` : '', bg: BG.hsa },
+  { key: 'hsaReimbursed',   label: 'HSA Reimb.',   group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReimbursed, tooltip: (r) => r.hsaReimbursed > 0 ? 'Past medical bills reimbursed from the HSA tax-free. Used only after your other accounts ran out.' : '', bg: BG.hsa },
+  { key: 'hsaNonQualWD',    label: 'HSA Non-qual', group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaNonQualWD, tooltip: (r) => r.hsaNonQualWD > 0 ? 'Taken from the HSA for non-medical spending: taxed as ordinary income, plus a 20% penalty before 65.' : '', bg: BG.hsa },
+  { key: 'hsaPenalty',      label: 'HSA Penalty',  group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaPenalty, bg: BG.hsa },
+  { key: 'hsaReceiptsBal',  label: 'Receipts',     group: 'hsa', essential: false, fmt: 'money', get: (r) => r.hsaReceiptsBal, tooltip: () => 'Medical bills you paid from other accounts. They can be reimbursed from the HSA later, tax-free.', bg: BG.hsa },
+
+  // TIPS ladder — opt-in through the column chooser (and the CSV); all zero without a ladder.
+  { key: 'endTips',        label: 'Ladder Bal.',  group: 'tips', essential: false, fmt: 'money', get: (r) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth, tooltip: (r, $) => r.endTipsTaxable + r.endTipsTrad + r.endTipsRoth > 0 ? `Indexed value of the bonds still held (included in End Total): taxable ${$(r.endTipsTaxable)}, pre-tax ${$(r.endTipsTrad)}, Roth ${$(r.endTipsRoth)}. It follows inflation, not market returns.` : '', bg: BG.tips },
+  { key: 'tipsCoupon',     label: 'TIPS Coupon',  group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsCoupon, tooltip: (r) => r.tipsCoupon > 0 ? `Interest paid by the bonds this year. Taxable rungs pay it to you as cash; pre-tax and Roth rungs pay it back into the account.` : '', bg: BG.tips },
+  { key: 'tipsAccrual',    label: 'TIPS Accrual', group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsAccrual, tooltip: (r) => r.tipsAccrual !== 0 ? 'Inflation increase in the bonds\' principal. On taxable rungs it is taxable income with no cash until maturity ("phantom income"); inside an IRA or Roth it is not taxed.' : '', bg: BG.tips },
+  { key: 'tipsMaturity',   label: 'TIPS Maturity',group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsMaturity, tooltip: (r, $) => r.tipsMaturity > 0 ? `Principal paid out by bonds maturing this year${r.tipsFloorBonus > 0 ? ` (includes ${$(r.tipsFloorBonus)} from the deflation floor)` : ''}.` : '', bg: BG.tips },
+  { key: 'tipsOrdInc',     label: 'TIPS Taxable', group: 'tips', essential: false, fmt: 'money', get: (r) => r.tipsOrdInc, tooltip: (r) => r.tipsOrdInc > 0 ? 'Federal ordinary income from taxable rungs (coupons plus inflation increase). Not taxed by your state. Counted from the first year either of you has retired.' : '', bg: BG.tips },
+  { key: 'rmdUnmet',       label: 'RMD Unmet',    group: 'tips', essential: false, fmt: 'money', get: (r) => r.rmdUnmet, tooltip: (r) => r.rmdUnmet > 0 ? 'Part of the required withdrawal the plan could not take because the IRA money left is tied up in ladder bonds. The plan holds bonds to maturity and does not model taking them out in kind; in real life the shortfall would be taken in kind or risk a penalty.' : '', bg: BG.tips },
 
   // Balances — end-of-year portfolio state
   { key: 'endTotal',       label: 'End Total', group: 'balances', essential: true,  fmt: 'money', get: (r) => r.endTotal,       bg: BG.balances },
@@ -117,8 +167,8 @@ const COLUMNS: Column[] = [
   { key: 'endTraditional', label: 'End Trd',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTraditional - ((r.inheritedBal ?? 0) - (r.inheritedRothBal ?? 0)), bg: BG.balances },
   { key: 'endRoth',        label: 'End Roth',   group: 'balances', essential: false, fmt: 'money', get: (r) => r.endRoth - (r.inheritedRothBal ?? 0), bg: BG.balances },
   { key: 'inheritedBal',   label: 'End Inh',    group: 'balances', essential: false, fmt: 'money', get: (r) => r.inheritedBal ?? 0, tooltip: () => 'Money left in inherited accounts at the end of the year. End Trd and End Roth cover your own accounts only.', bg: BG.balances },
-  { key: 'endTaxableBasis',label: 'End Basis',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxableBasis ?? 0, tooltip: (r, money) => `Unrealized gain: ${money(Math.max(0, r.endTaxable - (r.endTaxableBasis ?? 0)))}`, bg: BG.balances },
-  { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r, money) => `Gross ${money(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
+  { key: 'endTaxableBasis',label: 'End Basis',  group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxableBasis ?? 0, tooltip: (r, $) => `Unrealized gain: ${$(Math.max(0, r.endTaxable - (r.endTaxableBasis ?? 0)))}`, bg: BG.balances },
+  { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r, $) => `Gross ${$(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
 ];
 
 const GROUP_LABELS: Record<GroupKey, string> = {
@@ -126,6 +176,9 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   withdrawals: 'Withdrawals',
   spending:    'Spending',
   taxes:       'Taxes',
+  qcd:         'Giving',
+  hsa:         'HSA',
+  tips:        'TIPS',
   balances:    'Balances',
   decisions:   'Decisions',
 };
@@ -135,6 +188,9 @@ const GROUP_COLORS: Record<GroupKey, { bg: string; text: string }> = {
   withdrawals: { bg: '#2d6a4f', text: '#fff' },
   spending:    { bg: '#6a2d6a', text: '#fff' },
   taxes:       { bg: '#3b5e8a', text: '#fff' },
+  qcd:         { bg: '#c9a84c', text: '#0d1b2e' },
+  hsa:         { bg: '#1f8f8c', text: '#fff' },
+  tips:        { bg: '#6b4f96', text: '#fff' },
   balances:    { bg: '#0d1b2e', text: '#fff' },
   decisions:   { bg: '#2d6a6a', text: '#fff' },
 };
@@ -155,6 +211,9 @@ function GroupCheckbox({ cols, visibleKeys, onToggle }: {
 }
 
 const STORAGE_KEY = 'fireopt-projections-cols-v5';
+// Set once the user changes the column choice while the QCD columns were auto-shown, so their choice sticks.
+const QCD_TOUCHED_KEY = 'fireopt-projections-qcd-touched';
+const QCD_KEYS = COLUMNS.filter((c) => c.group === 'qcd').map((c) => c.key);
 
 const DEFAULT_VISIBLE = new Set([
   ...COLUMNS.filter(c => c.essential || c.group === 'identity').map(c => c.key),
@@ -174,6 +233,16 @@ export default function Projections() {
   const mode = usePlanStore((s) => s.displayMode);
   const proj = useProjection();
   const [visibleKeys, setVisibleKeysState] = useState<Set<string>>(loadVisibleKeys);
+  const [qcdTouched, setQcdTouched] = useState<boolean>(() => {
+    try { return typeof window !== 'undefined' && localStorage.getItem(QCD_TOUCHED_KEY) === '1'; } catch { return false; }
+  });
+  // Giving columns are on by default only when this plan has charitable giving, until the user chooses otherwise.
+  const lifetimeGiving = proj.rows.reduce((s, r) => s + r.charitableSpend, 0);
+  const qcdAuto = lifetimeGiving > 0 && !qcdTouched;
+  const effectiveVisible = useMemo(
+    () => (qcdAuto ? new Set([...visibleKeys, ...QCD_KEYS]) : visibleKeys),
+    [qcdAuto, visibleKeys],
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPos, setPickerPos] = useState<{ top: number; right: number; maxHeight: number }>({ top: 0, right: 0, maxHeight: 400 });
   const [cellTip, setCellTip] = useState<{ x: number; y: number; text: string; wide?: boolean } | null>(null);
@@ -237,26 +306,31 @@ export default function Projections() {
     setPickerOpen(o => !o);
   };
 
-  const save = (next: Set<string>) => {
+  const save = (next: Set<string>, resetQcd = false) => {
     setVisibleKeysState(next);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+    const touched = resetQcd ? false : qcdTouched || qcdAuto;
+    setQcdTouched(touched);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+      if (touched) localStorage.setItem(QCD_TOUCHED_KEY, '1'); else localStorage.removeItem(QCD_TOUCHED_KEY);
+    } catch { /* ignore */ }
   };
 
   const toggleColumn = (key: string) => {
-    const next = new Set(visibleKeys);
+    const next = new Set(effectiveVisible);
     if (next.has(key)) next.delete(key); else next.add(key);
     save(next);
   };
 
   const toggleGroup = (g: GroupKey) => {
     const cols = allColumns.filter(c => c.group === g);
-    const allOn = cols.every(c => visibleKeys.has(c.key));
-    const next = new Set(visibleKeys);
+    const allOn = cols.every(c => effectiveVisible.has(c.key));
+    const next = new Set(effectiveVisible);
     cols.forEach(c => allOn ? next.delete(c.key) : next.add(c.key));
     save(next);
   };
 
-  const visibleColumns = allColumns.filter(c => c.group === 'identity' || visibleKeys.has(c.key));
+  const visibleColumns = allColumns.filter(c => c.group === 'identity' || effectiveVisible.has(c.key));
 
   const downloadCSV = () => {
     // CSV always includes every column regardless of UI expansion.
@@ -356,7 +430,7 @@ export default function Projections() {
                             padding: '5px 14px', cursor: 'pointer', userSelect: 'none',
                             background: bg,
                           }}>
-                            <GroupCheckbox cols={cols} visibleKeys={visibleKeys} onToggle={() => toggleGroup(g)} />
+                            <GroupCheckbox cols={cols} visibleKeys={effectiveVisible} onToggle={() => toggleGroup(g)} />
                             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: text, textTransform: 'uppercase' }}>
                               {GROUP_LABELS[g]}
                             </span>
@@ -365,7 +439,7 @@ export default function Projections() {
                             <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 14px 3px 32px', cursor: 'pointer', userSelect: 'none' }}>
                               <input
                                 type="checkbox"
-                                checked={visibleKeys.has(c.key)}
+                                checked={effectiveVisible.has(c.key)}
                                 onChange={() => toggleColumn(c.key)}
                                 style={{ accentColor: 'var(--navy)', cursor: 'pointer' }}
                               />
@@ -377,7 +451,7 @@ export default function Projections() {
                     })}
                     <div style={{ borderTop: '1px solid var(--border-light)', margin: '8px 0 4px' }} />
                     <button
-                      onClick={() => save(DEFAULT_VISIBLE)}
+                      onClick={() => save(DEFAULT_VISIBLE, true)}
                       style={{ display: 'block', width: '100%', textAlign: 'left', padding: '3px 14px', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
                     >
                       Reset to defaults
@@ -431,8 +505,8 @@ export default function Projections() {
                   const isExpanded = expandedYear === r.year;
                   const leftOffsets = [0, 60, 120, 180];
                   return (
-                    <>
-                      <tr key={r.year}>
+                    <Fragment key={r.year}>
+                      <tr>
                         {visibleColumns.map((c, i) => {
                           const sticky = c.group === 'identity';
                           const v = c.get(r);
@@ -484,7 +558,7 @@ export default function Projections() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -500,8 +574,10 @@ export default function Projections() {
           position: 'fixed', left: cellTip.x + 12, top: cellTip.y - 8,
           background: '#1a2535', color: '#e8edf3', fontSize: 11,
           padding: '5px 9px', borderRadius: 5, pointerEvents: 'none',
-          whiteSpace: cellTip.wide ? 'pre-wrap' : 'nowrap',
-          maxWidth: cellTip.wide ? 420 : undefined,
+          // Short tips stay on one line; long ones wrap instead of running off the screen.
+          whiteSpace: cellTip.wide ? 'pre-wrap' : 'normal',
+          width: 'max-content',
+          maxWidth: cellTip.wide ? 420 : 360,
           zIndex: 9999, boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
         }}>
           {cellTip.text}

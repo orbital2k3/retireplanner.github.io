@@ -793,8 +793,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 @keyframes rowIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
 .stream-row.income-row  { grid-template-columns: 0.85fr 0.65fr 0.9fr 0.5fr 1.1fr 0.65fr 1.0fr 0.5fr 0.5fr 28px; }
-.stream-row.expense-row { grid-template-columns: 1.3fr 0.65fr 0.5fr 1.4fr 0.8fr 1.1fr 0.55fr 28px; }
+.stream-row.expense-row { grid-template-columns: 1.3fr 0.9fr 0.65fr 0.5fr 1.4fr 0.8fr 1.1fr 0.55fr 28px; }
 .stream-row.lumpsum-row { grid-template-columns: 1fr 0.9fr 1.2fr 0.6fr 1.5fr 28px; }
+.stream-row.tips-row { grid-template-columns: 0.7fr 1fr 0.9fr 0.7fr 1fr 0.8fr 28px; }
 .stream-expander-btn {
   width: 26px; height: 32px; border: none; background: transparent;
   color: var(--text-muted); font-size: 10px; cursor: pointer; padding: 0;
@@ -816,6 +817,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 .plan-warning.warn { background: rgba(201,168,76,0.12); color: #7a5c10; }
 .plan-warning.error { background: rgba(192,57,43,0.1); color: #c0392b; }
+.plan-warning.info { background: rgba(59,94,138,0.1); color: #3b5e8a; }
 /* Inputs and dropdowns in a stream row share one fixed height so the selects
    line up with the number boxes. */
 .stream-row select, .stream-row input { height: 28px; }
@@ -1371,8 +1373,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   /* CashFlow stream rows — horizontal scroll container */
   .stream-rows-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .stream-row.income-row { min-width: 860px; }
-  .stream-row.expense-row { min-width: 680px; }
+  .stream-row.expense-row { min-width: 760px; }
   .stream-row.lumpsum-row { min-width: 600px; }
+  .stream-row.tips-row { min-width: 640px; }
 
   /* CashFlowTable — make outer wrapper scroll horizontally */
   .cashflow-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }

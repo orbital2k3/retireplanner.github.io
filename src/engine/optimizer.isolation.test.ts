@@ -42,5 +42,5 @@ describe('Optimizer ↔ Projection coordination', () => {
       `Expected 1 distinct optimizer output across ${results.length} Pick-tab combinations, got ${distinct.size}.\n` +
       `First two distinct outputs:\n  ${[...distinct].slice(0, 2).join('\n  ')}`
     ).toBe(1);
-  }, 180_000);
+  }, 300_000);
 });

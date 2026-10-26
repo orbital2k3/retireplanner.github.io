@@ -107,3 +107,163 @@ export const MC_OPTIMIZE_HELP: HelpTopic = {
     },
   ],
 };
+
+export const QCD_HELP: HelpTopic = {
+  eyebrow: 'Learn more',
+  title: 'Giving from your IRA (QCDs)',
+  sections: [
+    {
+      heading: 'What a QCD is',
+      paras: [
+        'A qualified charitable distribution, or QCD, sends money straight from your IRA to a charity. The money never passes through your hands, so it is not added to your income.',
+        'Once your required withdrawals start (at 73 or 75, depending on your birth year), a QCD also counts toward them. That is the useful part: you meet the requirement without paying income tax on that money.',
+      ],
+    },
+    {
+      heading: 'The rules this tool follows',
+      paras: [
+        'You can start once you are 70½. The tool treats the whole year you turn 70½ as eligible; in fact only gifts made after your half-birthday count. The limit in 2026 is $111,000 a year for each person, and it rises with inflation. A couple has two limits.',
+        'The money has to come from an IRA. If your savings are in a 401(k), assume they have been rolled into an IRA. Money in an inherited IRA is left out.',
+        'Deductible IRA contributions made for the year you turn 70½ or later make the same amount of your later QCDs taxable, dollar for dollar, until they are used up. The tool applies this to a spousal contribution to a traditional IRA. It treats contributions while you work as 401(k)-type deferrals, which do not count.',
+        'The gift has to go directly to a public charity. Donor-advised funds, supporting organizations and most private foundations do not qualify (a private operating foundation can). Untick the box on a giving row to mark a gift like that. It is then taxed like General spending: paid from your other accounts, with no QCD and no charity deduction. It still shows as giving in the Sankey and the Giving column of the Projections table.',
+      ],
+    },
+    {
+      heading: 'What happens in your plan',
+      paras: [
+        'Mark an expense row as Charitable. Once you are eligible, the tool pays that giving from your IRA. It covers your required withdrawal first, then any extra up to the limit. Anything left over is paid from your other accounts the usual way.',
+        'The part that goes to charity is left out of your taxable income. Once your required withdrawals start, it counts toward them, but you do not receive it as cash.',
+      ],
+    },
+    {
+      heading: 'Why it can lower your taxes',
+      paras: [
+        'Lower taxable income can mean less of your Social Security is taxed, a lower Medicare surcharge two years later, and less state tax in states that tax IRA income.',
+        'The Taxes page compares your plan with the same gifts paid in cash, using the same withdrawal plan, and shows the difference in today\u2019s dollars.',
+      ],
+    },
+    {
+      heading: 'Gifts that are not QCDs',
+      paras: [
+        'From 2026, cash gifts to public charities can be deducted even if you do not itemize, up to $1,000 for one person or $2,000 for a couple. The tool applies this to any giving a QCD did not cover. The limits are fixed by law and do not rise with inflation.',
+      ],
+    },
+    {
+      heading: 'What it leaves out',
+      paras: [
+        'It does not model leaving part of an IRA to charity when you die, itemized deductions, or bunching several years of gifts into one. The tax saving on the Taxes page assumes the standard deduction; if you itemize, cash gifts are deductible too, so the real saving is smaller.',
+      ],
+    },
+  ],
+};
+
+export const HSA_HELP: HelpTopic = {
+  eyebrow: 'Learn more',
+  title: 'Your health savings account (HSA)',
+  sections: [
+    {
+      heading: 'Why an HSA is special',
+      paras: [
+        'Money goes in untaxed, grows untaxed, and comes out untaxed when it pays for qualified medical costs. No other account does all three.',
+        'There is no required withdrawal, and you can reimburse yourself years later for a medical bill you paid out of pocket. That is why many people let the HSA grow and pay bills from other accounts first.',
+      ],
+    },
+    {
+      heading: 'What you can put in',
+      paras: [
+        'In 2026 the limit is $4,400 for self-only coverage and $8,750 for family coverage. The base limit rises with inflation. If you are 55 or older you can add $1,000, and that catch-up does not rise with inflation. If either spouse is on family coverage, you both share one family limit, and each has their own catch-up.',
+        'You need an HSA-eligible health plan, and you cannot be on Medicare. The tool stops contributions at 65, or when you claim Social Security if that is later, because claiming enrolls you in Medicare Part A. It does not prorate the last year: Part A coverage reaches back up to six months before you claim, so a late claimer should stop earlier than the tool shows, and the year you turn 65 gets no contribution even though the months before your birthday would count.',
+        'You do not need a job to contribute. From 2026, bronze and catastrophic marketplace plans count as HSA-eligible, so an early retiree on one can keep contributing. Tick the box in the HSA section to model that.',
+      ],
+    },
+    {
+      heading: 'How the tool pays bills from it',
+      paras: [
+        'Mark expense rows as Medical. From the age you pick (65 by default, or Always), the HSA pays those bills first, before your other accounts, plus any Medicare income surcharge (IRMAA) once the HSA owner is 65 (Medicare premiums count as medical costs only from an owner 65 or over, even when they are a spouse\u2019s). None of that is income.',
+        'Before that age, medical bills are paid from your other accounts and logged as receipts, added to any receipts you entered. Both people\'s receipts form one household pot. Receipts are what you can still claim tax-free later. The tool reimburses them only as a last resort, when your other accounts have run out. Otherwise they lower the tax counted on the HSA at the end of the plan (see below). They are a fixed dollar amount and do not grow with inflation.',
+      ],
+    },
+    {
+      heading: 'What it does for your ACA subsidy',
+      paras: [
+        'If you retire before 65 and keep contributing, the contribution is deducted from your income, including capital gains, and from your state income in every state the tool models except California. That lowers the income used for your marketplace subsidy, so the subsidy goes up. The catch is where the contribution money comes from: if it comes from withdrawals that count as income (pre-tax money, or brokerage gains), those cancel part or all of the deduction. Paying it from Roth money or cash gets the full effect. It also moves money you could spend before 65 into the HSA, so your brokerage money can run out sooner and the pre-tax withdrawals that replace it can raise your ACA income in a later year. The Taxes page shows what your plan actually gets over all the contribution years. If every other account is empty, the plan skips that year\u2019s contribution, since paying it from the HSA itself would only cost tax and penalty. Be careful near the bottom of the range: under 100% of the poverty level there is no subsidy at all, and the plan warns you if a contribution pushes you there.',
+      ],
+    },
+    {
+      heading: 'If your other money runs out',
+      paras: [
+        'As a last resort the HSA can pay for anything. Money used for something other than medical costs is taxed as ordinary income, and before 65 there is also a 20% penalty. The plan shows a warning when that happens.',
+      ],
+    },
+    {
+      heading: 'What it leaves out',
+      paras: [
+        'California and New Jersey do not follow the federal HSA rules and tax the growth each year. The tool does not model that and shows a note for California plans. It also does not model your regular Medicare premiums, long-term-care premiums paid from the HSA, or the optimizer choosing how much to put in the HSA.',
+        'At the end of the plan, an HSA above your receipts is counted at the same tax rate as pre-tax money, because a non-spouse heir owes ordinary tax on it. A spouse can keep it as their own HSA.',
+        'The part your receipts cover is counted as tax-free. That assumes you claim the receipts before you die: you can reimburse yourself at any time, and the cash then passes like any other savings. Receipts you never claim are lost. A non-spouse heir owes tax on the whole HSA balance and cannot use them. So when your health or age suggests the end is near, reimburse yourself for every receipt on file. The heir\'s tax is also figured at one flat rate, though they take the whole balance within a year, so a large HSA may be taxed at a higher rate than shown.',
+      ],
+    },
+  ],
+};
+
+export const TIPS_HELP: HelpTopic = {
+  eyebrow: 'Learn more',
+  title: 'Your TIPS ladder',
+  sections: [
+    {
+      heading: 'What a ladder does',
+      paras: [
+        'TIPS are Treasury bonds whose principal rises with inflation. A ladder is a row of them, one maturing in each year you want covered. Each rung pays a fixed real amount in its year, whatever the stock market does. That is the point: those years no longer depend on returns.',
+        'Enter each bond as a rung: the year it matures, the principal shown on your statement (the inflation-adjusted figure), its coupon, and which account holds it. Par value is optional and only sets a floor: at maturity a TIPS pays at least par. Left blank, the plan uses today\'s principal as par, which is right for a bond bought at issue but generous for one bought later (its par is usually lower); it only matters if prices fall.',
+      ],
+    },
+    {
+      heading: 'Do my balances already include it?',
+      paras: [
+        'Usually yes: your brokerage statement shows one total for the account, bonds included. Leave the box ticked and the tool takes the rungs out of that balance and invests only the rest, so nothing is counted twice. Pre-tax $500,000 with $100,000 of rungs becomes $400,000 invested plus the ladder. Untick it only if the bonds are in addition to the balances you entered. If the rungs add up to more than the account holds, the plan shows an error and caps them at the balance.',
+      ],
+    },
+    {
+      heading: 'Whose bonds are they?',
+      paras: [
+        'There is one ladder for the household, but each rung says which account holds it. Taxable and Roth balances are pooled for the household in this plan, so those rungs are Household. A pre-tax rung belongs to one person: it comes out of that person\'s pre-tax balance, counts toward their required withdrawal, and passes to the survivor.',
+      ],
+    },
+    {
+      heading: 'Where the bonds sit changes the tax',
+      paras: [
+        'In a taxable account you owe federal tax every year on the coupon and on the inflation increase of the principal, even though the increase is paid out only at maturity. That is "phantom income". It also counts toward Social Security taxation, Medicare surcharges and ACA income. Treasury interest is exempt from state income tax. The tool counts this income from the first year either of you has retired.',
+        'In an IRA there is no tax while the bonds are held; the coupons and maturities are added to the IRA and taxed when you take the money out. In a Roth they are never taxed. An IRA or Roth is often the better home for a TIPS ladder.',
+      ],
+    },
+    {
+      heading: 'IRA bonds and required withdrawals',
+      paras: [
+        'Bonds in an IRA count when your required withdrawal is figured, but the tool can only pay that withdrawal from cash in the IRA. If most of the IRA is tied up in bonds, the plan shows the part it could not pay as "RMD unmet" and warns you. Taking the bonds out in kind is not modeled, and the unpaid part is never taxed and carries no 25% penalty, so in those years the tool understates your tax (in reality it is deferred, not avoided). The bonds themselves are not converted to Roth; cash the bonds pay into the IRA can be.',
+      ],
+    },
+    {
+      heading: 'How the tool models it',
+      paras: [
+        'The ladder follows inflation, not market returns: in Monte Carlo runs and historical stress tests the rungs pay the same real amounts in every scenario. Each bond is held to maturity. The plan never sells early, so a ladder cannot rescue a year that comes before its rung, and the plan warns you if you would run short while still holding bonds.',
+        'Every flow in a year is figured at the year-end price level. If prices fall over the life of a bond, the principal falls too, but at maturity it is never worth less than par, and in this tool a deflation adjustment only offsets that year\'s coupons. That is a simplification: the tax rules also let deflation beyond the year\'s coupons offset TIPS income you reported in earlier years, and carry any rest forward, so on a deflation path the tool overstates the tax a little.',
+      ],
+    },
+    {
+      heading: 'Seeing it',
+      paras: [
+        'Build a ladder\u2026 on the card plans new rungs for an income you choose. It opens with example values, so its table is a preview; nothing is added until you click Add.',
+        'On the charts the ladder is the hatched band inside its account\'s color. The Projections table has a TIPS column group (balance, coupon, inflation accrual, maturity, taxable income and unmet RMD) that you can switch on in the column chooser.',
+      ],
+    },
+    {
+      heading: 'What it leaves out',
+      paras: [
+        'Selling bonds before maturity, price changes from interest rates, reinvesting coupons into new bonds, I bonds, CDs and ladders of ordinary bonds.',
+        'The principal you enter is used both as what the bond cost and as what it is worth, so a bond bought at a discount or premium is taken out of your balance at its principal rather than at what you paid.',
+        'Rungs held in an IRA or Roth (including ones the builder places there) pay back into that account, not to you. Your withdrawal plan then decides whether that money is spent; with taxes-first ordering it can simply stay invested, and the ladder does not bridge the years it was built for.',
+        'The first plan year counts a full year of inflation on the principal, and phantom income in years before either of you retires is not taxed at all (the tool does not model income tax while you work).',
+      ],
+    },
+  ],
+};

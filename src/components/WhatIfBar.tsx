@@ -72,6 +72,7 @@ export default function WhatIfBar() {
           taxableReturn: effectivePlan.assumptions.taxableReturn + d,
           tradReturn:    effectivePlan.assumptions.tradReturn + d,
           rothReturn:    effectivePlan.assumptions.rothReturn + d,
+          ...(effectivePlan.assumptions.hsaReturn !== undefined ? { hsaReturn: effectivePlan.assumptions.hsaReturn + d } : {}),
         } : {}),
         ...(overrides.inflation !== undefined ? { inflation: overrides.inflation } : {}),
       };

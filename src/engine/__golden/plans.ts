@@ -466,3 +466,156 @@ export function planP_tightPlan(): Plan {
     state: 'IL',
   };
 }
+
+/** QCD giver: a 72+ couple in NY with large pre-tax balances and $30k a year of charitable giving.
+ *  The giving is paid straight from the IRAs as QCDs (A turns 74, B 72, so both are QCD-eligible
+ *  from year 0, and both have RMDs from 73). Exercises the RMD split into taxable income and charity,
+ *  NY taxing IRA income, and the Single-filer transition after B's death at 90. Taxfirst, no conversions. */
+export function planQ_qcdGiver(): Plan {
+  const p = goldenBase();
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1952-03-01', retirementAge: 65, planThroughAge: 95, ssPIA: 40000, ssClaimAge: 67 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1954-03-01', retirementAge: 65, planThroughAge: 90, ssPIA: 24000, ssClaimAge: 67 },
+    portfolio: {
+      personA: { taxable: 250000, taxableBasis: 150000, traditional: 1_200_000, roth: 100000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      personB: { taxable: 100000, taxableBasis: 60000, traditional: 800_000, roth: 50000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 95 }, survivorPct: 0, annualAmount: 40000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 90 }, survivorPct: 0, annualAmount: 24000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 65, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 90000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+      { id: 'giving', description: 'Charitable giving', whose: 'Household', startAge: 65, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 30000, inflationPct: { mode: 'fixed', rate: 0.025 }, category: 'charitable' as const },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 65, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'NY',
+  };
+}
+
+/** HSA early retiree: A is 55 and B is 53, both retired now, on an HSA-eligible ACA bronze plan (family
+ *  coverage). A holds a $150k HSA with $22k of past receipts and keeps contributing the family limit until
+ *  65 from the portfolio (a cash need that also lowers ACA income). Medical bills are tagged; the household
+ *  policy is the default (the HSA starts paying at 65, bills before that become receipts). IL, taxfirst,
+ *  ACA modeled. Exercises the retiree deduction, receipts, qualified payments of medical + IRMAA, and the
+ *  survivor merge (A dies at 88, B at 92). */
+export function planR_hsaEarlyRetiree(): Plan {
+  const p = goldenBase();
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1971-03-01', retirementAge: 55, planThroughAge: 88, ssPIA: 36000, ssClaimAge: 67 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1973-03-01', retirementAge: 53, planThroughAge: 92, ssPIA: 18000, ssClaimAge: 67 },
+    assumptions: { ...p.assumptions, modelACA: true, acaHouseholdSize: 2, acaBenchmarkPremium: 17000, acaNoSubsidy: false },
+    portfolio: {
+      personA: {
+        taxable: 450000, taxableBasis: 270000, traditional: 600000, roth: 160000, annualContribution: 0,
+        contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 },
+        hsa: 150000, hsaContribution: 8750, hsaCoverage: 'family', hsaContribInRetirement: true, hsaReceipts: 22000,
+      },
+      personB: {
+        taxable: 150000, taxableBasis: 90000, traditional: 250000, roth: 60000, annualContribution: 0,
+        contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 },
+      },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 88 }, survivorPct: 0, annualAmount: 36000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 92 }, survivorPct: 0, annualAmount: 18000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 55, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 78000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+      { id: 'medical', description: 'Out-of-pocket medical', whose: 'Household', startAge: 55, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 9000, inflationPct: { mode: 'fixed', rate: 0.045 }, category: 'medical' as const },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 55, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'IL',
+  };
+}
+
+/** TIPS ladder: A (60) and B (58) are retired now with a four-part ladder carved out of their balances (IL,
+ *  taxfirst, ACA modeled until 65). Six taxable rungs (2027-2032) bridge to Social Security at 67 and owe
+ *  federal tax on their indexation each year (no state tax, and the extra income feeds ACA income); four of
+ *  A's pre-tax rungs (2033-2036) and two of B's (2035-2036) pay back into the IRAs, and one more A rung
+ *  (2055) outlives A, who dies at 85, so it stays in B's RMD base; two Roth rungs (2030-2031) pay tax-free.
+ *  The 2027 rung has a par value below its adjusted principal. Maturity years are fixed, like the ages in
+ *  every other golden plan, so the CSV belongs to the 2026 calendar. */
+export function planS_tipsLadder(): Plan {
+  const p = goldenBase();
+  const r = (id: string, maturityYear: number, adjustedPrincipal: number, couponRate: number, account: 'taxable' | 'traditional' | 'roth', whose: 'A' | 'B' | 'Household', faceValue?: number) =>
+    ({ id, maturityYear, adjustedPrincipal, couponRate, account, whose, ...(faceValue !== undefined ? { faceValue } : {}) });
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1966-03-01', retirementAge: 60, planThroughAge: 85, ssPIA: 36000, ssClaimAge: 67 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1968-03-01', retirementAge: 58, planThroughAge: 95, ssPIA: 20000, ssClaimAge: 67 },
+    assumptions: { ...p.assumptions, modelACA: true, acaHouseholdSize: 2, acaBenchmarkPremium: 15000, acaNoSubsidy: false },
+    portfolio: {
+      personA: { taxable: 400000, taxableBasis: 260000, traditional: 900000, roth: 100000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      personB: { taxable: 200000, taxableBasis: 140000, traditional: 300000, roth: 60000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      tipsLadder: {
+        rungs: [
+          r('s1', 2027, 40000, 0.0125, 'taxable', 'Household', 36500),
+          r('s2', 2028, 40000, 0.0125, 'taxable', 'Household'),
+          r('s3', 2029, 40000, 0.0125, 'taxable', 'Household'),
+          r('s4', 2030, 40000, 0.0125, 'taxable', 'Household'),
+          r('s5', 2031, 40000, 0.0125, 'taxable', 'Household'),
+          r('s6', 2032, 40000, 0.0125, 'taxable', 'Household'),
+          r('a1', 2033, 50000, 0.015, 'traditional', 'A'),
+          r('a2', 2034, 50000, 0.015, 'traditional', 'A'),
+          r('a3', 2035, 50000, 0.015, 'traditional', 'A'),
+          r('a4', 2036, 50000, 0.015, 'traditional', 'A'),
+          r('a5', 2055, 60000, 0.02, 'traditional', 'A'),
+          r('b1', 2035, 40000, 0.01, 'traditional', 'B'),
+          r('b2', 2036, 40000, 0.01, 'traditional', 'B'),
+          r('r1', 2030, 25000, 0.0175, 'roth', 'Household'),
+          r('r2', 2031, 25000, 0.0175, 'roth', 'Household'),
+        ],
+      },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 85 }, survivorPct: 0, annualAmount: 36000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 95 }, survivorPct: 0, annualAmount: 20000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 60, end: { mode: 'age' as const, age: 95 }, survivorPct: 1, annualAmount: 85000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 60, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'IL',
+  };
+}
+
+/** QCD edge cases planQ doesn't reach. CA couple: A turns 70 in 2026 but is 70½ only in Feb 2027 (born in
+ *  August), so 2026 giving is cash and earns the OBBBA non-itemizer deduction; B (born in March) is 70½ in
+ *  the year she turns 70 (2028), so a second limit opens. $150k of giving is above one person's $111k limit
+ *  until then, and again after A dies at 82 (2038), when B files Single and the excess earns the $1,000
+ *  deduction. A $5k donor-advised-fund gift (qcd:false) never gets a QCD or the deduction. Taxfirst, no
+ *  conversions. */
+export function planT_qcdEdges(): Plan {
+  const p = goldenBase();
+  return {
+    ...p,
+    personA: { ...p.personA, name: 'Person A', dob: '1956-08-15', retirementAge: 65, planThroughAge: 82, ssPIA: 36000, ssClaimAge: 70 },
+    personB: { ...p.personB!, name: 'Person B', dob: '1958-03-01', retirementAge: 65, planThroughAge: 92, ssPIA: 20000, ssClaimAge: 67 },
+    portfolio: {
+      personA: { taxable: 400000, taxableBasis: 280000, traditional: 2_000_000, roth: 60000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+      personB: { taxable: 200000, taxableBasis: 120000, traditional: 900_000, roth: 40000, annualContribution: 0, contribGrowth: { mode: 'fixed', rate: 0 }, contribSplit: { taxable: 0.2, traditional: 0.4, roth: 0.4 } },
+    },
+    incomeStreams: [
+      { id: 'ssa', description: 'SS A', whose: 'A', type: 'SS', startAge: 70, end: { mode: 'age' as const, age: 82 }, survivorPct: 0, annualAmount: 36000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+      { id: 'ssb', description: 'SS B', whose: 'B', type: 'SS', startAge: 67, end: { mode: 'age' as const, age: 92 }, survivorPct: 0, annualAmount: 20000, growthPct: { mode: 'cpi' }, taxablePct: 1, stateTaxablePct: 1 },
+    ],
+    expenseStreams: [
+      { id: 'core', description: 'Core Household Spending', whose: 'Household', startAge: 70, end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: 85000, inflationPct: { mode: 'fixed', rate: 0.025 } },
+      { id: 'giving', description: 'Charitable giving', whose: 'Household', startAge: 70, end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: 150000, inflationPct: { mode: 'fixed', rate: 0.025 }, category: 'charitable' as const },
+      { id: 'daf', description: 'Donor-advised fund', whose: 'Household', startAge: 70, end: { mode: 'lastSurvivor' as const }, survivorPct: 1, annualAmount: 5000, inflationPct: { mode: 'fixed', rate: 0.025 }, category: 'charitable' as const, qcd: false },
+    ],
+    withdrawalStrategy: 'taxfirst',
+    withdrawalBracketCeiling: 100800,
+    conversion: { mode: 'off', startAge: 70, endAge: 72, autoAmount: 70000, bracketCeiling: 100800, manualSchedule: {}, optimize: false },
+    state: 'CA',
+  };
+}

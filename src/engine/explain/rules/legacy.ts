@@ -1,14 +1,35 @@
 import type { Insight, InsightContext } from '../index';
 import { fmtUSD } from '../../../lib/format';
+import { hsaTaxableBalance } from '../../taxAdjusted';
+
+const hsaTaxFree = (hsa: number, receipts: number): number => hsa - hsaTaxableBalance(hsa, receipts);
 
 /** Surfaces end-of-plan balances, separating Roth (tax-free legacy) from other buckets. */
 export function legacyRule(ctx: InsightContext): Insight | null {
   const { proj } = ctx;
   if (proj.rows.length === 0 || proj.ranOut) return null;
   const last = proj.rows[proj.rows.length - 1];
-  const endRothReal = last.endRoth / last.inflationFactor;
+  // Ladder bonds held in a Roth are Roth money too.
+  const endRothReal = (last.endRoth + last.endTipsRoth) / last.inflationFactor;
   const endTotalReal = proj.endTotalReal;
   if (endTotalReal < 100_000) return null;
+  // HSA money backed by receipts can be reimbursed tax-free, so it counts with the Roth money. That assumes the
+  // owner claims the receipts before death (the body says so): a non-spouse heir is taxed on the whole balance.
+  const hsaFreeReal = hsaTaxFree(last.endHSA, last.hsaReceiptsBal) / last.inflationFactor;
+  const taxFreeReal = endRothReal + hsaFreeReal;
+
+  if (hsaFreeReal > 0) {
+    const pct = endTotalReal > 0 ? Math.round((taxFreeReal / endTotalReal) * 100) : 0;
+    return {
+      id: 'legacyRoth',
+      surfaces: ['dashboard', 'strategy'],
+      severity: 'info',
+      priority: 40,
+      title: `Tax-free legacy: ${fmtUSD(taxFreeReal)}`,
+      body: `Plan ends with ${fmtUSD(endTotalReal)} total (today's $). ${fmtUSD(endRothReal)} is Roth, and ${fmtUSD(hsaFreeReal)} of your HSA is backed by medical receipts you can claim tax-free. That's ${pct}% of the ending balance. ` +
+        'Claim those receipts before you die: a spouse keeps the HSA as their own, but any other heir owes income tax on the whole balance and cannot use your receipts.',
+    };
+  }
 
   const rothPct = endTotalReal > 0 ? Math.round((endRothReal / endTotalReal) * 100) : 0;
   return {

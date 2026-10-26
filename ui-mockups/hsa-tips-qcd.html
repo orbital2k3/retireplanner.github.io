@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QCD / HSA / TIPS UI mockups (M1-M5)</title>
+<!-- UI reference for every UI activity in hsa-tips-qcd-plan.md. The copy is final; the layout is the target.
+     Styles come from the real app stylesheet. The app loads no web fonts, so neither does this page.
+     Open through the dev server (pnpm dev, http://localhost:5173/ui-mockups/hsa-tips-qcd.html) or straight from disk.
+     Blocks are copied verbatim from Appendix B of the plan; edit the plan and regenerate, not this file. -->
+<link rel="stylesheet" href="../src/styles/clarity.css">
+<style>
+  .mock-page { max-width: 960px; margin: 0 auto; padding: 24px 20px 64px; }
+  .mock-page > h1 { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 500; margin-bottom: 4px; }
+  .mock-page > .lede { color: var(--text-secondary); font-size: 13px; margin-bottom: 28px; }
+  .mock-page section { margin-bottom: 40px; }
+  .mock-page h2 { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 500; border-bottom: 2px solid var(--gold); padding-bottom: 4px; margin-bottom: 4px; }
+  .mock-page h2 span { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 400; color: var(--text-secondary); margin-left: 6px; }
+  .mock-page .where { color: var(--text-muted); font-size: 12px; margin-bottom: 10px; }
+  .mock-page nav { display: flex; gap: 14px; font-size: 13px; margin-bottom: 28px; }
+  .mock-page nav a { color: var(--gold); text-decoration: none; font-weight: 500; }
+</style>
+</head>
+<body>
+<main class="mock-page">
+<h1>QCD, HSA and TIPS ladder: UI mockups</h1>
+<p class="lede">Light theme only (the app has no dark mode). Each block is the target for its UI activity in <code>hsa-tips-qcd-plan.md</code>.</p>
+<nav><a href="#m1">M1 Expenses</a><a href="#m2">M2 HSA</a><a href="#m3">M3 TIPS ladder</a><a href="#m4">M4 Results</a><a href="#m5">M5 Builder</a></nav>
+<section id="m1">
+<h2>M1 <span>Expense rows with Category and the QCD sub-row</span></h2>
+<p class="where">Inputs › Cash flow › Expenses. Built in F-4.</p>
+<div style="background:#faf7f2;border-radius:12px;padding:14px;font-family:'DM Sans',system-ui,sans-serif;color:#0d1b2e">
+<div style="background:#fff;border:1px solid rgba(13,27,46,0.08);border-radius:12px;overflow:hidden">
+<div style="background:#f5e9c8;border-bottom:1px solid rgba(13,27,46,0.18);padding:7px;text-align:center;font-size:13px;font-weight:500;letter-spacing:.6px">CASH FLOW</div>
+<div style="padding:12px 14px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;border-left:3px solid #c9a84c;padding-left:8px;margin-bottom:6px">EXPENSES</div>
+<div style="font-size:11px;color:#7a96b0;margin-bottom:8px">Do not include income taxes, IRMAA surcharges, or ACA premiums. The tool calculates these.</div>
+<div style="display:grid;grid-template-columns:1.25fr .9fr .6fr .45fr .8fr .75fr .55fr .45fr 20px;gap:5px;font-size:11px;color:#4a6080;font-weight:500;border-bottom:2px solid rgba(13,27,46,0.08);padding-bottom:4px">
+<div>Description</div><div style="background:#f5e9c8;border-radius:4px;padding:0 3px">Category <span style="color:#b8620a">new</span></div><div>Whose</div><div>Start</div><div>Until</div><div>Annual amt</div><div>Infl %</div><div>Surv %</div><div></div></div>
+<div style="display:grid;grid-template-columns:1.25fr .9fr .6fr .45fr .8fr .75fr .55fr .45fr 20px;gap:5px;font-size:11px;align-items:center;padding:5px 0">
+<div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Core spending</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">General ▾</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Household</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">60</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Life</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$110,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">CPI</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">70</div><div style="color:#7a96b0;text-align:center">×</div></div>
+<div style="display:grid;grid-template-columns:1.25fr .9fr .6fr .45fr .8fr .75fr .55fr .45fr 20px;gap:5px;font-size:11px;align-items:center;padding:5px 0">
+<div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Healthcare</div><div style="border:1.5px solid #1a8a5a;background:#e8f7f0;color:#0f5c3b;border-radius:5px;padding:3px 5px">Medical ▾</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Household</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">60</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Life</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$14,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">5.5%</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">60</div><div style="color:#7a96b0;text-align:center">×</div></div>
+<div style="font-size:11px;color:#4a6080;padding:0 0 5px 4px">Your HSA can pay this tax-free (see Portfolio › HSA).</div>
+<div style="display:grid;grid-template-columns:1.25fr .9fr .6fr .45fr .8fr .75fr .55fr .45fr 20px;gap:5px;font-size:11px;align-items:center;padding:5px 0">
+<div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Church and charities</div><div style="border:1.5px solid #c9a84c;background:#f5e9c8;color:#6b5418;border-radius:5px;padding:3px 5px">Charitable ▾</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Household</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">60</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Life</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$25,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">CPI</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">100</div><div style="color:#7a96b0;text-align:center">×</div></div>
+<div style="font-size:11px;color:#4a6080;padding:0 0 4px 4px;display:flex;gap:6px;align-items:flex-start"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#c9a84c;color:#fff;font-size:9px;line-height:12px;text-align:center;flex-shrink:0;margin-top:1px">✓</span><span>Paid directly to a public charity. From age 70½ this is paid straight from your IRA as a QCD: it counts toward your required withdrawal and isn't taxed. Untick for donor-advised funds or private foundations.</span></div>
+<div style="font-size:12px;color:#c9a84c;padding:6px 0">+ Add expense category</div>
+</div></div>
+<div style="font-size:11px;color:#4a6080;margin-top:8px">Category options: General (default, no change in behavior) · Medical · Charitable. Rows saved before this release show General.</div>
+</div>
+</section>
+<section id="m2">
+<h2>M2 <span>Portfolio HSA block, household policy, and HSA return field</span></h2>
+<p class="where">Inputs › Portfolio, HSA block, household policy and HSA return field. Built in HU-1.</p>
+<div style="background:#faf7f2;border-radius:12px;padding:14px;font-family:'DM Sans',system-ui,sans-serif;color:#0d1b2e">
+<div style="background:#fff;border:1px solid rgba(13,27,46,0.08);border-radius:12px;overflow:hidden">
+<div style="background:#f5e9c8;border-bottom:1px solid rgba(13,27,46,0.18);padding:7px;text-align:center;font-size:13px;font-weight:500;letter-spacing:.6px">PORTFOLIO <span style="font-weight:400;font-size:11px;color:#7a96b0;letter-spacing:0">· balances as of Jan 1, 2026</span></div>
+<div style="padding:12px 14px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;border-left:3px solid #c9a84c;padding-left:8px;margin-bottom:8px">EXPECTED RETURNS</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;margin-bottom:14px">
+<div><div style="color:#4a6080;font-weight:500">Taxable</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">5.5 %</div></div>
+<div><div style="color:#4a6080;font-weight:500">Pre-tax</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">5.5 %</div></div>
+<div><div style="color:#4a6080;font-weight:500">Roth</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">5.5 %</div></div>
+<div style="background:#f5e9c8;border-radius:5px;padding:0 3px 3px"><div style="color:#4a6080;font-weight:500">HSA <span style="color:#b8620a">new</span></div><div style="border:1.5px solid rgba(13,27,46,0.22);background:#fff;border-radius:5px;padding:4px 6px">5.5 %</div><div style="color:#7a96b0">Shown only when an HSA exists</div></div>
+</div>
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;border-left:3px solid #c9a84c;padding-left:8px;margin-bottom:8px">ALEX <span style="font-weight:400;font-size:11px;color:#7a96b0">· $1.32M</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px;margin-bottom:6px">
+<div><div style="color:#4a6080;font-weight:500">Taxable</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">$271,000</div></div>
+<div><div style="color:#4a6080;font-weight:500">Pre-tax</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">$779,000</div></div>
+<div><div style="color:#4a6080;font-weight:500">Roth</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">$441,000</div></div></div>
+<div style="font-size:11px;color:#7a96b0;margin-bottom:10px">… annual contribution, contribution mix (unchanged) …</div>
+<div style="border:1.5px solid #1a8a5a;border-radius:8px;padding:9px 10px;background:#fbfefc">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:10px;font-weight:500;letter-spacing:1px;color:#0f5c3b">▾ HEALTH SAVINGS ACCOUNT (HSA)</div><div style="font-size:10px;color:#7a96b0">Collapsed by default when the balance is $0</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px">
+<div><div style="color:#4a6080;font-weight:500">HSA balance</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">$62,000</div></div>
+<div><div style="color:#4a6080;font-weight:500">Annual contribution</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">$9,750</div><div style="color:#7a96b0">Max $9,750 (family + 55+ catch-up)</div></div>
+<div><div style="color:#4a6080;font-weight:500">Coverage</div><div style="display:flex;background:rgba(13,27,46,0.05);border-radius:6px;padding:2px;gap:2px"><div style="flex:1;text-align:center;padding:3px;color:#7a96b0">Self</div><div style="flex:1;text-align:center;padding:3px;background:#fff;border-radius:4px;font-weight:500">Family</div></div></div>
+<div><div style="color:#4a6080;font-weight:500">Unreimbursed receipts</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">$18,000</div><div style="color:#7a96b0">Past medical bills you paid out of pocket and can still claim tax-free</div></div>
+<div style="grid-column:span 2;display:flex;gap:6px;align-items:flex-start;padding-top:14px"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#c9a84c;color:#fff;font-size:9px;line-height:12px;text-align:center;flex-shrink:0;margin-top:1px">✓</span><span style="color:#4a6080">Keep contributing after I retire, on an HSA-eligible plan (for example ACA bronze), until 65. Lowers the income used for your ACA subsidy. <span style="color:#7a96b0">Shown only if retiring before 65.</span></span></div>
+</div></div>
+<div style="font-size:11px;color:#7a96b0;margin:10px 0">… Jordan: same layout …</div>
+<div style="border-top:1px solid rgba(13,27,46,0.08);padding-top:10px;display:grid;grid-template-columns:1fr 1.4fr;gap:10px;font-size:11px;align-items:start">
+<div><div style="color:#4a6080;font-weight:500">HSA pays medical expenses from age</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">65 ▾ <span style="color:#7a96b0">(Always · 55 … 75)</span></div></div>
+<div style="color:#4a6080;padding-top:14px">Before that age, medical bills are paid from your other accounts and logged as receipts, so the HSA keeps growing tax-free. Receipts can be claimed later as tax-free cash.</div>
+</div>
+</div></div></div>
+</section>
+<section id="m3">
+<h2>M3 <span>TIPS ladder card</span></h2>
+<p class="where">Inputs › Portfolio, TIPS ladder card. Built in TU-1.</p>
+<div style="background:#faf7f2;border-radius:12px;padding:14px;font-family:'DM Sans',system-ui,sans-serif;color:#0d1b2e">
+<div style="background:#fff;border:1px solid rgba(13,27,46,0.08);border-radius:12px;padding:12px 14px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;border-left:3px solid #c9a84c;padding-left:8px">TIPS LADDER <span style="font-weight:400;font-size:11px;color:#7a96b0">· 5 rungs · $240,000</span></div>
+<div style="display:flex;gap:6px;font-size:11px"><span style="border:1px solid rgba(13,27,46,0.18);border-radius:6px;padding:3px 8px;color:#4a6080">Paste from CSV</span><span style="border:1px solid #c9a84c;border-radius:6px;padding:3px 8px;color:#6b5418">Build a ladder… <span style="color:#7a96b0">(phase 4)</span></span></div></div>
+<div style="font-size:11px;color:#7a96b0;margin-bottom:8px">Treasury inflation-protected bonds you'll hold to maturity. Each rung pays a fixed real amount in its year, whatever markets do.</div>
+<div style="display:grid;grid-template-columns:.7fr 1fr .9fr .7fr 1fr .8fr 20px;gap:5px;font-size:11px;color:#4a6080;font-weight:500;border-bottom:2px solid rgba(13,27,46,0.08);padding-bottom:4px"><div>Matures</div><div>Adj. principal</div><div>Face (par)</div><div>Coupon</div><div>Account</div><div>Whose</div><div></div></div>
+<div style="display:grid;grid-template-columns:.7fr 1fr .9fr .7fr 1fr .8fr 20px;gap:5px;font-size:11px;align-items:center;padding:4px 0"><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">2031</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$48,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$45,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">1.25%</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Pre-tax ▾</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Alex ▾</div><div style="color:#7a96b0;text-align:center">×</div></div>
+<div style="display:grid;grid-template-columns:.7fr 1fr .9fr .7fr 1fr .8fr 20px;gap:5px;font-size:11px;align-items:center;padding:4px 0"><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">2032</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$48,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$46,500</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">0.625%</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Pre-tax ▾</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">Alex ▾</div><div style="color:#7a96b0;text-align:center">×</div></div>
+<div style="display:grid;grid-template-columns:.7fr 1fr .9fr .7fr 1fr .8fr 20px;gap:5px;font-size:11px;align-items:center;padding:4px 0"><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">2033</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$48,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">$48,000</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px">1.75%</div><div style="border:1.5px solid #b8620a;border-radius:5px;padding:3px 5px">Taxable ▾</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:3px 5px;color:#7a96b0">Household</div><div style="color:#7a96b0;text-align:center">×</div></div>
+<div style="font-size:11px;color:#7a5c10;background:rgba(201,168,76,0.12);border-radius:5px;padding:4px 7px;margin:2px 0 4px">Taxable rungs owe federal tax each year on the inflation increase even though you get no cash until maturity ("phantom income"). An IRA is often a better home. Exempt from state tax.</div>
+<div style="font-size:11px;color:#7a96b0;padding:2px 0 6px">… 2034, 2035 …</div>
+<div style="font-size:12px;color:#c9a84c;padding-bottom:8px">+ Add rung</div>
+<div style="border-top:1px solid rgba(13,27,46,0.08);padding-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px">
+<div style="background:#faf7f2;border-radius:6px;padding:6px 8px"><div style="color:#7a96b0">In pre-tax</div><div style="font-weight:500;font-size:13px">$144,000</div><div style="color:#7a96b0">of Alex's $779,000</div></div>
+<div style="background:#faf7f2;border-radius:6px;padding:6px 8px"><div style="color:#7a96b0">In taxable</div><div style="font-weight:500;font-size:13px">$96,000</div><div style="color:#7a96b0">of $586,000</div></div>
+<div style="background:#faf7f2;border-radius:6px;padding:6px 8px"><div style="color:#7a96b0">In Roth</div><div style="font-weight:500;font-size:13px">$0</div></div></div>
+<div style="display:flex;gap:6px;align-items:flex-start;font-size:11px;color:#4a6080;margin-top:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#c9a84c;color:#fff;font-size:9px;line-height:12px;text-align:center;flex-shrink:0;margin-top:1px">✓</span><span>My account balances above already include these bonds. We'll set the ladder apart from them so nothing is counted twice.</span></div>
+<div style="font-size:11px;color:#c0392b;background:rgba(192,57,43,0.1);border-radius:5px;padding:4px 7px;margin-top:6px">Example error: Roth rungs total $60,000 but the Roth balance is $40,000.</div>
+</div></div>
+</section>
+<section id="m4">
+<h2>M4 <span>Results surfaces (Projections columns, Taxes cards, warnings, chart legend)</span></h2>
+<p class="where">Results surfaces: Projections columns, Taxes cards, warnings strip, chart legend. Built in QU-1/2/3/4, HU-2..5, TU-2/3.</p>
+<div style="background:#faf7f2;border-radius:12px;padding:14px;font-family:'DM Sans',system-ui,sans-serif;color:#0d1b2e;font-size:11px">
+<div style="font-size:12px;font-weight:500;color:#4a6080;margin-bottom:6px">A. Projections table: new column groups (picked in the existing column chooser, off by default except QCD when used)</div>
+<div style="background:#fff;border:1px solid rgba(13,27,46,0.08);border-radius:10px;overflow:hidden;margin-bottom:14px">
+<div style="display:grid;grid-template-columns:.45fr .8fr .7fr .75fr .8fr .8fr .8fr .8fr;font-weight:500;color:#4a6080"><div style="padding:5px">Age</div><div style="padding:5px;background:#eef2f7">RMD</div><div style="padding:5px;background:#f5e9c8">QCD</div><div style="padding:5px;background:#f5e9c8">Charity ded.</div><div style="padding:5px;background:#e8f7f0">HSA paid</div><div style="padding:5px;background:#e8f7f0">HSA bal.</div><div style="padding:5px;background:#efeaf6">TIPS cash</div><div style="padding:5px;background:#efeaf6">TIPS accrual</div></div>
+<div style="display:grid;grid-template-columns:.45fr .8fr .7fr .75fr .8fr .8fr .8fr .8fr;border-top:1px solid rgba(13,27,46,0.06)"><div style="padding:5px">72</div><div style="padding:5px">$38.2K ⓘ</div><div style="padding:5px">$25.0K</div><div style="padding:5px">$0</div><div style="padding:5px">$8.1K</div><div style="padding:5px">$91.4K</div><div style="padding:5px">$52.7K</div><div style="padding:5px">$1.2K</div></div>
+<div style="display:grid;grid-template-columns:.45fr .8fr .7fr .75fr .8fr .8fr .8fr .8fr;border-top:1px solid rgba(13,27,46,0.06)"><div style="padding:5px">73</div><div style="padding:5px">$40.0K</div><div style="padding:5px">$25.6K</div><div style="padding:5px">$0</div><div style="padding:5px">$8.6K</div><div style="padding:5px">$88.9K</div><div style="padding:5px">$53.9K</div><div style="padding:5px">$1.2K</div></div>
+<div style="padding:5px 7px;background:#faf7f2;color:#4a6080;border-top:1px solid rgba(13,27,46,0.06)">RMD tooltip: "Required $38.2K. $25.0K went straight to charity as a QCD (not taxed); $13.2K came to you as cash." More HSA columns: contribution, reimbursed, non-qualified, penalty, receipts left. More TIPS columns: maturity, ladder balance, RMD unmet.</div></div>
+<div style="font-size:12px;font-weight:500;color:#4a6080;margin-bottom:6px">B. Taxes page: new insight cards (existing .insight-card style)</div>
+<div style="background:rgba(201,168,76,0.08);border-left:4px solid #c9a84c;padding:10px 12px;display:flex;gap:10px;margin-bottom:6px"><div style="font-size:16px">◆</div><div><div style="font-weight:500;font-size:12px;margin-bottom:2px">QCDs save you $61,400 in lifetime taxes (today's $)</div><div style="color:#4a6080;line-height:1.5">From age 72, $25,000 a year of your giving goes straight from your IRA to charity. That covers 64% of your required withdrawals, lowers taxable Social Security, and keeps you out of IRMAA tier 1 in 9 years. Same withdrawal plan, compared with paying the same gifts in cash.</div></div></div>
+<div style="background:#e8f7f0;border-left:4px solid #1a8a5a;padding:10px 12px;display:flex;gap:10px;margin-bottom:14px"><div style="font-size:16px">✚</div><div><div style="font-weight:500;font-size:12px;margin-bottom:2px">Your HSA covers Medicare premiums and medical bills from 65</div><div style="color:#4a6080;line-height:1.5">$184,000 of medical costs paid tax-free over the plan. Contributing $9,750 a year on a bronze plan before 65 lowers your ACA income by the same amount and raises your subsidy by about $3,100 a year.</div></div></div>
+<div style="font-size:12px;font-weight:500;color:#4a6080;margin-bottom:6px">C. Inputs page warnings strip (existing .plan-warning style)</div>
+<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px">
+<div style="padding:5px 9px;border-radius:6px;background:rgba(201,168,76,0.12);color:#7a5c10">Charitable giving starts at 72 but Jordan's IRA is empty, so no QCD is possible. Gifts will be paid from other accounts.</div>
+<div style="padding:5px 9px;border-radius:6px;background:rgba(201,168,76,0.12);color:#7a5c10">Alex's HSA contribution of $11,000 is above the 2026 limit of $9,750. Capped at the limit.</div>
+<div style="padding:5px 9px;border-radius:6px;background:rgba(201,168,76,0.12);color:#7a5c10">California doesn't recognize HSAs: state tax on HSA growth isn't modeled.</div>
+<div style="padding:5px 9px;border-radius:6px;background:rgba(192,57,43,0.1);color:#c0392b">TIPS rungs in Roth ($60,000) exceed the Roth balance ($40,000).</div></div>
+<div style="font-size:12px;font-weight:500;color:#4a6080;margin-bottom:6px">D. Charts: legend after all three releases</div>
+<div style="background:#fff;border:1px solid rgba(13,27,46,0.08);border-radius:10px;padding:10px 12px">
+<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:8px"><span><span style="display:inline-block;width:10px;height:10px;background:#1a8a5a;border-radius:2px;margin-right:4px"></span>Taxable</span><span><span style="display:inline-block;width:10px;height:10px;background:#0d1b2e;border-radius:2px;margin-right:4px"></span>Pre-tax</span><span><span style="display:inline-block;width:10px;height:10px;background:#c9a84c;border-radius:2px;margin-right:4px"></span>Roth</span><span><span style="display:inline-block;width:10px;height:10px;background:#7b5ea7;border-radius:2px;margin-right:4px"></span>Inherited</span><span><span style="display:inline-block;width:10px;height:10px;background:#2a9d9a;border-radius:2px;margin-right:4px"></span>HSA (new)</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;background:repeating-linear-gradient(45deg,#0d1b2e 0 2px,#fff 2px 4px);border:1px solid #0d1b2e"></span>TIPS, hatched in its account color (new)</span></div>
+<div style="display:flex;height:22px;border-radius:4px;overflow:hidden"><div style="flex:20;background:#1a8a5a"></div><div style="flex:6;background:repeating-linear-gradient(45deg,#1a8a5a 0 3px,#fff 3px 6px)"></div><div style="flex:34;background:#0d1b2e"></div><div style="flex:9;background:repeating-linear-gradient(45deg,#0d1b2e 0 3px,#fff 3px 6px)"></div><div style="flex:22;background:#c9a84c"></div><div style="flex:6;background:#2a9d9a"></div></div>
+<div style="color:#4a6080;margin-top:8px">Sankey gets new links: Pre-tax → Charity (QCD), HSA → Medical, TIPS → Cash. A new series appears only when its value is non-zero, so existing plans look unchanged. The HSA teal is a placeholder until it's checked with the dataviz palette validator.</div></div>
+</div>
+</section>
+<section id="m5">
+<h2>M5 <span>TIPS ladder builder modal (phase 4)</span></h2>
+<p class="where">TIPS ladder builder modal. Built in TB-2 (phase 4).</p>
+<div style="min-height:420px;background:rgba(13,27,46,0.45);border-radius:12px;display:flex;align-items:center;justify-content:center;padding:18px;font-family:'DM Sans',system-ui,sans-serif;color:#0d1b2e;font-size:11px">
+<div style="background:#fff;border-radius:14px;width:100%;max-width:560px;overflow:hidden">
+<div style="background:#f5e9c8;padding:8px 14px;display:flex;justify-content:space-between;font-size:13px;font-weight:500;letter-spacing:.6px"><span>BUILD A TIPS LADDER</span><span style="color:#7a96b0">×</span></div>
+<div style="padding:12px 14px">
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+<div><div style="color:#4a6080;font-weight:500">Income per year (today's $)</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">$40,000</div></div>
+<div><div style="color:#4a6080;font-weight:500">From age</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">62</div></div>
+<div><div style="color:#4a6080;font-weight:500">Through age</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">69</div><div style="color:#7a96b0">Bridge to Social Security at 70</div></div>
+<div><div style="color:#4a6080;font-weight:500">Real yield</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">1.9 %</div><div style="color:#7a96b0">From TreasuryDirect or your broker</div></div>
+<div><div style="color:#4a6080;font-weight:500">Buy with money from</div><div style="border:1.5px solid rgba(13,27,46,0.22);border-radius:5px;padding:4px 6px">Pre-tax · Alex ▾</div></div></div>
+<div style="font-size:10px;font-weight:500;letter-spacing:1px;color:#7a96b0;margin:10px 0 4px">PREVIEW</div>
+<div style="display:grid;grid-template-columns:.6fr .7fr 1fr 1fr;font-weight:500;color:#4a6080;border-bottom:2px solid rgba(13,27,46,0.08);padding-bottom:3px"><div>Year</div><div>Age</div><div>Rung principal</div><div>Pays (today's $)</div></div>
+<div style="display:grid;grid-template-columns:.6fr .7fr 1fr 1fr;padding:3px 0"><div>2038</div><div>62</div><div>$34,600</div><div>$40,000</div></div>
+<div style="display:grid;grid-template-columns:.6fr .7fr 1fr 1fr;padding:3px 0"><div>2039</div><div>63</div><div>$35,300</div><div>$40,000</div></div>
+<div style="color:#7a96b0;padding:2px 0">… 6 more rungs …</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+<div style="background:#faf7f2;border-radius:6px;padding:6px 8px"><div style="color:#7a96b0">Cost today</div><div style="font-weight:500;font-size:14px">$271,800</div></div>
+<div style="background:#faf7f2;border-radius:6px;padding:6px 8px"><div style="color:#7a96b0">Comes out of</div><div style="font-weight:500;font-size:14px">Alex pre-tax: $779K → $507K</div></div></div>
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><span style="border:1px solid rgba(13,27,46,0.18);border-radius:6px;padding:5px 12px;color:#4a6080">Cancel</span><span style="background:#0d1b2e;color:#fff;border-radius:6px;padding:5px 12px">Add 8 rungs to ladder</span></div>
+</div></div></div>
+</section>
+</main>
+</body>
+</html>

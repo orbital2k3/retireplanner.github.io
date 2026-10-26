@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { runOptimizer } from '../store/strategyActions';
 import ConversionPills from '../components/strategy/ConversionPills';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +6,9 @@ import { usePlanStore, useEnginePlan } from '../store/usePlanStore';
 import { householdTotals, resolveGrowthRate } from '../schemas/plan';
 import type { IncomeStream, ExpenseStream, LumpSumEvent, PersonPortfolio, GrowthRate, EndRule } from '../schemas/plan';
 import { computePlanWarnings } from '../engine/planWarnings';
+import { computeHsaProjectionWarnings } from '../engine/hsaWarnings';
+import { computeTipsProjectionWarnings } from '../engine/tipsWarnings';
+import { runProjection } from '../engine/projection';
 import { NumberInput } from '../components/inputs/NumberInput';
 import { LegacyTargetInput } from '../components/inputs/LegacyTargetInput';
 import { listStates } from '../engine/stateTax';
@@ -16,8 +19,17 @@ import { INCOME_TEMPLATES, EXPENSE_TEMPLATES } from '../engine/streamTemplates';
 import { USER_GOALS, type UserGoal } from '../engine/recommender';
 import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE, IRA_CONTRIB_LIMIT, IRA_CATCHUP, IRA_CATCHUP_AGE, INHERITED_DEADLINE_YEARS } from '../engine/taxConstants';
 import StrategyCustomizeSheet from '../components/strategy/StrategyCustomizeSheet';
+import { HsaBlock, HsaPolicyRow } from '../components/inputs/HsaBlock';
+import { TipsLadderCard } from '../components/inputs/TipsLadderCard';
 
 const headerStyle: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', whiteSpace: 'nowrap' };
+
+/** Tint for the expense Category select (general stays neutral). Matches mockup M1. */
+const CATEGORY_SELECT_STYLE: Record<NonNullable<ExpenseStream['category']>, React.CSSProperties> = {
+  general: {},
+  medical: { borderColor: 'var(--success)', background: 'var(--success-light)', color: '#0f5c3b' },
+  charitable: { borderColor: 'var(--gold)', background: 'var(--gold-pale)', color: '#6b5418' },
+};
 
 function EndRuleControl({ end, startAge, onChange }: {
   end: EndRule;
@@ -196,6 +208,8 @@ export default function InputsPage() {
   const setCustomStateTaxRate = usePlanStore((s) => s.setCustomStateTaxRate);
   const setPersonAPortfolio = usePlanStore((s) => s.setPersonAPortfolio);
   const setPersonBPortfolio = usePlanStore((s) => s.setPersonBPortfolio);
+  const setHsaPolicy = usePlanStore((s) => s.setHsaPolicy);
+  const setTipsLadder = usePlanStore((s) => s.setTipsLadder);
   const addIncomeStream = usePlanStore((s) => s.addIncomeStream);
   const updateIncomeStream = usePlanStore((s) => s.updateIncomeStream);
   const removeIncomeStream = usePlanStore((s) => s.removeIncomeStream);
@@ -248,6 +262,7 @@ export default function InputsPage() {
     value: top, label: `${Math.round(rate * 100)}% ($${top.toLocaleString()})`,
   }));
   const pf = plan.portfolio;
+  const hasHsa = (pf.personA.hsa ?? 0) > 0 || (pf.personA.hsaContribution ?? 0) > 0 || (pf.personB?.hsa ?? 0) > 0 || (pf.personB?.hsaContribution ?? 0) > 0;
   const isMobile = useIsMobile();
 
 
@@ -279,7 +294,18 @@ export default function InputsPage() {
     && splitValidA && splitValidB;
   const retirementAge = A.retirementAge;
   const planThroughAge = A.planThroughAge;
-  const planWarnings = computePlanWarnings(flatPlan);
+  // Warnings that need the year-by-year numbers (early HSA draws, the ACA income floor) are only worth a
+  // projection when the plan has an HSA.
+  const hsaProjectionWarnings = useMemo(
+    () => (hasHsa ? computeHsaProjectionWarnings(flatPlan, runProjection(flatPlan).rows) : []),
+    [hasHsa, flatPlan],
+  );
+  const hasTips = (flatPlan.portfolio.tipsLadder?.rungs.length ?? 0) > 0;
+  const tipsProjectionWarnings = useMemo(
+    () => (hasTips ? computeTipsProjectionWarnings(runProjection(flatPlan).rows, { a: nameA, b: B ? nameB : undefined }) : []),
+    [hasTips, flatPlan, nameA, nameB, B],
+  );
+  const planWarnings = [...computePlanWarnings(flatPlan), ...hsaProjectionWarnings, ...tipsProjectionWarnings];
   const minStartAge = (whose: string) => {
     if (whose === 'B' && B) return B.retirementAge;
     if (whose === 'Household' && B) return Math.min(A.retirementAge, B.retirementAge);
@@ -331,7 +357,7 @@ export default function InputsPage() {
           <div className="plan-warnings-strip">
             {planWarnings.map((w) => (
               <div key={w.id} className={`plan-warning ${w.severity}`}>
-                {w.severity === 'error' ? '⚠' : '⚑'} {w.message}
+                {w.severity === 'error' ? '⚠' : w.severity === 'info' ? 'ⓘ' : '⚑'} {w.message}
               </div>
             ))}
           </div>
@@ -576,12 +602,12 @@ export default function InputsPage() {
                       {isSS
                         ? <div title="SS survivor benefits are modeled separately — not controlled here" style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: 2 }}>Built-in</div>
                         : <div className="input-suffix-wrap">
-                            <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={100} style={{ fontSize: 13 }} onCommit={(v) => updateIncomeStream(s.id, { survivorPct: v })} />
+                            <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={1} style={{ fontSize: 13 }} onCommit={(v) => updateIncomeStream(s.id, { survivorPct: v })} />
                             <span className="input-suffix">%</span>
                           </div>
                       }
                       <div className="input-suffix-wrap" title={s.type === 'VA' ? '38 U.S.C. §5301: VA disability is fully exempt from state tax' : 'Only applies when using a Custom flat-rate state. Named states apply their own rules.'}>
-                        <NumberInput value={s.stateTaxablePct ?? 1} scale={100} digits={0} min={0} max={100} style={{ fontSize: 13, opacity: s.type === 'VA' ? 0.45 : 1 }} disabled={s.type === 'VA'} onCommit={(v) => updateIncomeStream(s.id, { stateTaxablePct: v })} />
+                        <NumberInput value={s.stateTaxablePct ?? 1} scale={100} digits={0} min={0} max={1} style={{ fontSize: 13, opacity: s.type === 'VA' ? 0.45 : 1 }} disabled={s.type === 'VA'} onCommit={(v) => updateIncomeStream(s.id, { stateTaxablePct: v })} />
                         <span className="input-suffix">%</span>
                       </div>
                       <button className="remove-btn" onClick={() => removeIncomeStream(s.id)}>×</button>
@@ -676,6 +702,7 @@ export default function InputsPage() {
             <div className="stream-rows-scroll">
               <div className="stream-row expense-row" style={{ padding: '6px 0', borderBottom: '2px solid var(--border-light)' }}>
                 <div style={headerStyle}>Description</div>
+                <div style={headerStyle}>Category</div>
                 <div style={headerStyle}>Whose</div>
                 <div style={headerStyle}>Start age</div>
                 <div style={headerStyle}>Until</div>
@@ -687,6 +714,21 @@ export default function InputsPage() {
               {plan.expenseStreams.map((s) => (
                 <div key={s.id} className="stream-row expense-row">
                   <input type="text" value={s.description} style={{ fontSize: 13 }} onChange={(e) => updateExpenseStream(s.id, { description: e.target.value })} />
+                  <select
+                    value={s.category ?? 'general'}
+                    style={{ fontSize: 13, ...(CATEGORY_SELECT_STYLE[s.category ?? 'general']) }}
+                    onChange={(e) => {
+                      // General is the default, so it is written as absent and a row switched back keeps its original key.
+                      // 'qcd' belongs to charitable rows, so leaving one clears it.
+                      const picked = e.target.value as NonNullable<ExpenseStream['category']>;
+                      const category = picked === 'general' ? undefined : picked;
+                      updateExpenseStream(s.id, category === 'charitable' ? { category } : { category, qcd: undefined });
+                    }}
+                  >
+                    <option value="general">General</option>
+                    <option value="medical">Medical</option>
+                    <option value="charitable">Charitable</option>
+                  </select>
                   <select value={s.whose} style={{ fontSize: 13 }} onChange={(e) => updateExpenseStream(s.id, { whose: e.target.value as ExpenseStream['whose'] })}>
                     <option value="Household">Household</option>
                     <option value="A">{nameA}</option>
@@ -699,10 +741,26 @@ export default function InputsPage() {
                   </div>
                   <GrowthRateInput value={s.inflationPct} inflation={asm.inflation} onChange={(gr) => updateExpenseStream(s.id, { inflationPct: gr })} />
                   <div className="input-suffix-wrap">
-                    <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={100} style={{ fontSize: 13 }} onCommit={(v) => updateExpenseStream(s.id, { survivorPct: v })} />
+                    <NumberInput value={s.survivorPct} scale={100} digits={0} min={0} max={1} style={{ fontSize: 13 }} onCommit={(v) => updateExpenseStream(s.id, { survivorPct: v })} />
                     <span className="input-suffix">%</span>
                   </div>
                   <button className="remove-btn" onClick={() => removeExpenseStream(s.id)}>×</button>
+                  {s.category === 'medical' && hasHsa && (
+                    <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--text-secondary)', padding: '0 0 4px 4px' }}>
+                      Your HSA can pay this tax-free (see Portfolio › HSA).
+                    </div>
+                  )}
+                  {s.category === 'charitable' && (
+                    <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', padding: '2px 0 4px 4px' }}>
+                      <input type="checkbox" checked={s.qcd !== false} onChange={(e) => updateExpenseStream(s.id, { qcd: e.target.checked ? undefined : false })} style={{ accentColor: 'var(--gold)', width: 13, height: 13, marginTop: 1, flexShrink: 0 }} />
+                      <span>
+                        Paid directly to a public charity. From age 70½ this is paid straight from your IRA as a QCD and isn't taxed; once required withdrawals start, it counts toward them.
+                        {s.qcd === false
+                          ? <strong style={{ fontWeight: 500 }}> Unticked: taxed like a General expense, paid from your other accounts with no QCD and no charity deduction. Still shown as giving in Projections.</strong>
+                          : ' Untick for a donor-advised fund or a private (non-operating) foundation, which can\'t receive a QCD.'}
+                      </span>
+                    </label>
+                  )}
                 </div>
               ))}
             </div>
@@ -721,16 +779,21 @@ export default function InputsPage() {
             <div style={{ display: 'flex', gap: 0, marginBottom: 20, flexDirection: isMobile ? 'column' : 'row' }}>
               <div style={{ flex: 3 }}>
                 <div className="subsection-label">Expected Returns</div>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${hasHsa ? 4 : 3}, 1fr)`, gap: 12 }}>
                   {[
                     { label: 'Taxable', key: 'taxableReturn' as const, hint: 'Brokerage' },
                     { label: 'Pre-tax', key: 'tradReturn' as const, hint: '401(k) / IRA' },
                     { label: 'Roth', key: 'rothReturn' as const, hint: 'Roth IRA / 401k' },
+                    // Shown only when an HSA exists. Absent = same as pre-tax, so the field shows that rate.
+                    ...(hasHsa ? [{ label: 'HSA', key: 'hsaReturn' as const, hint: 'Health savings' }] : []),
                   ].map(({ label, key, hint }) => (
                     <div key={key} className="form-group" style={{ marginBottom: 0 }}>
                       <label>{label}<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {hint}</span></label>
                       <div className="input-suffix-wrap">
-                        <NumberInput value={asm[key]} scale={100} digits={1} onCommit={(v) => setAssumptions({ [key]: v })} />
+                        <NumberInput value={key === 'hsaReturn' ? (asm.hsaReturn ?? asm.tradReturn) : asm[key]} scale={100} digits={1} onCommit={(v) => setAssumptions(key === 'hsaReturn'
+                          // Absent = same as pre-tax, so the HSA keeps following later pre-tax edits.
+                          ? { hsaReturn: Math.abs(v - asm.tradReturn) < 1e-9 ? undefined : v }
+                          : { [key]: v })} />
                         <span className="input-suffix">%</span>
                       </div>
                     </div>
@@ -864,16 +927,24 @@ export default function InputsPage() {
             {/* Person A + B bucket panels */}
             <div className="two-col" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 16, gap: 0 }}>
               <div style={{ paddingRight: 24, borderRight: '2px solid rgba(13,27,46,0.18)' }}>
-                <PortfolioPersonSection name={nameA} data={pf.personA} onChange={setPersonAPortfolio} isRetired={isRetiredA} inflation={asm.inflation} spousal={spousalA} />
+                <PortfolioPersonSection name={nameA} data={pf.personA} onChange={setPersonAPortfolio} isRetired={isRetiredA} inflation={asm.inflation} spousal={spousalA}
+                  hsaAge={isValidDob(A.dob) ? calendarYearAge(A.dob) : undefined} retirementAge={A.retirementAge} sharedWith={pf.personB?.hsaCoverage === 'family' ? nameB : undefined} />
               </div>
               {pf.personB ? (
                 <div style={{ paddingLeft: 24 }}>
-                  <PortfolioPersonSection name={nameB} data={pf.personB} onChange={setPersonBPortfolio} isRetired={isRetiredB} inflation={asm.inflation} spousal={spousalB} />
+                  <PortfolioPersonSection name={nameB} data={pf.personB} onChange={setPersonBPortfolio} isRetired={isRetiredB} inflation={asm.inflation} spousal={spousalB}
+                    hsaAge={B && isValidDob(B.dob) ? calendarYearAge(B.dob) : undefined} retirementAge={B?.retirementAge ?? 65} sharedWith={pf.personA.hsaCoverage === 'family' ? nameA : undefined} />
                 </div>
               ) : (
                 <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 16 }}>No second person on this plan.</div>
               )}
             </div>
+            {hasHsa && <HsaPolicyRow value={pf.hsaPolicy?.payMedicalFromAge} onChange={(age) => setHsaPolicy(age === undefined ? undefined : { payMedicalFromAge: age })} />}
+            <TipsLadderCard
+              portfolio={pf} nameA={nameA} nameB={pf.personB ? nameB : undefined} startYear={new Date().getFullYear()}
+              ageA={isValidDob(A.dob) ? new Date().getFullYear() - parseInt(A.dob.slice(0, 4), 10) : undefined}
+              retireAgeA={A.retirementAge} ssClaimAgeA={A.ssClaimAge} onChange={setTipsLadder}
+            />
           </div>
         </div>
 
@@ -949,7 +1020,7 @@ export default function InputsPage() {
                 <div className="form-group" style={{ marginBottom: 0, flex: '0 0 110px' }}>
                   <label style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>IRA / 401(k)</label>
                   <div className="input-suffix-wrap" title="Blended effective rate on the ending pre-tax balance — not a bracket, not used in year-by-year taxes.">
-                    <NumberInput value={asm.taxAdjOrdRate ?? 0.22} scale={100} digits={1} min={0} max={60}
+                    <NumberInput value={asm.taxAdjOrdRate ?? 0.22} scale={100} digits={1} min={0} max={0.6}
                       onCommit={(v) => setAssumptions({ taxAdjOrdRate: Math.min(0.6, Math.max(0, v)) })} />
                     <span className="input-suffix">%</span>
                   </div>
@@ -958,7 +1029,7 @@ export default function InputsPage() {
                 <div className="form-group" style={{ marginBottom: 0, flex: '0 0 110px' }}>
                   <label style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Brokerage gains</label>
                   <div className="input-suffix-wrap" title="Blended effective rate on the ending brokerage gain above basis — not a bracket, not used in year-by-year taxes.">
-                    <NumberInput value={asm.taxAdjLtcgRate ?? 0.15} scale={100} digits={1} min={0} max={40}
+                    <NumberInput value={asm.taxAdjLtcgRate ?? 0.15} scale={100} digits={1} min={0} max={0.4}
                       onCommit={(v) => setAssumptions({ taxAdjLtcgRate: Math.min(0.4, Math.max(0, v)) })} />
                     <span className="input-suffix">%</span>
                   </div>
@@ -1011,7 +1082,7 @@ export default function InputsPage() {
 
 type SpousalWindow = { spouseName: string; fromAge: number; toAge: number };
 
-function PortfolioPersonSection({ name, data, onChange, isRetired = false, inflation, spousal }: { name: string; data: PersonPortfolio; onChange: (patch: Partial<PersonPortfolio>) => void; isRetired?: boolean; inflation: number; spousal?: SpousalWindow }) {
+function PortfolioPersonSection({ name, data, onChange, isRetired = false, inflation, spousal, hsaAge, retirementAge, sharedWith }: { name: string; data: PersonPortfolio; onChange: (patch: Partial<PersonPortfolio>) => void; isRetired?: boolean; inflation: number; spousal?: SpousalWindow; hsaAge?: number; retirementAge: number; sharedWith?: string }) {
   const split = data.contribSplit;
   const splitPct = Math.round((split.taxable + split.traditional + split.roth) * 100);
   // Cap shown in today's dollars, keyed off age at the start of the window. The engine indexes
@@ -1134,6 +1205,7 @@ function PortfolioPersonSection({ name, data, onChange, isRetired = false, infla
           </div>
         </div>
       )}
+      <HsaBlock data={data} onChange={onChange} age={hsaAge} retirementAge={retirementAge} sharedWith={sharedWith} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Contribution mix</div>
         {!isRetired && (
