@@ -7,7 +7,7 @@ import { REC_GOALS, USER_GOALS, type RecGoal, type UserGoal } from './recommende
 import { calendarYearAge } from '../lib/ageUtils';
 import { nelderMead2D, nelderMead3D } from './nelderMead';
 import { mulberry32, historicalBootstrap, DEFAULT_EQUITY_PCT } from './returnModels';
-import { FED_BRACKETS_MFJ } from './taxConstants';
+import { FED_BRACKETS_MFJ, FED_BRACKETS_SINGLE } from './taxConstants';
 import { federalPovertyLevel } from './aca';
 import { shiftRetirementAge } from './retirementAgeShift';
 import { taxAdjustedValue, taxAdjustedRates } from './taxAdjusted';
@@ -59,6 +59,7 @@ const BF_WITHDRAWAL_CEILINGS = [BRACKET_12_TOP, FED_BRACKETS_MFJ[2][0]] as const
 // fill-to-24% strategy. The prior 3× BRACKET_12_TOP cap ($302K) blocked this
 // basin for plans with large low-income windows (e.g. pre-SS years with no RMDs).
 const BRACKET_24_TOP = FED_BRACKETS_MFJ[3][0];
+const BRACKET_24_TOP_SINGLE = FED_BRACKETS_SINGLE[3][0];
 // Scale for normalising convAmt deltas to the same magnitude as split-fraction deltas (both ≈ [0,1]).
 const CONV_PENALTY_SCALE = BRACKET_24_TOP;
 
@@ -376,7 +377,8 @@ function innerOptimize(
   const convCapAtYear = (proj: ProjectionResult, yi: number): number => {
     const r = proj.rows[yi + retireRowOffset];
     if (!r) return 0;
-    const ceiling = BRACKET_24_TOP;
+    // Single filers and surviving-spouse years use the Single 24% bracket top.
+    const ceiling = r.filingStatus === 'MFJ' ? BRACKET_24_TOP : BRACKET_24_TOP_SINGLE;
     const tradReal = r.begTraditional / r.inflationFactor;
     return Math.max(0, Math.min(tradReal, ceiling));
   };
