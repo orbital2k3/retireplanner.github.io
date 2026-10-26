@@ -26,6 +26,7 @@ import { annualIRMAACost } from './irmaa';
 import { annualNIIT } from './niit';
 import { stateTax, STATE_PROFILES, HSA_NONCONFORMING_STATES } from './stateTax';
 import { acaNetPremium } from './aca';
+import { remainingYearFraction, partialYearReturn } from './yearFraction';
 import { buildYearDecisions, type YearDecision } from './explain/yearDecisions';
 import { irmaaHeadroomNote, acaCliffNote } from './explain/headroom';
 
@@ -273,6 +274,9 @@ const sumExpenseStreams = (
  * Returns one row per year for ages startAgeA..startAgeA+74 (max plan span).
  */
 export interface ProjectionOptions {
+  /** "Today" for year 1: sets the start year and how much of it is left (growth and contributions are
+   *  prorated). Defaults to the current date. Tests pass a fixed date. */
+  asOf?: Date;
   /** Override the active withdrawal policy without mutating the plan. */
   policy?: BlendPolicy;
   /** Per-year nominal return overrides (length matches projection years). Used by Monte Carlo. */
@@ -338,7 +342,10 @@ export function isPastInheritedEvent(ev: LumpSumEvent, ageNow: number): boolean 
 export function runProjection(livePlan: Plan, opts?: ProjectionOptions): ProjectionResult {
   const plan = resolveStrategy(livePlan);
   const activePolicy: BlendPolicy | undefined = opts?.policy ?? (plan.customPolicy as BlendPolicy | undefined);
-  const startYear = new Date().getFullYear();
+  const asOf = opts?.asOf ?? new Date();
+  const startYear = asOf.getFullYear();
+  // Balances are entered as of today, so year 1 earns only the rest of the year's return.
+  const year1Fraction = remainingYearFraction(asOf);
   const startAgeA = ageAt(plan.personA.dob, startYear);
   const startAgeB = plan.personB ? ageAt(plan.personB.dob, startYear) : undefined;
   const passingA = plan.personA.planThroughAge;
@@ -479,8 +486,12 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       ? Math.min((pfA.spousalContribution ?? 0) * inflationFactor, iraCap(ageA)) : 0;
     const spousalB = (!!plan.personB && !!pfB && aliveB && !workingB && workingA && ageB !== undefined)
       ? Math.min((pfB.spousalContribution ?? 0) * inflationFactor, iraCap(ageB)) : 0;
-    const contribA = workingA ? pfA.annualContribution * cgFactorA : spousalA;
-    const contribB = workingB ? pfB!.annualContribution * cgFactorB : spousalB;
+    // Year 1: the amount still to be contributed this calendar year (the user's own figure, else the
+    // annual amount prorated to the part of the year left). Later years use the full, grown amount.
+    const yearContrib = (pf: PersonPortfolio, grown: number) =>
+      i === 0 ? (pf.year1Contribution ?? pf.annualContribution * year1Fraction) : pf.annualContribution * grown;
+    const contribA = workingA ? yearContrib(pfA, cgFactorA) : spousalA;
+    const contribB = workingB ? yearContrib(pfB!, cgFactorB) : spousalB;
 
     // Per-person, per-bucket contribution amounts. Working-year contributions follow that
     // person's contribSplit; spousal IRA contributions bypass it entirely and land wholly in
@@ -488,7 +499,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // contribX * split, so the two routings can never drift apart.
     const bucketize = (pf: PersonPortfolio | undefined, working: boolean, own: number, spousal: number) => {
       if (!pf) return { tax: 0, trad: 0, roth: 0 };
-      if (working) return { tax: own * pf.contribSplit.taxable, trad: own * pf.contribSplit.traditional, roth: own * pf.contribSplit.roth };
+      // Year 1 may carry its own mix, used only with the user's own year-1 amount.
+      const mix = i === 0 && pf.year1Contribution !== undefined && pf.year1Split ? pf.year1Split : pf.contribSplit;
+      if (working) return { tax: own * mix.taxable, trad: own * mix.traditional, roth: own * mix.roth };
       // Default target is traditional (the deductible-IRA case) when unset.
       return { tax: 0, trad: pf.spousalTarget === 'roth' ? 0 : spousal, roth: pf.spousalTarget === 'roth' ? spousal : 0 };
     };
@@ -601,9 +614,11 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
 
     // Per-year growth rates. Hoisted above the RMD block so the QCD/HSA/TIPS steps can read them.
     const override = opts?.returnOverrides?.[i];
-    const gRateTaxYear  = override ?? plan.assumptions.taxableReturn;
-    const gRateTradYear = override ?? plan.assumptions.tradReturn;
-    const gRateRothYear = override ?? plan.assumptions.rothReturn;
+    // Year 1 earns only the remaining fraction of the year; HSA and TIPS growth are not prorated.
+    const yearReturn = (r: number) => (i === 0 ? partialYearReturn(r, year1Fraction) : r);
+    const gRateTaxYear  = yearReturn(override ?? plan.assumptions.taxableReturn);
+    const gRateTradYear = yearReturn(override ?? plan.assumptions.tradReturn);
+    const gRateRothYear = yearReturn(override ?? plan.assumptions.rothReturn);
     const gRateHsaYear  = override ?? (plan.assumptions.hsaReturn ?? plan.assumptions.tradReturn);
 
     // Per-person RMD — each governed by their own age and SECURE 2.0 start age.
@@ -692,9 +707,9 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
     // Taxfirst/tradfirst pull from traditional when taxable is exhausted; when payTaxFromBrokerage
     // is true, conversion taxes also draw from taxable — reducing spending capacity and forcing
     // more traditional draws. Both effects tighten the headroom available for the conversion.
-    const taxAvailEst   = Math.max(0, taxable * (1 + plan.assumptions.taxableReturn) + contribToTax);
-    const tradAvailForEst = Math.max(0, trad * (1 + plan.assumptions.tradReturn) + contribToTrad - trdForced);
-    const rothAvailForEst = Math.max(0, roth * (1 + plan.assumptions.rothReturn) + contribToRoth);
+    const taxAvailEst   = Math.max(0, taxable * (1 + yearReturn(plan.assumptions.taxableReturn)) + contribToTax);
+    const tradAvailForEst = Math.max(0, trad * (1 + yearReturn(plan.assumptions.tradReturn)) + contribToTrad - trdForced);
+    const rothAvailForEst = Math.max(0, roth * (1 + yearReturn(plan.assumptions.rothReturn)) + contribToRoth);
     // Exempt interest estimate (gated on retirement like the actual value).
     // other.exemptInterest is gated by the stream's own age window (not retirement) by design —
     // a muni stream correctly hits ACA MAGI for a pre-retirement marketplace enrollee.
@@ -758,7 +773,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
         const alive = s.ev.whose === 'A' ? aliveA : s.ev.whose === 'B' ? aliveB : (aliveA || aliveB);
         return alive ? sum + s.remainingBal : sum;
       }, 0);
-    const maxConvEst  = Math.max(0, (trad - inheritedTradBal) * (1 + plan.assumptions.tradReturn) + contribToTrad - trdForced);
+    const maxConvEst  = Math.max(0, (trad - inheritedTradBal) * (1 + yearReturn(plan.assumptions.tradReturn)) + contribToTrad - trdForced);
     // Senior bonus MAGI must include the conversion and LTCG from taxable withdrawals to correctly
     // model the OBBBA phase-out. Using pre-conversion ordinary income alone massively underestimates
     // MAGI (e.g. $38k vs $260k in taxfirst), causing the conversion to be oversized by ~the full
@@ -1069,6 +1084,7 @@ export function runProjection(livePlan: Plan, opts?: ProjectionOptions): Project
       const headroomNominalDisplay = Math.max(0, ceilForConv - (baseOrdIncDisplay - stdDEff - seniorBonus));
       const notes = buildYearDecisions({
         year: i + 1,
+        inflationFactor,
         ageA,
         conv,
         convPolicyZero: policyConv === 0,

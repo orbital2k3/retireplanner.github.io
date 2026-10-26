@@ -39,6 +39,8 @@ export function irmaaHeadroomNote(rows: ProjectionRow[], i: number): YearDecisio
       severity: 'warning', binding: false,
       text: `Age ${row.ageA} — income of ${fmtUSD(surchargeMAGI)} (IRMAA MAGI) sets ` +
         `the maximum Medicare surcharge at age ${futureAge}: ${fmtUSD(currentSurcharge)}/person/year.`,
+      textReal: `Age ${row.ageA} — income of ${fmtUSD(surchargeMAGI / row.inflationFactor)} (IRMAA MAGI) sets ` +
+        `the maximum Medicare surcharge at age ${futureAge}: ${fmtUSD(currentSurcharge)}/person/year.`,
       amounts: { surchargeMAGI, annualSurcharge: currentSurcharge },
     };
   }
@@ -50,6 +52,7 @@ export function irmaaHeadroomNote(rows: ProjectionRow[], i: number): YearDecisio
   if (currentSurcharge === 0 && headroom > threshold * 0.20) return null;
 
   const nextSurcharge = (tiers[tierIdx + 1].partB + tiers[tierIdx + 1].partD) * 12;
+  const real = (n: number) => fmtUSD(n / row.inflationFactor);
   const severity = headroom < threshold * 0.05 ? 'caution' : 'info';
   const tierDesc = currentSurcharge === 0
     ? `below the first IRMAA surcharge threshold`
@@ -60,6 +63,10 @@ export function irmaaHeadroomNote(rows: ProjectionRow[], i: number): YearDecisio
     severity, binding: false,
     text: `Age ${row.ageA} — income of ${fmtUSD(surchargeMAGI)} (IRMAA MAGI) is ${tierDesc} ` +
       `and ${fmtUSD(headroom)} below the next threshold at age ${futureAge}; ` +
+      `crossing it adds ${fmtUSD(nextSurcharge - currentSurcharge)}/person/year.`,
+    // Income and headroom are this year's dollars; the surcharge amounts come from the base-year tier table.
+    textReal: `Age ${row.ageA} — income of ${real(surchargeMAGI)} (IRMAA MAGI) is ${tierDesc} ` +
+      `and ${real(headroom)} below the next threshold at age ${futureAge}; ` +
       `crossing it adds ${fmtUSD(nextSurcharge - currentSurcharge)}/person/year.`,
     amounts: { surchargeMAGI, headroom, threshold, annualSurcharge: currentSurcharge, nextAnnualSurcharge: nextSurcharge },
   };
@@ -78,14 +85,18 @@ export function acaCliffNote(row: ProjectionRow, householdSize: number, modelACA
   if (headroom > 0 && headroom > cliff * 0.20) return null;
 
   const severity  = headroom <= 0 ? 'warning' : headroom < cliff * 0.05 ? 'caution' : 'info';
-  const cliffDesc = headroom <= 0
-    ? `has exceeded the 400% FPL threshold (${fmtUSD(cliff)})`
-    : `is ${fmtUSD(headroom)} below the 400% FPL threshold (${fmtUSD(cliff)})`;
+  const real = (n: number) => fmtUSD(n / row.inflationFactor);
+  const describe = (m: (n: number) => string) => headroom <= 0
+    ? `has exceeded the 400% FPL threshold (${m(cliff)})`
+    : `is ${m(headroom)} below the 400% FPL threshold (${m(cliff)})`;
+  const cliffDesc = describe(fmtUSD);
 
   return {
     year: row.year, ageA: row.ageA, code: 'aca-cliff',
     severity, binding: false,
     text: `Age ${row.ageA} — ACA MAGI of ${fmtUSD(row.acaMagi)} ${cliffDesc}. ` +
+      `Exceeding this limit eliminates ACA premium subsidies entirely.`,
+    textReal: `Age ${row.ageA} — ACA MAGI of ${real(row.acaMagi)} ${describe(real)}. ` +
       `Exceeding this limit eliminates ACA premium subsidies entirely.`,
     amounts: { acaMagi: row.acaMagi, cliff, headroom },
   };

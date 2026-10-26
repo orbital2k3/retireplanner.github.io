@@ -753,9 +753,9 @@ export function GuideContent() {
 
       <H3>Annual Contributions (before retirement)</H3>
       <FieldTable rows={[
-        ["Annual contribution", "How much you save in total across all accounts each year until retirement.", "$25,000"],
+        ["Annual contribution (Taxable / Pre-tax / Roth)", "How much you save into each type of account each year until retirement, in today's dollars. The total is the sum of the three. This should match your actual payroll elections.", "$0 Taxable / $20,000 Pre-tax / $5,000 Roth"],
+        ["This year's contribution", "What you still expect to contribute for the rest of the current calendar year. Your balances are as of today, so year 1 also earns only the part of a year's return that is left. Enter it per account (Taxable / Pre-tax / Roth), like the annual contribution. If you leave it alone it is the annual contribution times the share of the year remaining. From next year the full annual contribution applies.", "$4,500"],
         ["Contribution growth", "How fast your savings rate increases each year, for example if you expect raises.", "2%"],
-        ["Contribution mix", "What fraction goes into each bucket type. The three percentages must add up to 100%. This should match your actual payroll elections.", "0% Taxable / 80% Pre-tax / 20% Roth"],
       ]} />
 
       {/* ── Section 4: Goals & Build Plan ───────────────────── */}

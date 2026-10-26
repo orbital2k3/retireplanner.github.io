@@ -6,13 +6,19 @@ import { fmtUSD, fmtFull } from '../lib/format';
 import CashFlowsBalanced from '../components/charts/CashFlowsBalanced';
 import WhatIfBar from '../components/WhatIfBar';
 import ChartFrame from '../components/charts/ChartFrame';
-import type { YearDecision } from '../engine/explain/yearDecisions';
+import { decisionText, type YearDecision } from '../engine/explain/yearDecisions';
 
 const fmt = (n: number, mode: DisplayMode, inflF: number): string => {
   if (!isFinite(n) || n === 0) return '—';
   const v = mode === 'real' ? n / inflF : n;
   return fmtUSD(v);
 };
+
+/** Beginning balances are last year's ending balances: same moment, so in today's dollars they must use the
+ *  same price level as that End column (the previous row's factor), not this row's. Row 1 is today. */
+const BEG_KEYS: ReadonlySet<string> = new Set(['begTaxable', 'begTraditional', 'begRoth', 'inheritedBegBal']);
+const deflatorFor = (key: string, rows: readonly Row[], i: number): number =>
+  BEG_KEYS.has(key) && i > 0 ? rows[i - 1].inflationFactor : rows[i].inflationFactor;
 
 // Sticky-cell base style; per-column `left` offsets stack against each other.
 const stickyTh = (left: number, bg = '#e2e4e6', minWidth = 60): React.CSSProperties => ({
@@ -171,6 +177,128 @@ const COLUMNS: Column[] = [
   { key: 'endTaxAdjusted', label: 'End Tax-Adj',group: 'balances', essential: false, fmt: 'money', get: (r) => r.endTaxAdjusted ?? 0, tooltip: (r, $) => `Gross ${$(r.endTotal)} less est. tax on pre-tax balance and unrealized gains`, bg: BG.balances },
 ];
 
+/** A column's value exactly as the table shows it (so a tooltip's terms match the cells). */
+const colVal = (key: string, r: Row): number => Number(COLUMNS.find((c) => c.key === key)!.get(r));
+
+/**
+ * One line of arithmetic with this row's numbers: `Name $total = Term $a + Term $b − Term $c`.
+ * Parts are signed values; zero terms are left out. `plug` names whatever the listed terms do not
+ * explain (growth, rounding, items with no column), so the line always adds up to the total.
+ */
+const eq = (name: string, total: number, parts: Array<[string, number]>, $: Money, plug?: string): string => {
+  const all = [...parts];
+  if (plug) all.push([plug, total - parts.reduce((t, [, v]) => t + v, 0)]);
+  const shown = all.filter(([, v]) => Math.abs(v) >= 0.5);
+  const body = shown.length
+    ? shown.map(([label, v], i) => `${i === 0 ? (v < 0 ? '−' : '') : v < 0 ? ' − ' : ' + '}${label} ${$(Math.abs(v))}`).join('')
+    : '$0';
+  return `${name} ${$(total)} = ${body}`;
+};
+
+/** Social Security that was taxable this year: Total SS less the part ACA MAGI adds back as non-taxable. */
+const taxableSS = (r: Row): number => Math.max(0, r.totalSS - (r.acaMagi - r.ordIncome - r.ltcg - r.exemptInterest));
+
+/** Numbers-in-place formulas, shown above the rules text in each cell's tooltip. */
+const CALC: Record<string, (r: Row, $: Money) => string> = {
+  ordinaryDiv: (r, $) => r.begTaxable > 0 ? `Beg Tax ${$(r.begTaxable)} × ${((r.ordinaryDiv ?? 0) / r.begTaxable * 100).toFixed(2)}% (Dividend Yield × (1 − Qualified %)) = ${$(r.ordinaryDiv ?? 0)}` : '',
+  qualifiedDiv: (r, $) => r.begTaxable > 0 ? `Beg Tax ${$(r.begTaxable)} × ${((r.qualifiedDiv ?? 0) / r.begTaxable * 100).toFixed(2)}% (Dividend Yield × Qualified %) = ${$(r.qualifiedDiv ?? 0)}` : '',
+  distributedCash: (r, $) => {
+    const inc = (r.ordinaryDiv ?? 0) + (r.qualifiedDiv ?? 0) + (r.exemptInterest ?? 0);
+    return inc > 0 ? `(Ord Div ${$(r.ordinaryDiv ?? 0)} + Qual Div ${$(r.qualifiedDiv ?? 0)} + Tax-Exempt Int ${$(r.exemptInterest ?? 0)}) × ${(((r.distributedCash ?? 0) / inc) * 100).toFixed(0)}% paid out in cash = ${$(r.distributedCash ?? 0)}` : '';
+  },
+  cashSurplus: (r, $) => (r.cashSurplus ?? 0) > 0
+    ? eq('Cash Surplus', r.cashSurplus, [['Total SS', r.totalSS], ['Other Inc', r.otherIncome], ['Div Paid Out', r.distributedCash ?? 0], ['RMD', r.rmd],
+        ['Net Spend', -r.netSpend], ['Fed Tax', -r.fedTax], ['State Tax', -r.stateTaxAmt], ['IRMAA', -r.irmaa], ['NIIT', -r.niit], ['ACA Premium', -r.acaPremium]], $, 'other')
+    : 'No surplus: Total SS + Other Inc + Div Paid Out + RMD did not exceed Net Spend plus taxes and premiums.',
+  totalWD: (r, $) => eq('Total WD', colVal('totalWD', r), [['WD Taxable', colVal('wdTax', r)], ['WD Pre-tax', colVal('wdTrd', r)], ['WD Roth', colVal('wdRth', r)]], $)
+    + '\n' + eq('Cash needed', r.totalWD, [['Net Spend', r.netSpend], ['Fed Tax', r.fedTax], ['State Tax', r.stateTaxAmt], ['IRMAA', r.irmaa], ['NIIT', r.niit], ['ACA Premium', r.acaPremium],
+        ['Total SS', -r.totalSS], ['Other Inc', -r.otherIncome], ['RMD', -r.rmd], ['Div Paid Out', -(r.distributedCash ?? 0)]], $, 'other (HSA, ladder, rounding)'),
+  rmd: (r, $) => r.rmd > 0 && colVal('begTraditional', r) > 0
+    ? `Beg Trd ${$(colVal('begTraditional', r))} ÷ ${(colVal('begTraditional', r) / r.rmd).toFixed(1)} (IRS divisor for your age) = ${$(r.rmd)}` : '',
+  acaPremium: (r, $) => eq('ACA MAGI', r.acaMagi, [['Ord Income', r.ordIncome], ['LTCG', r.ltcg], ['Tax-Exempt Int', r.exemptInterest ?? 0], ['Total SS (non-taxable part)', r.totalSS - taxableSS(r)]], $, 'other'),
+  ordIncome: (r, $) => eq('Ord Income', r.ordIncome, [['Total SS (taxable part)', taxableSS(r)], ['Other Inc (taxable part)', r.otherIncomeTaxable], ['WD Pre-tax', r.wdTrd],
+        ['RMD', r.rmd], ['Roth Conv', r.rothConv], ['Ord Div', r.ordinaryDiv ?? 0]], $, 'other taxable (lump sum, TIPS, HSA)'),
+  ltcg: (r, $) => eq('LTCG', r.ltcg, [['gain part of WD Taxable', r.ltcg - (r.qualifiedDiv ?? 0)], ['Qual Div', r.qualifiedDiv ?? 0]], $),
+  seniorBonus: (r) => {
+    const n = (r.ageA >= 65 ? 1 : 0) + (r.ageB !== undefined && r.ageB >= 65 ? 1 : 0);
+    return n > 0 ? `${n} ${n === 1 ? 'person is' : 'people are'} 65 or older.` : 'Nobody is 65 or older yet.';
+  },
+  taxableIncome: (r, $) => eq('Taxable Inc', colVal('taxableIncome', r), [['Ord Income', r.ordIncome], ['LTCG', r.ltcg], ['Std Deduct', -colVal('stdDeduction', r)],
+        ['Senior Bonus', -colVal('seniorBonus', r)], ['Charity ded.', -(r.charityDeduction ?? 0)]], $, 'floor at $0'),
+  fedTax: (r, $) => `Taxable ordinary income ${$(Math.max(0, r.ordIncome - r.stdDeduction))} (Ord Income ${$(r.ordIncome)} − Std Deduct − Senior Bonus) through the brackets, plus LTCG ${$(r.ltcg)} at 0/15/20% = ${$(r.fedTax)}`,
+  niit: (r, $) => r.niit > 0
+    ? `3.8% × the smaller of (LTCG ${$(r.ltcg)} + Ord Div ${$(r.ordinaryDiv ?? 0)}) and (Ord Income + LTCG ${$(r.ordIncome + r.ltcg)} − ${$(r.filingStatus === 'MFJ' ? 250_000 : 200_000)} threshold) = ${$(r.niit)}`
+    : 'No NIIT: Ord Income + LTCG is under the $250,000 joint / $200,000 single threshold, or there is no investment income.',
+  effRate: (r, $) => `Fed Tax ${$(r.fedTax)} ÷ (Ord Income ${$(r.ordIncome)} + LTCG ${$(r.ltcg)}) = ${(r.effRate * 100).toFixed(1)}%`,
+  endTaxable: (r, $) => eq('End Tax', r.endTaxable, [['Beg Tax', r.begTaxable], ['Cash Surplus', r.cashSurplus ?? 0], ['Lump Sum', r.lumpSumInjectTaxable ?? 0], ['WD Taxable', -r.wdTax]], $, 'growth & contributions'),
+  endTraditional: (r, $) => eq('End Trd', colVal('endTraditional', r), [['Beg Trd', colVal('begTraditional', r)], ['WD Pre-tax', -colVal('wdTrd', r)], ['RMD', -r.rmd], ['Roth Conv', -r.rothConv]], $, 'growth, contributions & rollovers'),
+  endRoth: (r, $) => eq('End Roth', colVal('endRoth', r), [['Beg Roth', colVal('begRoth', r)], ['Roth Conv', r.rothConv], ['WD Roth', -colVal('wdRth', r)]], $, 'growth & contributions'),
+  endTotal: (r, $) => eq('End Total', r.endTotal, [['End Tax', r.endTaxable], ['End Trd', colVal('endTraditional', r)], ['End Roth', colVal('endRoth', r)], ['End Inh', r.inheritedBal ?? 0],
+        ['HSA Bal.', r.endHSA ?? 0], ['Ladder Bal.', colVal('endTips', r)]], $, 'other'),
+  endTaxAdjusted: (r, $) => eq('End Tax-Adj', r.endTaxAdjusted ?? 0, [['End Total', r.endTotal]], $, 'estimated tax on End Trd and unrealized gains'),
+};
+
+/**
+ * "How it's calculated" text shown under every numeric cell's tooltip (after any live detail the
+ * column's own `tooltip` adds). Keyed by column key. A function gets the row so it can show the
+ * actual terms. Keep these in step with the engine: projection.ts, tax.ts, aca.ts, irmaa.ts, niit.ts.
+ */
+const HOW: Record<string, string | ((r: Row, $: Money) => string)> = {
+  year: 'Years since the plan started. Year 1 is this calendar year.',
+  ageA: 'This calendar year minus the birth year.',
+  ageB: 'This calendar year minus the birth year.',
+  phase: 'Accum. = neither of you has retired. SemiRetire = one of you has. Retire = both have. Survivor = one of you has died.',
+
+  totalSS: 'Social Security from both of you at your claim ages, raised by inflation each year. After a death the survivor keeps the larger benefit.',
+  otherIncome: 'Sum of your income streams other than Social Security that are active this year, each grown by its own growth rate.',
+  exemptInterest: 'Beg Tax × Tax-Exempt Yield + any Muni Bond income stream. Not in Ord Income, but counted toward Social Security taxation, ACA MAGI and IRMAA.',
+  lumpSumInject: 'Lump-sum events landing this year that go straight into your Taxable, Pre-tax or Roth accounts.',
+  lumpSumOrdinaryIncome: 'Lump-sum amounts that must come out as taxable income this year (HSA, inherited IRA), plus any extra your withdrawal strategy takes from them.',
+  contribA: 'While A works: annual contribution × growth since plan start. Zero after retiring, except Spousal IRA.',
+  contribB: 'While B works: annual contribution × growth since plan start. Zero after retiring, except Spousal IRA.',
+  spousalIRA: 'Spousal IRA amount × inflation, capped at the IRA limit. Included in Contrib A / Contrib B.',
+
+  wdTax: 'Share of Total WD taken from the taxable account, per your withdrawal split. Only its gain part (1 − cost basis ÷ balance) is taxed, and lands in LTCG.',
+  wdTrd: 'Share of Total WD taken from pre-tax accounts, per your withdrawal split. Counts in Ord Income. Does not include RMD or Roth Conv.',
+  wdRth: 'Share of Total WD taken from Roth, per your withdrawal split. Tax-free and adds nothing to ACA MAGI or Ord Income.',
+  rmd: 'Beg Trd ÷ the IRS Uniform Lifetime divisor for each person\'s age. Starts at 73 or 75 depending on birth year. Counts in Ord Income.',
+  rothConv: 'Moved from End Trd to End Roth. Set by the optimizer (or your manual setting), capped at what is left in Trd after growth and RMD. Counts in Ord Income.',
+
+  netSpend: 'Sum of your expense streams active this year, each grown by its own inflation rate. Includes one-time expenses entered as streams. Taxes are not included.',
+  acaPremium: 'Benchmark premium × inflation × people covered, reduced by the subsidy. ACA MAGI = Ord Income + LTCG + Tax-Exempt Int + the non-taxable part of Total SS. Between 133% and 400% of the poverty line you pay about 3%–10% of ACA MAGI. At 400% or more you pay the full premium.',
+
+  stdDeduction: 'Standard deduction for your filing status, plus the extra amount per person 65 or older, scaled by inflation. Senior Bonus and Charity ded. are separate.',
+  seniorBonus: '$6,000 per person 65+ (2025–2028 only), reduced by 6 cents for each dollar of Ord Income + LTCG over $150,000 joint ($75,000 single).',
+  stateTaxAmt: 'Your state\'s rules applied to this year\'s income: what it taxes of Total SS, WD Pre-tax, RMD and Roth Conv, less its exemptions and deductions.',
+  irmaa: 'Medicare surcharge per person aged 65+, from the Ord Income + LTCG + Tax-Exempt Int of two years earlier (this year\'s in the first two years).',
+
+  giving: 'All spending tagged Charitable. Part may come from an IRA as QCD; the rest from your other accounts.',
+  qcd: 'Paid from an IRA straight to charity from age 70½. Counts toward RMD first and is left out of Ord Income.',
+  charityDeduction: 'Cash gifts to charity when you take the standard deduction (from 2026: up to $1,000, or $2,000 joint). Included in Std Deduct.',
+
+  endHSA: 'Previous HSA Bal. × (1 + HSA return) + HSA Contrib − HSA Paid − HSA Reimb. − HSA Non-qual.',
+  hsaContrib: 'HSA contributions this year, up to the annual limit (plus catch-up from 55) while eligible.',
+  hsaQualifiedWD: 'Medical bills (and the Medicare surcharge at 65+) paid tax-free from the HSA.',
+  hsaReimbursed: 'Earlier medical bills repaid tax-free from the HSA, up to Receipts.',
+  hsaNonQualWD: 'HSA money taken for non-medical spending. Counts in Ord Income, plus HSA Penalty before 65.',
+  hsaPenalty: '20% × HSA Non-qual before age 65. Zero from 65.',
+  hsaReceiptsBal: 'Previous Receipts + medical bills paid from other accounts − HSA Reimb.',
+
+  endTips: 'Value of the bonds held: previous Ladder Bal. + TIPS Accrual − TIPS Maturity.',
+  tipsCoupon: 'Real coupon rate × the inflation-adjusted principal of the bonds held.',
+  tipsAccrual: 'Principal × this year\'s inflation (CPI) change.',
+  tipsMaturity: 'Inflation-adjusted principal of the rungs that mature this year.',
+  tipsOrdInc: 'TIPS Coupon + TIPS Accrual on rungs held in taxable accounts. Counts in Ord Income.',
+  rmdUnmet: 'Required RMD − RMD: the part that could not be taken because the IRA money is in ladder bonds.',
+
+  begTaxable: 'Previous year\'s End Tax.',
+  begTraditional: 'Previous year\'s End Trd.',
+  begRoth: 'Previous year\'s End Roth.',
+  inheritedBegBal: 'Previous year\'s End Inh.',
+  inheritedBal: 'Beg Inh grown at the pre-tax or Roth return, less what was taken out this year.',
+  endTaxableBasis: 'Previous End Basis + contributions + reinvested dividends + Cash Surplus − the basis part of WD Taxable.',
+};
+
 const GROUP_LABELS: Record<GroupKey, string> = {
   income:      'Income',
   withdrawals: 'Withdrawals',
@@ -270,15 +398,15 @@ export default function Projections() {
       const notes = notesMap.get(r.year) ?? [];
       if (!notes.length) return '';
       // Strip newlines: CSV uses join('\n') so embedded newlines break naive consumers.
-      return notes.map(n => n.text.replace(/\n/g, ' ')).join(' | ');
+      return notes.map(n => decisionText(n, mode === 'real').replace(/\n/g, ' ')).join(' | ');
     },
     tooltip: (r: Row) => {
       const notes = notesMap.get(r.year) ?? [];
       if (!notes.length) return '';
-      return notes.map(n => n.text.replace(/\n/g, ' ')).join('\n\n');
+      return notes.map(n => decisionText(n, mode === 'real').replace(/\n/g, ' ')).join('\n\n');
     },
     bg: BG.decisions,
-  }), [notesMap]);
+  }), [notesMap, mode]);
 
   const allColumns = useMemo<Column[]>(() => [...COLUMNS, whyColumn], [whyColumn]);
 
@@ -335,12 +463,12 @@ export default function Projections() {
   const downloadCSV = () => {
     // CSV always includes every column regardless of UI expansion.
     const header = allColumns.map((c) => c.label).join(',');
-    const rows = proj.rows.map((r) =>
+    const rows = proj.rows.map((r, i) =>
       allColumns.map((c) => {
         const v = c.get(r);
         if (typeof v === 'number') {
           const isMoney = c.fmt === 'money';
-          const scaled = isMoney && mode === 'real' ? v / r.inflationFactor : v;
+          const scaled = isMoney && mode === 'real' ? v / deflatorFor(c.key, proj.rows, i) : v;
           return Math.round(scaled);
         }
         return `"${String(v).replace(/"/g, '""')}"`;
@@ -500,7 +628,7 @@ export default function Projections() {
                 </tr>
               </thead>
               <tbody>
-                {proj.rows.map((r) => {
+                {proj.rows.map((r, rowIdx) => {
                   const rowNotes = notesMap.get(r.year) ?? [];
                   const isExpanded = expandedYear === r.year;
                   const leftOffsets = [0, 60, 120, 180];
@@ -512,10 +640,15 @@ export default function Projections() {
                           const v = c.get(r);
                           let display: string | number;
                           if (typeof v === 'string') display = v;
-                          else if (c.fmt === 'money') display = fmt(v, mode, r.inflationFactor);
+                          else if (c.fmt === 'money') display = fmt(v, mode, deflatorFor(c.key, proj.rows, rowIdx));
                           else if (c.fmt === 'pct') display = `${v.toFixed(1)}%`;
                           else display = v;
-                          const tipText = c.tooltip?.(r, (n) => fmtFull(mode === 'real' ? n / r.inflationFactor : n));
+                          const money = (n: number) => fmtFull(mode === 'real' ? n / r.inflationFactor : n);
+                          const detail = c.tooltip?.(r, money);
+                          const how = HOW[c.key];
+                          const rules = typeof how === 'function' ? how(r, money) : how;
+                          const howText = [CALC[c.key]?.(r, money), rules].filter(Boolean).join('\n');
+                          const tipText = [detail, howText && `How it's calculated: ${howText}`].filter(Boolean).join('\n\n');
                           const isWhy = c.key === 'why';
                           const hasNotes = isWhy && rowNotes.length > 0;
                           const style: React.CSSProperties = sticky
@@ -535,7 +668,7 @@ export default function Projections() {
                             <td
                               key={c.key}
                               style={style}
-                              onMouseEnter={tipText ? (e) => setCellTip({ x: e.clientX, y: e.clientY, text: tipText, wide: isWhy }) : undefined}
+                              onMouseEnter={tipText ? (e) => setCellTip({ x: e.clientX, y: e.clientY, text: tipText, wide: isWhy || tipText.includes('\n') }) : undefined}
                               onMouseLeave={tipText ? () => setCellTip(null) : undefined}
                               onClick={hasNotes ? () => setExpandedYear(y => y === r.year ? null : r.year) : undefined}
                             >
@@ -552,7 +685,7 @@ export default function Projections() {
                           >
                             {rowNotes.map((n, idx) => (
                               <div key={idx} style={{ marginBottom: idx < rowNotes.length - 1 ? 8 : 0 }}>
-                                <span style={{ fontWeight: n.binding ? 700 : 400 }}>{n.text}</span>
+                                <span style={{ fontWeight: n.binding ? 700 : 400 }}>{decisionText(n, mode === 'real')}</span>
                               </div>
                             ))}
                           </td>

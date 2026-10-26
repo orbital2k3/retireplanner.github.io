@@ -23,11 +23,20 @@ export interface YearDecision {
   /** True when this constraint is what set the actual number, not just contextual commentary. */
   binding: boolean;
   text: string;
+  /** Same sentence with every dollar amount in today's dollars (nominal ÷ the year's inflation factor). */
+  textReal?: string;
   amounts?: Record<string, number>;
 }
 
+/** The note's sentence in the dollars the user is viewing (today's when `real`, else nominal). */
+export const decisionText = (n: YearDecision, real: boolean): string => (real && n.textReal) || n.text;
+
 export interface YearDecisionContext {
   year: number;
+  /** Cumulative inflation for this year. When set, each note also gets `textReal`. */
+  inflationFactor?: number;
+  /** Money formatter used inside note text. Internal: the builder sets it for the today's-dollars pass. */
+  fmt?: (n: number) => string;
   ageA: number;
   // Conversion
   conv: number;
@@ -67,6 +76,7 @@ export interface YearDecisionContext {
 // ---------------------------------------------------------------------------
 
 function convBracketHeadroom(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, headroomNominal, ceilForConv, baseOrdIncome, conv } = ctx;
   return {
     year, ageA,
@@ -74,14 +84,15 @@ function convBracketHeadroom(ctx: YearDecisionContext): YearDecision {
     severity: 'info',
     binding: true,
     text: `Age ${ageA} — the bracket ceiling was the binding limit on this conversion. ` +
-      `${fmtUSD(headroomNominal)} of room remained below the ${fmtUSD(ceilForConv)} ceiling ` +
-      `after ${fmtUSD(baseOrdIncome)} of other ordinary income, ` +
-      `and ${fmtUSD(conv)} was converted — the full available headroom.`,
+      `${$(headroomNominal)} of room remained below the ${$(ceilForConv)} ceiling ` +
+      `after ${$(baseOrdIncome)} of other ordinary income, ` +
+      `and ${$(conv)} was converted — the full available headroom.`,
     amounts: { headroomNominal, ceilForConv, baseOrdIncome, conv },
   };
 }
 
 function convTradCap(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, headroomNominal, maxConv, conv } = ctx;
   return {
     year, ageA,
@@ -89,14 +100,15 @@ function convTradCap(ctx: YearDecisionContext): YearDecision {
     severity: 'info',
     binding: true,
     text: `Age ${ageA} — the pre-tax balance was the binding limit on this conversion. ` +
-      `${fmtUSD(headroomNominal)} of bracket room was available, ` +
-      `but only ${fmtUSD(maxConv)} remained in the pre-tax account, ` +
-      `so ${fmtUSD(conv)} was converted.`,
+      `${$(headroomNominal)} of bracket room was available, ` +
+      `but only ${$(maxConv)} remained in the pre-tax account, ` +
+      `so ${$(conv)} was converted.`,
     amounts: { headroomNominal, maxConv, conv },
   };
 }
 
 function convOptimizerPolicy(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, conv, headroomNominal } = ctx;
   const unused = Math.max(0, headroomNominal - conv);
   return {
@@ -104,8 +116,8 @@ function convOptimizerPolicy(ctx: YearDecisionContext): YearDecision {
     code: 'conv-optimizer-policy',
     severity: 'info',
     binding: true,
-    text: `Age ${ageA} — the optimizer set this year's conversion to ${fmtUSD(conv)}, ` +
-      `leaving ${fmtUSD(unused)} of the ${fmtUSD(headroomNominal)} available below the next bracket ceiling unused. ` +
+    text: `Age ${ageA} — the optimizer set this year's conversion to ${$(conv)}, ` +
+      `leaving ${$(unused)} of the ${$(headroomNominal)} available below the next bracket ceiling unused. ` +
       `The multi-year model determined that converting more here would reduce projected after-tax wealth. ` +
       `The optimizer evaluates all years simultaneously — the trade-off is driven by future-year tax ` +
       `interactions (RMD pressure, IRMAA tiers, bracket shifts after one spouse passes) ` +
@@ -128,6 +140,7 @@ function convPolicyZero(ctx: YearDecisionContext): YearDecision {
 }
 
 function convWithTradWd(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, conv, headroomNominal, ceilForConv, baseOrdIncome, gap, wdTax, wdRth, wdTrd } = ctx;
   return {
     year, ageA,
@@ -135,12 +148,12 @@ function convWithTradWd(ctx: YearDecisionContext): YearDecision {
     severity: 'info',
     binding: false,
     text: `Age ${ageA} — a Roth conversion and a pre-tax withdrawal are not in conflict. ` +
-      `The conversion is sized first: ${fmtUSD(headroomNominal)} of bracket room remained ` +
-      `below the ${fmtUSD(ceilForConv)} ceiling after ${fmtUSD(baseOrdIncome)} of other ordinary income, ` +
-      `and ${fmtUSD(conv)} was converted. ` +
-      `The withdrawal happens after, and funds a different need: of the ${fmtUSD(gap)} spending gap, ` +
-      `${fmtUSD(wdTax)} came from taxable and ${fmtUSD(wdRth)} from Roth, ` +
-      `leaving ${fmtUSD(wdTrd)} to draw from pre-tax. ` +
+      `The conversion is sized first: ${$(headroomNominal)} of bracket room remained ` +
+      `below the ${$(ceilForConv)} ceiling after ${$(baseOrdIncome)} of other ordinary income, ` +
+      `and ${$(conv)} was converted. ` +
+      `The withdrawal happens after, and funds a different need: of the ${$(gap)} spending gap, ` +
+      `${$(wdTax)} came from taxable and ${$(wdRth)} from Roth, ` +
+      `leaving ${$(wdTrd)} to draw from pre-tax. ` +
       `Converting more would not have reduced the withdrawal — it would have added to it, ` +
       `because conversion tax is part of the same gap.`,
     amounts: { conv, headroomNominal, ceilForConv, baseOrdIncome, gap, wdTax, wdRth, wdTrd },
@@ -148,6 +161,7 @@ function convWithTradWd(ctx: YearDecisionContext): YearDecision {
 }
 
 function convDuringRmd(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, rmdTaxable, tradBalance, ceilForConv, headroomNominal, conv, gap } = ctx;
   return {
     year, ageA,
@@ -155,17 +169,18 @@ function convDuringRmd(ctx: YearDecisionContext): YearDecision {
     severity: 'info',
     binding: false,
     text: `Age ${ageA} — the RMD came first and shrank the conversion. ` +
-      `Your ${fmtUSD(rmdTaxable)} RMD is mandatory ordinary income and consumed that much bracket space ` +
-      `before any conversion was considered; it also reduced the convertible pre-tax balance to ${fmtUSD(tradBalance)}. ` +
-      `What remained below the ${fmtUSD(ceilForConv)} ceiling was ${fmtUSD(headroomNominal)}, ` +
-      `and ${fmtUSD(conv)} was converted. ` +
-      `The RMD is spending money, not a withdrawal, so it offsets your ${fmtUSD(gap)} of spending ` +
+      `Your ${$(rmdTaxable)} RMD is mandatory ordinary income and consumed that much bracket space ` +
+      `before any conversion was considered; it also reduced the convertible pre-tax balance to ${$(tradBalance)}. ` +
+      `What remained below the ${$(ceilForConv)} ceiling was ${$(headroomNominal)}, ` +
+      `and ${$(conv)} was converted. ` +
+      `The RMD is spending money, not a withdrawal, so it offsets your ${$(gap)} of spending ` +
       `rather than appearing in the withdrawal columns.`,
     amounts: { rmdTaxable, tradBalance, ceilForConv, headroomNominal, conv, gap },
   };
 }
 
 function qcdRmd(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, rmdTaxable } = ctx;
   const qcd = ctx.qcd ?? 0;
   const beyond = ctx.qcdBeyondRmd ?? 0;
@@ -173,8 +188,8 @@ function qcdRmd(ctx: YearDecisionContext): YearDecision {
   const covered = qcd - beyond;
   const taxed = ctx.qcdTaxable ?? 0;
   const rmdPart = gross > 1
-    ? `It covered ${fmtUSD(covered)} of your ${fmtUSD(gross)} required withdrawal, so only ${fmtUSD(rmdTaxable)} of it counted as income` +
-      (beyond > 1 ? `, and a further ${fmtUSD(beyond)} went to charity beyond the requirement.` : '.')
+    ? `It covered ${$(covered)} of your ${$(gross)} required withdrawal, so only ${$(rmdTaxable)} of it counted as income` +
+      (beyond > 1 ? `, and a further ${$(beyond)} went to charity beyond the requirement.` : '.')
     : 'No withdrawal was required yet, so none of it counted toward an RMD.';
   return {
     year, ageA,
@@ -182,9 +197,9 @@ function qcdRmd(ctx: YearDecisionContext): YearDecision {
     severity: 'info',
     binding: false,
     text: taxed > 1
-      ? `Age ${ageA} — ${fmtUSD(qcd)} went straight from your IRA to charity as a QCD. ${fmtUSD(taxed)} of it was taxed anyway: ` +
+      ? `Age ${ageA} — ${$(qcd)} went straight from your IRA to charity as a QCD. ${$(taxed)} of it was taxed anyway: ` +
         `deductible IRA contributions made from age 70½ reduce the tax-free amount (IRC §408(d)(8)). ${rmdPart}`
-      : `Age ${ageA} — ${fmtUSD(qcd)} went straight from your IRA to charity as a QCD, so it was not taxed. ${rmdPart}`,
+      : `Age ${ageA} — ${$(qcd)} went straight from your IRA to charity as a QCD, so it was not taxed. ${rmdPart}`,
     amounts: { qcd, qcdBeyondRmd: beyond, rmdGross: gross, rmdTaxable, ...(taxed > 0 ? { qcdTaxable: taxed } : {}) },
   };
 }
@@ -193,12 +208,12 @@ function qcdRmd(ctx: YearDecisionContext): YearDecision {
 // Withdrawal notes
 // ---------------------------------------------------------------------------
 
-function spillReasonText(kind: SpillKind, ageA: number, spill: YearDecisionContext['spill']): string {
+function spillReasonText(kind: SpillKind, ageA: number, spill: YearDecisionContext['spill'], $: (n: number) => string): string {
   switch (kind) {
     case 'no-window':
       return `age ${ageA} is not covered by any window in your policy`;
     case 'trad-cap':
-      return `the window's traditional cap (${fmtUSD(spill?.tradCap ?? 0)}) limits this account`;
+      return `the window's traditional cap (${$(spill?.tradCap ?? 0)}) limits this account`;
     case 'pct-unhonorable':
       return `account balances are too small to fill the requested percentages`;
     case 'balance-exhausted':
@@ -207,6 +222,7 @@ function spillReasonText(kind: SpillKind, ageA: number, spill: YearDecisionConte
 }
 
 function wdPolicySpill(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, spill, spillWindow, gap, wdTax, wdTrd, wdRth } = ctx;
   if (!spill) throw new Error('wdPolicySpill called without spill');
   const totalWd = wdTax + wdTrd + wdRth;
@@ -218,7 +234,7 @@ function wdPolicySpill(ctx: YearDecisionContext): YearDecision {
       `${Math.round(spillWindow.pctTraditional * 100)}% pre-tax / ` +
       `${Math.round(spillWindow.pctRoth * 100)}% Roth, but `
     : 'Your policy could not be honored: ';
-  const reason = spillReasonText(spill.kind, ageA, spill);
+  const reason = spillReasonText(spill.kind, ageA, spill, $);
   return {
     year, ageA,
     code: 'wd-policy-spill',
@@ -226,7 +242,7 @@ function wdPolicySpill(ctx: YearDecisionContext): YearDecision {
     binding: true,
     text: `Age ${ageA} — your withdrawal split could not be honored. ` +
       windowDesc +
-      `${fmtUSD(spill.amount)} of the ${fmtUSD(gap)} needed could not be drawn that way — ` +
+      `${$(spill.amount)} of the ${$(gap)} needed could not be drawn that way — ` +
       `${reason}. ` +
       `The shortfall was refilled taxable → pre-tax → Roth, ` +
       `which is why the actual split is ${pctTax}/${pctTrd}/${pctRth}.`,
@@ -235,6 +251,7 @@ function wdPolicySpill(ctx: YearDecisionContext): YearDecision {
 }
 
 function wdBracketOverride(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, wdTrd, gap, wdTax, wdRth } = ctx;
   return {
     year, ageA,
@@ -242,22 +259,23 @@ function wdBracketOverride(ctx: YearDecisionContext): YearDecision {
     severity: 'caution',
     binding: true,
     text: `Age ${ageA} — the bracket-fill ceiling was overridden. ` +
-      `Taxable and Roth accounts could not cover the ${fmtUSD(gap)} spending need on their own, ` +
-      `so ${fmtUSD(wdTrd)} was drawn from the pre-tax account past the bracket ceiling. ` +
-      `Taxable covered ${fmtUSD(wdTax)} and Roth ${fmtUSD(wdRth)}.`,
+      `Taxable and Roth accounts could not cover the ${$(gap)} spending need on their own, ` +
+      `so ${$(wdTrd)} was drawn from the pre-tax account past the bracket ceiling. ` +
+      `Taxable covered ${$(wdTax)} and Roth ${$(wdRth)}.`,
     amounts: { gap, wdTrd, wdTax, wdRth },
   };
 }
 
 function wdBracketfillRoom(ctx: YearDecisionContext): YearDecision {
+  const $ = ctx.fmt ?? fmtUSD;
   const { ageA, year, bracketfillRoom, ceilForConv } = ctx;
   return {
     year, ageA,
     code: 'wd-bracketfill-room',
     severity: 'info',
     binding: false,
-    text: `Age ${ageA} — the withdrawal preset filled the bracket up to ${fmtUSD(ceilForConv)}. ` +
-      `${fmtUSD(bracketfillRoom)} of room remained after the pre-tax draw; ` +
+    text: `Age ${ageA} — the withdrawal preset filled the bracket up to ${$(ceilForConv)}. ` +
+      `${$(bracketfillRoom)} of room remained after the pre-tax draw; ` +
       `remaining spending came from Roth and taxable.`,
     amounts: { bracketfillRoom, ceilForConv },
   };
@@ -267,7 +285,16 @@ function wdBracketfillRoom(ctx: YearDecisionContext): YearDecision {
 // Public builder
 // ---------------------------------------------------------------------------
 
+/** Notes in nominal dollars; with `ctx.inflationFactor`, each also carries `textReal` in today's dollars. */
 export function buildYearDecisions(ctx: YearDecisionContext): YearDecision[] {
+  const notes = buildNotes(ctx);
+  const f = ctx.inflationFactor;
+  if (!f || f <= 0) return notes;
+  const real = buildNotes({ ...ctx, fmt: (n) => fmtUSD(n / f) });
+  return notes.map((n, i) => ({ ...n, textReal: real[i].text }));
+}
+
+function buildNotes(ctx: YearDecisionContext): YearDecision[] {
   const notes: YearDecision[] = [];
 
   if (ctx.conv > 1) {

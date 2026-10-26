@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { runOptimizer } from '../store/strategyActions';
 import ConversionPills from '../components/strategy/ConversionPills';
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { computePlanWarnings } from '../engine/planWarnings';
 import { computeHsaProjectionWarnings } from '../engine/hsaWarnings';
 import { computeTipsProjectionWarnings } from '../engine/tipsWarnings';
 import { runProjection } from '../engine/projection';
+import { remainingYearFraction } from '../engine/yearFraction';
 import { NumberInput } from '../components/inputs/NumberInput';
 import { LegacyTargetInput } from '../components/inputs/LegacyTargetInput';
 import { listStates } from '../engine/stateTax';
@@ -1064,7 +1065,7 @@ export default function InputsPage() {
               ? (!isValidDob(A.dob) || (B && !isValidDob(B.dob))
                   ? 'Fix the date of birth in Personal Details (year must be 1900–present).'
                   : (!splitValidA || !splitValidB)
-                    ? 'Contribution mix must add up to 100% in Portfolio.'
+                    ? 'The contribution amounts in Portfolio don\'t add up. Re-enter one of the Taxable / Pre-tax / Roth amounts to fix it.'
                     : 'Enter names for all people in Personal Details to build your plan.')
               : 'Runs the optimizer for your selected goal, then opens your results dashboard.'}
           </div>
@@ -1084,36 +1085,42 @@ type SpousalWindow = { spouseName: string; fromAge: number; toAge: number };
 
 function PortfolioPersonSection({ name, data, onChange, isRetired = false, inflation, spousal, hsaAge, retirementAge, sharedWith }: { name: string; data: PersonPortfolio; onChange: (patch: Partial<PersonPortfolio>) => void; isRetired?: boolean; inflation: number; spousal?: SpousalWindow; hsaAge?: number; retirementAge: number; sharedWith?: string }) {
   const split = data.contribSplit;
-  const splitPct = Math.round((split.taxable + split.traditional + split.roth) * 100);
+  const yearLeft = remainingYearFraction(new Date());
   // Cap shown in today's dollars, keyed off age at the start of the window. The engine indexes
   // both the base limit and the catch-up to CPI year by year.
   const spousalCap = IRA_CONTRIB_LIMIT + ((spousal?.fromAge ?? 0) >= IRA_CATCHUP_AGE ? IRA_CATCHUP : 0);
 
   type BucketKey = 'taxable' | 'traditional' | 'roth';
-  const [pctDraft, setPctDraft] = useState<Record<BucketKey, string>>({
-    taxable: String(Math.round(split.taxable * 100)),
-    traditional: String(Math.round(split.traditional * 100)),
-    roth: String(Math.round(split.roth * 100)),
-  });
-  const editingRef = useRef(false);
-
-  useEffect(() => {
-    if (!editingRef.current) {
-      setPctDraft({
-        taxable: String(Math.round(split.taxable * 100)),
-        traditional: String(Math.round(split.traditional * 100)),
-        roth: String(Math.round(split.roth * 100)),
-      });
-    }
-  }, [split.taxable, split.traditional, split.roth]);
-
-  const commitBucket = (key: BucketKey) => {
-    editingRef.current = false;
-    const parsed = parseFloat(pctDraft[key]);
-    const v = isNaN(parsed) ? split[key] * 100 : Math.max(0, Math.min(100, parsed));
-    setPctDraft((prev) => ({ ...prev, [key]: String(v) }));
-    onChange({ contribSplit: { ...split, [key]: v / 100 } });
+  const BUCKETS: ReadonlyArray<readonly [BucketKey, string]> = [['taxable', 'Taxable'], ['traditional', 'Pre-tax'], ['roth', 'Roth']];
+  // Annual contribution is entered as dollars per account. The plan stores the total plus each
+  // account's share, so changing one amount changes the total and keeps the others as they are.
+  const bucketAmount = (k: BucketKey) => Math.round(data.annualContribution * split[k] * 100) / 100;
+  const commitBucketAmount = (k: BucketKey, dollars: number) => {
+    const amounts = { taxable: bucketAmount('taxable'), traditional: bucketAmount('traditional'), roth: bucketAmount('roth'), [k]: dollars };
+    const total = amounts.taxable + amounts.traditional + amounts.roth;
+    // With nothing left to contribute there is no mix to derive; keep the last one.
+    onChange({
+      annualContribution: total,
+      ...(total > 0 ? { contribSplit: { taxable: amounts.taxable / total, traditional: amounts.traditional / total, roth: amounts.roth / total } } : {}),
+    });
   };
+
+  // This year's contribution, per account. Until edited it is the annual amounts times the share of
+  // the year left; once set it carries its own mix (falling back to the annual one).
+  const yearMix = data.year1Split ?? split;
+  const yearAmount = (k: BucketKey) => Math.round(
+    (data.year1Contribution !== undefined ? data.year1Contribution * yearMix[k] : data.annualContribution * split[k] * yearLeft) * 100) / 100;
+  const commitYearAmount = (k: BucketKey, dollars: number) => {
+    const amounts = { taxable: yearAmount('taxable'), traditional: yearAmount('traditional'), roth: yearAmount('roth'), [k]: dollars };
+    const total = amounts.taxable + amounts.traditional + amounts.roth;
+    onChange({
+      year1Contribution: total,
+      year1Split: total > 0
+        ? { taxable: amounts.taxable / total, traditional: amounts.traditional / total, roth: amounts.roth / total }
+        : yearMix,
+    });
+  };
+  const yearTotal = BUCKETS.reduce((t, [k]) => t + yearAmount(k), 0);
 
   return (
     <div>
@@ -1156,14 +1163,44 @@ function PortfolioPersonSection({ name, data, onChange, isRetired = false, infla
           </div>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-        <div className="form-group">
-          <label>Annual contribution</label>
-          <div className="input-prefix-wrap"><span className="input-prefix">$</span>
-            <NumberInput value={isRetired ? 0 : data.annualContribution} min={0} style={{ paddingLeft: 22 }} disabled={isRetired} onCommit={(v) => onChange({ annualContribution: v })} />
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Annual contribution</div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>
+          {isRetired ? 'Already retired' : `Total ${fmtFull(data.annualContribution)}/yr`}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
+        {BUCKETS.map(([k, label]) => (
+          <div key={k} className="form-group">
+            <label>{label}</label>
+            <div className="input-prefix-wrap"><span className="input-prefix">$</span>
+              <NumberInput value={isRetired ? 0 : bucketAmount(k)} min={0} style={{ paddingLeft: 22 }} disabled={isRetired} onCommit={(v) => commitBucketAmount(k, v)} />
+            </div>
           </div>
-          {isRetired && <div className="helper-text">Already retired</div>}
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>This year's contribution</div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>
+          {isRetired ? 'Already retired' : `Total ${fmtFull(yearTotal)}`}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: data.year1Contribution === undefined ? 4 : 12 }}>
+        {BUCKETS.map(([k, label]) => (
+          <div key={k} className="form-group">
+            <label>{label}</label>
+            <div className="input-prefix-wrap"><span className="input-prefix">$</span>
+              <NumberInput value={isRetired ? 0 : yearAmount(k)} min={0} style={{ paddingLeft: 22 }} disabled={isRetired} onCommit={(v) => commitYearAmount(k, v)} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {!isRetired && (
+        <div className="helper-text" style={{ marginBottom: 12 }}>
+          Still to come in {new Date().getFullYear()}.{data.year1Contribution === undefined && ` Annual × ${Math.round(yearLeft * 100)}% of the year left.`}
         </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginBottom: 12 }}>
         <div className="form-group">
           <label>Contribution growth</label>
           {isRetired
@@ -1206,33 +1243,6 @@ function PortfolioPersonSection({ name, data, onChange, isRetired = false, infla
         </div>
       )}
       <HsaBlock data={data} onChange={onChange} age={hsaAge} retirementAge={retirementAge} sharedWith={sharedWith} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Contribution mix</div>
-        {!isRetired && (
-          <span style={{ fontSize: 11, fontWeight: 700, color: splitPct === 100 ? 'var(--success)' : 'var(--warning)' }}>
-            {splitPct === 100 ? '✓ 100%' : `⚠ ${splitPct}%`}
-          </span>
-        )}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-        {(['taxable', 'traditional', 'roth'] as const).map((k) => (
-          <div key={k} className="form-group">
-            <label>{k === 'taxable' ? 'Taxable' : k === 'traditional' ? 'Pre-tax' : 'Roth'}</label>
-            <div className="input-suffix-wrap">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={isRetired ? '0' : pctDraft[k]}
-                disabled={isRetired}
-                onFocus={() => { editingRef.current = true; }}
-                onChange={(e) => setPctDraft((prev) => ({ ...prev, [k]: e.target.value }))}
-                onBlur={() => commitBucket(k)}
-              />
-              <span className="input-suffix">%</span>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

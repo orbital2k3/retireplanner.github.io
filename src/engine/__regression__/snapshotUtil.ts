@@ -32,9 +32,11 @@ export const RESULT_KEYS = [
   'endTaxAdjustedReal', 'yearsCovered', 'lifetimeShortfallReal', 'ranOut', 'overrideEvents',
 ] as const;
 
-/** Pinned "today". The projection reads `new Date().getFullYear()`, so every calendar-dependent
- *  value follows this date. Mid-year so no timezone can move it across a year boundary. */
-export const PINNED_NOW = '2026-06-15T12:00:00Z';
+/** Pinned "today". The projection reads the current date for its start year and for how much of year 1
+ *  is left, so every calendar-dependent value follows this date. Jan 1 means a full year 1 (no
+ *  proration), which keeps the snapshots meaning "a whole first year". No `Z`: local noon, so no
+ *  timezone can move it to another calendar day. */
+export const PINNED_NOW = '2026-01-01T12:00:00';
 
 /** Call from `beforeAll`; pair with `unpinDate` in `afterAll`. Only Date is faked, so the
  *  optimizer's performance.now()-style timers keep working. */

@@ -44,3 +44,6 @@ handover.md
 SWL-handover.md
 speed-up.md
 spend-with-legacy.md
+
+# Personal exports of a real plan (birth dates, balances); some local tests read one if present
+retirement-optimizer-*.json

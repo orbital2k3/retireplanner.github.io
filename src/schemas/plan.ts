@@ -107,6 +107,15 @@ export const PersonPortfolioSchema = z.object({
   traditional: z.number().nonnegative(),
   roth: z.number().nonnegative(),
   annualContribution: z.number().nonnegative(),
+  // Still to be contributed this calendar year (plan year 1). Absent = annualContribution prorated to the
+  // part of the year left. Optional so old plans parse unchanged and need no migration.
+  year1Contribution: z.number().nonnegative().optional(),
+  // How year1Contribution splits across buckets. Absent = the same mix as contribSplit.
+  year1Split: z.object({
+    taxable: z.number().min(0).max(1),
+    traditional: z.number().min(0).max(1),
+    roth: z.number().min(0).max(1),
+  }).optional(),
   // Annual % growth of this person's contribution while still working (e.g. 0.03 = +3%/yr).
   contribGrowth: GrowthRateSchema.default({ mode: 'cpi' }),
   // How each year's contribution splits across buckets for this person (must sum to ~1)

@@ -4,7 +4,8 @@ import type { Plan } from '../schemas/plan';
 import type { OptimizeResult } from '../engine/optimizer';
 import type { PolicyRationale } from '../engine/explain/optimizerRationale';
 import type { DecisionTrace, Counterfactual } from '../engine/explain/decisionTrace';
-import type { YearDecision } from '../engine/explain/yearDecisions';
+import { decisionText, type YearDecision } from '../engine/explain/yearDecisions';
+import { usePlanStore } from '../store/usePlanStore';
 import { buildDiagnosticsMarkdown, copyDiagnosticsToClipboard } from '../engine/explain/diagnosticsMarkdown';
 import { fmtM, fmtCompactWithSign } from '../lib/format';
 
@@ -216,6 +217,7 @@ const SEVERITY_ORDER: Record<YearDecision['severity'], number> = { warning: 0, c
 
 function YearDecisionsSection({ notes, onClose }: { notes: YearDecision[]; onClose: () => void }) {
   const navigate = useNavigate();
+  const real = usePlanStore((s) => s.displayMode) === 'real';
   const notable = notes
     .filter((n) => n.binding && n.severity !== 'info')
     .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
@@ -239,7 +241,7 @@ function YearDecisionsSection({ notes, onClose }: { notes: YearDecision[]; onClo
             <span style={{ fontSize: 11, fontWeight: 700, color: n.severity === 'warning' ? '#dc2626' : '#d97706', whiteSpace: 'nowrap', marginTop: 1 }}>
               Age {n.ageA}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.55, flex: 1 }}>{n.text}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.55, flex: 1 }}>{decisionText(n, real)}</span>
             <button
               onClick={() => { onClose(); navigate('/projections'); }}
               style={{ fontSize: 11, padding: '2px 8px', background: 'none', border: '1px solid var(--border-light)', borderRadius: 4, cursor: 'pointer', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontFamily: 'inherit', flexShrink: 0 }}

@@ -1,5 +1,7 @@
 import { usePlanStore } from '../store/usePlanStore';
-import { useWhatIfStore } from '../store/useWhatIfStore';
+import { useState } from 'react';
+import { useWhatIfStore, applyWhatIf } from '../store/useWhatIfStore';
+import { runOptimizer } from '../store/strategyActions';
 import { useOptimizerStore } from '../store/useOptimizerStore';
 import type { DeepPartial } from '../engine/scenario';
 import type { Plan } from '../schemas/plan';
@@ -55,6 +57,27 @@ export default function WhatIfBar() {
     overrides.inflation !== undefined ||
     spendIsOverridden
   );
+
+  const [optimizing, setOptimizing] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  /** Same optimizer run as the Dashboard's Re-optimize, but on the plan with the slider values
+   *  applied. The result is saved with those values (and the sliders reset, see commitOptimizerPlan),
+   *  or held for Apply when the goal rewrites inputs. */
+  const reoptimize = async () => {
+    setOptimizing(true);
+    setProgress(0);
+    try {
+      await runOptimizer({
+        plan: applyWhatIf(pendingPlan ?? plan, useWhatIfStore.getState()),
+        onProgress: setProgress,
+      });
+    } catch (err) {
+      console.error('[WhatIfBar] Re-optimize failed:', err);
+    } finally {
+      setOptimizing(false);
+    }
+  };
 
   const saveAsScenario = () => {
     const id = `scn-${Date.now()}`;
@@ -118,6 +141,15 @@ export default function WhatIfBar() {
           </span>
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-gold"
+            onClick={reoptimize}
+            disabled={!dirty || optimizing}
+            title="Re-run the optimizer using these what-if values"
+            style={{ fontSize: 12, padding: '6px 12px', opacity: dirty ? 1 : 0.4, whiteSpace: 'nowrap' }}
+          >
+            {optimizing ? `Optimizing… ${Math.round(progress * 100)}%` : '↗ Re-optimize'}
+          </button>
           <button
             className="btn btn-ghost"
             onClick={reset}

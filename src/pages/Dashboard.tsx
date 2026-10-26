@@ -501,8 +501,8 @@ function scenarioTemplates(plan: Plan): Array<{
     { id: 'higher-inflation', name: 'Higher Inflation (4%)', overrides: { assumptions: { inflation: 0.04 } } as Scenario['overrides'] },
     { id: 'higher-savings', name: 'Save +50%', overrides: {
         portfolio: {
-          personA: { annualContribution: Math.round(pfA.annualContribution * 1.5) },
-          ...(pfB ? { personB: { annualContribution: Math.round(pfB.annualContribution * 1.5) } } : {}),
+          personA: { annualContribution: Math.round(pfA.annualContribution * 1.5), ...(pfA.year1Contribution !== undefined ? { year1Contribution: Math.round(pfA.year1Contribution * 1.5) } : {}) },
+          ...(pfB ? { personB: { annualContribution: Math.round(pfB.annualContribution * 1.5), ...(pfB.year1Contribution !== undefined ? { year1Contribution: Math.round(pfB.year1Contribution * 1.5) } : {}) } } : {}),
         },
       } as Scenario['overrides'] },
     { id: 'reduce-spending', name: 'Reduce Spending 20%', overrides: {

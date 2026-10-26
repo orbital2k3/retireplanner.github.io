@@ -17,6 +17,7 @@ const OPT_FILES = [
   'src/engine/optimizer.isolation.test.ts',
   'src/engine/optimizer.smoke.test.ts',
   'src/engine/optimizer.swl.test.ts',
+  'src/engine/optimizer.infeasibleStart.test.ts',
   'src/engine/applyOptimizerResult.test.ts',
   'src/engine/conversionBenefit.test.ts',
   'src/engine/strategy/frozenSettings.test.ts',
@@ -36,6 +37,7 @@ export default defineConfig({
     // opt back in with an `@vitest-environment jsdom` docblock.
     environment: 'node',
     globals: true,
+    setupFiles: ['./vitest.setup.ts'],
     pool: 'threads',
     projects: [
       {
