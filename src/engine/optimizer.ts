@@ -218,6 +218,12 @@ const policyPenalty = (windows: BlendWindow[]): number => {
  *  changing behaviour — only sweep and NM pass the flat-ridge tolerance. */
 const isBetter = (a: InnerEval, b: InnerEval, tol = 0): boolean => {
   if (a.ranOut !== b.ranOut) return !a.ranOut;
+  // Both depleted: every such plan scores the same ($0 left), which gives the search nothing to climb
+  // and strands it on whichever policy it started with. Less unfunded spending is closer to feasible.
+  if (a.ranOut) {
+    const shortfallDiff = a.proj.lifetimeShortfallReal - b.proj.lifetimeShortfallReal;
+    if (Math.abs(shortfallDiff) > 1) return shortfallDiff < 0;
+  }
   const diff = a.score - b.score;
   if (Math.abs(diff) > tol) return diff > 0;
   return policyPenalty(a.policy.windows) < policyPenalty(b.policy.windows);
@@ -688,7 +694,8 @@ function innerOptimize(
       if (!mcCtx) {
         const proj = runProjection(plan, { policy });
         evalCounter.n++;
-        return proj.ranOut ? 1e15 : -spec.score(proj);
+        // Depleted: a huge constant plus the unfunded spending, so the simplex still sees which way is feasible.
+        return proj.ranOut ? 1e15 + proj.lifetimeShortfallReal : -spec.score(proj);
       }
       const paths = mcCtx.paths.slice(0, nPaths);
       const us = paths.map(path => {
