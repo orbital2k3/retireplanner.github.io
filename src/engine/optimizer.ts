@@ -1663,7 +1663,8 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
     opts.onProgress?.(1, 'Done');
 
     if (!bestFeasible) {
-      const fallbackDollars = amortAbs * 0.5;
+      // hi$ is the lowest spend the search actually tested (and found infeasible).
+      const fallbackDollars = hi$;
       const fallbackPlan = scaleTo(fallbackDollars);
       const inner = innerOptimize(fallbackPlan, opts, evalCounter);
       if (legacy > 0) {
@@ -1678,7 +1679,7 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
       return packageResult(fallbackPlan, inner, goal, evalCounter.n, {
         solvedSpendingMultiplier: baseAnnualSpend > 0 ? fallbackDollars / baseAnnualSpend : NaN,
         recommendedAnnualSpend: fallbackDollars,
-        headline: 'Plan depletes even at 50% of estimated sustainable spending',
+        headline: `Plan depletes even at ${fmtUSD(fallbackDollars)}/yr — the lowest spending level tested`,
         headlineLabel: 'Max sustainable spending',
       });
     }
@@ -1761,7 +1762,7 @@ export function optimizeStrategy(livePlan: Plan, goal: UserGoal, opts: OptimizeO
       const inner = innerOptimize(plan, opts, evalCounter);
       return packageResult(plan, inner, goal, evalCounter.n, {
         solvedRetirementAge: startAge,
-        headline: `Age ${startAge} (current — earlier ages infeasible)`,
+        headline: `Age ${startAge} (current) — plan runs out of money even at this age`,
         headlineLabel: 'Earliest feasible retirement',
       });
     }
